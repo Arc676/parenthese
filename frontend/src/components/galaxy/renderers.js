@@ -426,7 +426,7 @@ function measureTextCached(ctx, text, fontKey) {
 // ============================================================
 function drawPersonNode(ctx, node, pos, nodeProgress, {
   nodeRandomData, imageCache, hoverScales, selectedGlowScales, searchGlowScales,
-  mediaHoverState, entrance, entranceActive, elapsed, view = null,
+  mediaHoverState, entrance, entranceActive, elapsed, view = null, photoHint = false,
 }) {
   const { cx, cy } = pos
   const person = getPersonById(node._data.id) || node._data
@@ -562,7 +562,7 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
     ctx.shadowOffsetY = shadowY
   }
 
-  drawFrame(ctx, frameType, person, img)
+  drawFrame(ctx, frameType, person, img, photoHint && !img ? hs : 0)
   ctx.restore()
 
   // --- Labels (estompés puis absents en dézoom) ---
@@ -880,7 +880,7 @@ function resolveFrameType(person, img) {
   return fallback
 }
 
-function drawFrame(ctx, frameType, person, img) {
+function drawFrame(ctx, frameType, person, img, hint = 0) {
   if (frameType === 'polaroid') {
     const pw = PERSON_R + 4
     const ph = PERSON_R + 4
@@ -898,7 +898,7 @@ function drawFrame(ctx, frameType, person, img) {
     ctx.beginPath()
     ctx.roundRect(-pw, -ph, pw * 2, ph * 2, 2)
     ctx.clip()
-    drawPersonImage(ctx, img, person, -pw, -ph, pw * 2, ph * 2)
+    drawPersonImage(ctx, img, person, -pw, -ph, pw * 2, ph * 2, hint)
   } else if (frameType === 'square') {
     const s = PERSON_R + 4
     const pad = 3
@@ -914,7 +914,7 @@ function drawFrame(ctx, frameType, person, img) {
     ctx.beginPath()
     ctx.roundRect(-s, -s, s * 2, s * 2, 2)
     ctx.clip()
-    drawPersonImage(ctx, img, person, -s, -s, s * 2, s * 2)
+    drawPersonImage(ctx, img, person, -s, -s, s * 2, s * 2, hint)
   } else if (frameType === 'rect') {
     const ratio = img?.naturalWidth && img?.naturalHeight
       ? img.naturalWidth / img.naturalHeight
@@ -936,7 +936,7 @@ function drawFrame(ctx, frameType, person, img) {
     ctx.beginPath()
     ctx.roundRect(-rw, -rh, rw * 2, rh * 2, 3)
     ctx.clip()
-    drawPersonImage(ctx, img, person, -rw, -rh, rw * 2, rh * 2)
+    drawPersonImage(ctx, img, person, -rw, -rh, rw * 2, rh * 2, hint)
   } else {
     ctx.fillStyle = '#FFFFFF'
     ctx.beginPath()
@@ -951,14 +951,14 @@ function drawFrame(ctx, frameType, person, img) {
     ctx.beginPath()
     ctx.arc(0, 0, PERSON_R, 0, Math.PI * 2)
     ctx.clip()
-    drawPersonImage(ctx, img, person, -PERSON_R, -PERSON_R, PERSON_R * 2, PERSON_R * 2)
+    drawPersonImage(ctx, img, person, -PERSON_R, -PERSON_R, PERSON_R * 2, PERSON_R * 2, hint)
   }
 }
 
 // ============================================================
 // Dessiner l'image ou le placeholder initiales
 // ============================================================
-function drawPersonImage(ctx, img, person, x, y, w, h) {
+function drawPersonImage(ctx, img, person, x, y, w, h, hint = 0) {
   if (img) {
     drawImageCover(ctx, img, x, y, w, h)
     if (!person.isAlive) {
@@ -968,11 +968,27 @@ function drawPersonImage(ctx, img, person, x, y, w, h) {
   } else {
     ctx.fillStyle = person.isAlive ? COLORS.nodeAlive : COLORS.nodeDead
     ctx.fillRect(x, y, w, h)
-    ctx.fillStyle = COLORS.text
-    ctx.font = '400 16px "Newsreader", Georgia, serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
+    // Au survol, chez le propriétaire, les initiales cèdent la place à « + photo »
+    const baseAlpha = ctx.globalAlpha
+    if (hint > 0.01) {
+      ctx.fillStyle = `rgba(248, 228, 219, ${hint})`
+      ctx.fillRect(x, y, w, h)
+    }
+    ctx.globalAlpha = baseAlpha * (1 - hint)
+    ctx.fillStyle = COLORS.text
+    ctx.font = '400 16px "Newsreader", Georgia, serif'
     ctx.fillText((person.firstName[0] || '') + (person.lastName[0] || ''), 0, 0)
+    if (hint > 0.01) {
+      ctx.globalAlpha = baseAlpha * hint
+      ctx.fillStyle = '#93402A'
+      ctx.font = '300 22px "DM Sans", system-ui, sans-serif'
+      ctx.fillText('+', 0, -6)
+      ctx.font = '500 9.5px "DM Sans", system-ui, sans-serif'
+      ctx.fillText(t('photo'), 0, 10)
+    }
+    ctx.globalAlpha = baseAlpha
   }
 }
 

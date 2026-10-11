@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ImagePlus } from 'lucide-react'
+import { FileUp, ImagePlus } from 'lucide-react'
 import './TreeCreationWizard.css'
 import PzBusy from './PzBusy.jsx'
 import { t } from '../i18n/index.js'
@@ -10,6 +10,9 @@ const INITIAL_STATE = {
   selfLastName: '',
   selfBirthYear: '',
   photoFile: null,
+  // « J'ai déjà un arbre » : fichier GEDCOM exporté d'un logiciel, importé à la création
+  start: 'self',
+  gedcomFile: null,
 }
 
 // Titre traduit d'un bloc : le passage entre <em> et </em> garde son italique
@@ -46,8 +49,9 @@ function TreeCreationWizard({
   const canContinue = useMemo(() => form.treeName.trim().length >= 2 && !loading, [form.treeName, loading])
   const canCreate = useMemo(() => {
     if (loading) return false
+    if (form.start === 'import') return Boolean(form.gedcomFile)
     return form.selfFirstName.trim().length > 0 && form.selfLastName.trim().length > 0
-  }, [form.selfFirstName, form.selfLastName, loading])
+  }, [form.selfFirstName, form.selfLastName, form.start, form.gedcomFile, loading])
 
   if (!visible) {
     return null
@@ -68,6 +72,11 @@ function TreeCreationWizard({
     if (!canCreate) return
 
     setError('')
+    if (form.start === 'import') {
+      const submitError = await onSubmit({ treeName: form.treeName.trim(), gedcomFile: form.gedcomFile })
+      if (submitError) setError(submitError)
+      return
+    }
     const submitError = await onSubmit({
       treeName: form.treeName.trim(),
       selfFirstName: form.selfFirstName.trim(),
@@ -123,6 +132,40 @@ function TreeCreationWizard({
           </>
         ) : (
           <form onSubmit={handleCreate} className="tw-form">
+            <div className="pz-tabs tw-start" role="tablist" aria-label={t('Point de départ')}>
+              <button type="button" role="tab" aria-selected={form.start === 'self'} className={`pz-tab ${form.start === 'self' ? 'is-active' : ''}`} onClick={() => updateField('start', 'self')}>
+                {t('Je pars de moi')}
+              </button>
+              <button type="button" role="tab" aria-selected={form.start === 'import'} className={`pz-tab ${form.start === 'import' ? 'is-active' : ''}`} onClick={() => updateField('start', 'import')}>
+                {t("J'ai déjà un arbre")}
+              </button>
+            </div>
+
+            {form.start === 'import' ? (
+              <>
+                <div className="pz-modal-head">
+                  <h2 id="treeWizardTitle" className="pz-title">{withEmphasis(t('Importez <em>votre arbre</em>'))}</h2>
+                  <p className="pz-sub">{t('Heredis, Geneanet, Gramps, MyHeritage ou Ancestry savent exporter un fichier .ged. Parenthèse reprend les personnes, les liens et les dates, puis vous aide à retrouver les photos.')}</p>
+                </div>
+                <div className="pz-field">
+                  <label htmlFor="wizardGedcom" className="tw-photo">
+                    <span className="tw-photo-icon" aria-hidden="true"><FileUp size={20} strokeWidth={1.8} /></span>
+                    <span className="tw-photo-text">
+                      <strong>{form.gedcomFile ? form.gedcomFile.name : t('Choisir le fichier .ged')}</strong>
+                      <span>{form.gedcomFile ? t('Cliquez pour en choisir un autre') : t('Exporté depuis le logiciel où vous tenez votre arbre')}</span>
+                    </span>
+                  </label>
+                  <input
+                    id="wizardGedcom"
+                    className="tw-photo-input"
+                    type="file"
+                    accept=".ged,text/x-gedcom,text/plain"
+                    onChange={(event) => updateField('gedcomFile', event.target.files?.[0] || null)}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
             <div className="pz-modal-head">
               <h2 id="treeWizardTitle" className="pz-title">{withEmphasis(t('Commencez <em>par vous</em>'))}</h2>
               <p className="pz-sub">{t("L'arbre « {name} » démarre avec votre fiche. Vous ajouterez les autres ensuite.", { name: form.treeName.trim() })}</p>
@@ -186,6 +229,8 @@ function TreeCreationWizard({
                 onChange={(event) => updateField('photoFile', event.target.files?.[0] || null)}
               />
             </div>
+              </>
+            )}
 
             {error && <div className="pz-error tree-wizard-error" role="alert">{error}</div>}
 
@@ -194,7 +239,9 @@ function TreeCreationWizard({
                 {t('Retour')}
               </button>
               <button type="submit" className="pz-btn pz-btn--primary" disabled={!canCreate}>
-                <PzBusy busy={loading} busyLabel={t("Création de l'arbre")}>{t('Créer mon arbre')}</PzBusy>
+                <PzBusy busy={loading} busyLabel={form.start === 'import' ? t('Import en cours') : t("Création de l'arbre")}>
+                  {form.start === 'import' ? t('Importer mon arbre') : t('Créer mon arbre')}
+                </PzBusy>
               </button>
             </div>
           </form>

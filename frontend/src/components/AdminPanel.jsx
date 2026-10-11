@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Download, Trash2, X } from 'lucide-react'
+import { Download, ImagePlus, Trash2, X } from 'lucide-react'
 import './SettingsPanels.css'
 import {
   deleteTree,
@@ -30,6 +30,7 @@ const AdminPanel = ({
   onClose,
   onTreeDeleted,
   onGedcomImported,
+  onOpenPhotoStart,
 }) => {
   const [section, setSection] = useState('tree')
   const [loading, setLoading] = useState(false)
@@ -382,6 +383,21 @@ const AdminPanel = ({
                       </button>
                     </div>
                   </div>
+
+                  {onOpenPhotoStart && (
+                    <div className="ts-row">
+                      <div className="ts-row-text">
+                        <strong>{t('Ajouter des portraits')}</strong>
+                        <p className="pz-small">{t("Retrouver les photos de votre ancien logiciel, ou ajouter les premiers visages un par un.")}</p>
+                      </div>
+                      <div className="ts-row-actions">
+                        <button type="button" className="pz-btn pz-btn--secondary pz-btn--sm" onClick={onOpenPhotoStart} disabled={saving}>
+                          <ImagePlus size={15} aria-hidden="true" />
+                          {t('Ajouter des portraits')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="ts-row">
                     <div className="ts-row-text">

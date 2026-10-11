@@ -1,0 +1,61 @@
+/* Premiers visages après un import : retrouver les photos du logiciel, puis cinq portraits à demander */
+
+.psp { width: min(100%, 560px); gap: 22px; }
+.psp .pz-title em { font-style: italic; color: var(--pz-a700); }
+
+.psp-block { display: grid; gap: 12px; }
+.psp-block--folder {
+  padding: 18px;
+  background: var(--pz-a50);
+  border: 1px solid var(--pz-a100);
+  border-radius: var(--pz-r-m);
+}
+.psp-h { margin: 0; font: 500 16px/1.35 var(--pz-sans); color: var(--pz-ink); }
+.psp-p { margin: 0; font: 400 15px/1.55 var(--pz-sans); color: var(--pz-ink-2); }
+.psp-p strong { font-weight: 600; color: var(--pz-ink); }
+.psp-block .pz-hint { overflow-wrap: anywhere; }
+.psp-folder-btn { justify-self: start; }
+.psp-row-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.psp-found { display: grid; gap: 10px; justify-items: start; }
+
+.psp-progress { display: grid; gap: 8px; }
+.psp-bar { height: 8px; border-radius: 999px; background: var(--pz-surface); box-shadow: inset 0 0 0 1px var(--pz-a100); overflow: hidden; }
+.psp-bar span { display: block; height: 100%; background: var(--pz-a500); border-radius: inherit; transition: width 240ms var(--pz-ease); }
+
+.psp-faces { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.psp-face {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 62px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--pz-line-soft);
+}
+.psp-face:last-child { border-bottom: 0; }
+.psp-face-photo {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--pz-bg);
+  border: 1.5px dashed var(--pz-a300);
+  font: 400 16px var(--pz-serif);
+  color: var(--pz-muted);
+}
+.psp-face-photo.is-set { border: 2px solid #fff; box-shadow: 0 0 0 1px var(--pz-line), var(--pz-shadow); }
+.psp-face-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.psp-face-id { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.psp-face-name { font: 400 17px/1.25 var(--pz-serif); color: var(--pz-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.psp-face-years { font: 400 12.5px var(--pz-sans); color: var(--pz-muted); }
+.psp-face-error { font: 400 12.5px/1.4 var(--pz-sans); color: var(--pz-danger); }
+.psp-face-done { color: var(--pz-success); }
+.psp-face .pz-btn { flex: none; gap: 6px; }
+
+@media (max-width: 560px) {
+  .psp { gap: 18px; }
+  .psp-block--folder { padding: 16px; }
+  .psp-face .pz-btn--soft { padding: 0 12px; }
+}

@@ -311,13 +311,16 @@ export function computeLayout(graphData = null) {
     allNodes.push(node)
   }
 
-  // Unions virtuelles (parent unique → inconnu)
+  // Unions virtuelles (parent unique → inconnu) : une par parent, ses enfants sans autre parent connu
+  // partagent le même « Inconnu » (frères et sœurs d'un GEDCOM où un seul parent est renseigné)
   const virtualUnions = []
+  const virtualByParent = new Set()
   normalizedFiliations.forEach(f => {
-    if (!f.unionId && f.parentId) {
+    if (!f.unionId && f.parentId && !virtualByParent.has(f.parentId)) {
+      virtualByParent.add(f.parentId)
       virtualUnions.push({
-        elkId: `vu-${f.id}`,
-        unknownElkId: `unknown-${f.id}`,
+        elkId: `vu-${f.parentId}`,
+        unknownElkId: `unknown-${f.parentId}`,
         parentId: f.parentId,
         filiation: f,
       })
@@ -382,7 +385,7 @@ export function computeLayout(graphData = null) {
   // union/vu elkId → [child elkId]
   const childrenBySourceId = new Map()
   normalizedFiliations.forEach(f => {
-    const sourceId = f.unionId ? `u-${f.unionId}` : `vu-${f.id}`
+    const sourceId = f.unionId ? `u-${f.unionId}` : `vu-${f.parentId}`
     const targetId = `p-${f.childId}`
     if (!childrenBySourceId.has(sourceId)) childrenBySourceId.set(sourceId, [])
     childrenBySourceId.get(sourceId).push(targetId)
@@ -515,7 +518,7 @@ export function computeLayout(graphData = null) {
     .map(e => ({ ...e }))
 
   normalizedFiliations.forEach(f => {
-    const sourceId = f.unionId ? `u-${f.unionId}` : `vu-${f.id}`
+    const sourceId = f.unionId ? `u-${f.unionId}` : `vu-${f.parentId}`
     const targetId = `p-${f.childId}`
     if (!validNodeIds.has(sourceId) || !validNodeIds.has(targetId)) return
     allEdges.push({
