@@ -16,6 +16,7 @@ Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
 ### Fixes
 
+- Docker: on a first `docker compose up`, the API now gets 120 s to run its migrations before its health check counts (was 30 s). The web container waits for a healthy API and used to give up, so it had to be started again by hand.
 - Children of a family with only one known parent (common in GEDCOM files) are linked to that parent, under a single "Unknown" partner, instead of floating in the tree without a link.
 - Importing a GEDCOM file into a tree that already holds it no longer duplicates everyone: people with the same first name, last name, birth and death dates are reused, and existing unions and parent links are kept.
 
