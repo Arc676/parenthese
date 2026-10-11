@@ -186,6 +186,9 @@ async function exceedsStorageQuota(app: FastifyRequest['server'], treeId: string
 
 // Seules les routes d'envoi acceptent un corps de 12 Mo (fichier en base64), le reste de l'API est à 1 Mo (app.ts)
 const UPLOAD_RATE_LIMIT = { bodyLimit: UPLOAD_BODY_LIMIT, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }
+// Portraits : réservés au propriétaire, mais l'app peut en placer quelques centaines d'un coup (photos
+// retrouvées après un import GEDCOM), envoyées une par une. Le quota de stockage de l'arbre s'applique.
+const AVATAR_RATE_LIMIT = { bodyLimit: UPLOAD_BODY_LIMIT, config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }
 
 async function requireAdminMembership(app: FastifyRequest['server'], userId: string, treeId: string) {
   const membership = await app.prisma.treeMembership.findUnique({
@@ -461,7 +464,7 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
     return reply.code(201).send({ media, status: media.status })
   })
 
-  app.post('/trees/:id/persons/:personId/avatar', UPLOAD_RATE_LIMIT, async (request, reply) => {
+  app.post('/trees/:id/persons/:personId/avatar', AVATAR_RATE_LIMIT, async (request, reply) => {
     if (!request.actor || request.actor.kind !== 'user') {
       return reply.code(401).send({ error: 'authentication_required' })
     }

@@ -2,6 +2,23 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
+## Unreleased
+
+### First photos
+
+- Tree creation offers "I already have a tree": the .ged file is imported right away, without creating a "you" entry that would end up duplicated.
+- GEDCOM import reads the photos each person had in the original software (`OBJE` / `FILE`, inline or by reference, primary photo first). After an import, the owner picks the folder where those photos live and Parenthèse places each portrait by file name. Paths stay on the device, nothing is stored on the server.
+- After an import, a window suggests five faces to start with: the close family of the person marked "Me", otherwise the most recent generations.
+- For the owner, an empty portrait invites a photo: the empty frame on a profile is a button outside edit mode, and hovering an empty portrait in the tree shows "+ photo".
+- Phone photos over 5 MB are scaled down to 2000 px before upload instead of being refused.
+- Owner portrait uploads are limited to 120 per minute (was 30), still within the tree's storage quota.
+- Anonymous events: `gedcom_imported`, `portraits_bulk_placed`, `portrait_added` (rounded counts, no names, paths or tree address).
+
+### Fixes
+
+- Children of a family with only one known parent (common in GEDCOM files) are linked to that parent, under a single "Unknown" partner, instead of floating in the tree without a link.
+- Importing a GEDCOM file into a tree that already holds it no longer duplicates everyone: people with the same first name, last name, birth and death dates are reused, and existing unions and parent links are kept.
+
 ## 1.0.3 (2026-10-10)
 
 ### Self-hosting

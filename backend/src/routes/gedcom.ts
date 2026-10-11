@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 
 import { UPLOAD_BODY_LIMIT } from '../config/env.js'
+import { indexObjeRecords, photoPathForPerson } from '../lib/gedcom-photos.js'
 import type { MembershipRole } from '../types/auth.js'
 
 const treeIdParamSchema = z.object({
@@ -52,7 +53,7 @@ type GedcomNode = {
   children: GedcomNode[]
 }
 
-function parseGedcom(text: string): GedcomNode[] {
+export function parseGedcom(text: string): GedcomNode[] {
   const lines = text.split(/\r\n|\r|\n/)
   const roots: GedcomNode[] = []
   const stack: GedcomNode[] = []
@@ -174,6 +175,18 @@ function parseGedcomName(value: string): { firstName: string; lastName: string }
     }
   }
   return { firstName: value.trim(), lastName: '' }
+}
+
+// Réimport : une personne du fichier déjà présente dans l'arbre (même prénom, nom, naissance et décès)
+// est reprise au lieu d'être créée une seconde fois
+function personKey(firstName: string, lastName: string, birthDate: Date | null, deathDate: Date | null): string {
+  const norm = (value: string) => value.normalize('NFC').trim().toLowerCase()
+  const day = (value: Date | null) => (value ? value.toISOString().slice(0, 10) : '')
+  return [norm(firstName), norm(lastName), day(birthDate), day(deathDate)].join('|')
+}
+
+function pairKey(a: string, b: string | null): string {
+  return b ? [a, b].sort().join('|') : `${a}|`
 }
 
 function sanitizeXref(id: string): string {
@@ -466,7 +479,30 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const xrefToPersonId = new Map<string, string>()
+    const objeByXref = indexObjeRecords(roots)
+    const photoRefs: Array<{ personId: string; file: string }> = []
+
+    // Ce que l'arbre contient déjà : un second import du même fichier complète l'arbre sans rien doubler.
+    // Chaque personne existante ne sert qu'une fois, deux fiches identiques du fichier restent deux personnes.
+    const [existingPersons, existingUnions, existingLinks] = await Promise.all([
+      app.prisma.person.findMany({
+        where: { treeId, deletedAt: null },
+        select: { id: true, firstName: true, lastName: true, birthDate: true, deathDate: true, avatarPath: true },
+      }),
+      app.prisma.union.findMany({ where: { treeId, deletedAt: null }, select: { id: true, partner1PersonId: true, partner2PersonId: true } }),
+      app.prisma.parentChildLink.findMany({ where: { treeId, deletedAt: null }, select: { parentPersonId: true, childPersonId: true } }),
+    ])
+    const reusablePersons = new Map<string, Array<{ id: string; hasAvatar: boolean }>>()
+    for (const person of existingPersons) {
+      const key = personKey(person.firstName, person.lastName, person.birthDate, person.deathDate)
+      if (!reusablePersons.has(key)) reusablePersons.set(key, [])
+      reusablePersons.get(key)!.push({ id: person.id, hasAvatar: Boolean(person.avatarPath) })
+    }
+    const unionByPair = new Map(existingUnions.map((u) => [pairKey(u.partner1PersonId, u.partner2PersonId), u.id]))
+    const linkKeys = new Set(existingLinks.map((l) => `${l.parentPersonId}:${l.childPersonId}`))
+
     let personsCreated = 0
+    let personsReused = 0
     let unionsCreated = 0
     let linksCreated = 0
 
@@ -498,14 +534,29 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
           notes = clip([noteNode.value, ...contLines].join('\n'), 2000)
         }
 
+        const personFirstName = (firstName || '?').slice(0, 120)
+        const personLastName = (lastName || '').slice(0, 120)
+        const birthDate = isoDateToDbDate(birthDateIso)
+        const deathDate = isoDateToDbDate(deathDateIso)
+        const photoPath = photoPathForPerson(indi, objeByXref)
+
+        const existing = reusablePersons.get(personKey(personFirstName, personLastName, birthDate, deathDate))?.shift()
+        if (existing) {
+          xrefToPersonId.set(indi.xref!, existing.id)
+          personsReused++
+          // Une personne qui a déjà son portrait le garde
+          if (photoPath && !existing.hasAvatar) photoRefs.push({ personId: existing.id, file: photoPath })
+          continue
+        }
+
         const person = await tx.person.create({
           data: {
             treeId,
-            firstName: (firstName || '?').slice(0, 120),
-            lastName: (lastName || '').slice(0, 120),
+            firstName: personFirstName,
+            lastName: personLastName,
             sex,
-            birthDate: isoDateToDbDate(birthDateIso),
-            deathDate: isoDateToDbDate(deathDateIso),
+            birthDate,
+            deathDate,
             birthPlace,
             profession,
             notes,
@@ -516,6 +567,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
 
         xrefToPersonId.set(indi.xref!, person.id)
         personsCreated++
+        if (photoPath) photoRefs.push({ personId: person.id, file: photoPath })
       }
 
       for (const fam of famNodes) {
@@ -530,16 +582,22 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
         const marrNode = findChild(fam, 'MARR')
         const marriageDateIso = gedcomDateToIso(findChild(marrNode, 'DATE')?.value ?? '')
 
-        const union = await tx.union.create({
-          data: {
-            treeId,
-            partner1PersonId: partner1Id ?? partner2Id!,
-            partner2PersonId: partner1Id ? (partner2Id ?? null) : null,
-            startDate: isoDateToDbDate(marriageDateIso),
-          },
-        })
-
-        unionsCreated++
+        const firstPartner = partner1Id ?? partner2Id!
+        const secondPartner = partner1Id ? (partner2Id ?? null) : null
+        let unionId = unionByPair.get(pairKey(firstPartner, secondPartner))
+        if (!unionId) {
+          const union = await tx.union.create({
+            data: {
+              treeId,
+              partner1PersonId: firstPartner,
+              partner2PersonId: secondPartner,
+              startDate: isoDateToDbDate(marriageDateIso),
+            },
+          })
+          unionId = union.id
+          unionByPair.set(pairKey(firstPartner, secondPartner), unionId)
+          unionsCreated++
+        }
 
         const chilNodes = findAllChildren(fam, 'CHIL')
         const seenChildren = new Set<string>()
@@ -555,14 +613,17 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
           const parentIds = [partner1Id, partner2Id].filter((id): id is string => Boolean(id))
 
           for (const parentId of parentIds) {
+            const linkKey = `${parentId}:${childId}`
+            if (linkKeys.has(linkKey)) continue
             await tx.parentChildLink.create({
               data: {
                 treeId,
                 parentPersonId: parentId,
                 childPersonId: childId,
-                viaUnionId: union.id,
+                viaUnionId: unionId,
               },
             })
+            linkKeys.add(linkKey)
             linksCreated++
           }
         }
@@ -576,7 +637,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
           action: 'gedcom_imported',
           entityType: 'tree',
           entityId: treeId,
-          payloadJson: { personsCreated, unionsCreated, linksCreated },
+          payloadJson: { personsCreated, personsReused, unionsCreated, linksCreated, photoRefs: photoRefs.length },
         },
       })
     }, { timeout: 60000 })
@@ -584,6 +645,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
       importInProgress = false
     }
 
-    return reply.send({ personsCreated, unionsCreated, linksCreated })
+    // photoRefs : chemin de la photo que le logiciel d'origine associait à chaque personne (rien n'est gardé)
+    return reply.send({ personsCreated, personsReused, unionsCreated, linksCreated, photoRefs })
   })
 }

@@ -29,12 +29,15 @@ const MAX_SCALE = 3.2
 const FOCUS_MIN_READABLE_SCALE = 0.5
 const FOCUS_SCALE = 0.95
 
-const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0 }) => {
+const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, photoHint = false }) => {
   const canvasRef = useRef(null)
   // Lu au calcul du cadrage seulement : changer de personne de départ ne recadre pas une vue en cours
   const focusPersonIdRef = useRef(focusPersonId)
   // Mis à jour hors du rendu, avant l'effet de cadrage déclaré plus bas (même phase, ordre de déclaration)
   useEffect(() => { focusPersonIdRef.current = focusPersonId }, [focusPersonId])
+  // Propriétaire : un portrait vide survolé montre « + photo »
+  const photoHintRef = useRef(photoHint)
+  useEffect(() => { photoHintRef.current = photoHint }, [photoHint])
   const layoutDataRef = useRef(null)
   const [layoutReady, setLayoutReady] = useState(false)
   const transformRef = useRef({ x: 0, y: 0, scale: 1 })
@@ -571,6 +574,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
         mediaHoverState: mediaHoverState.current,
         entrance, entranceActive, elapsed,
         view,
+        photoHint: photoHintRef.current,
       })
       drawRenvoiPills(ctx)
       // Annotations dessinées APRES les noeuds pour que stickers/texte soient au-dessus

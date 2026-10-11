@@ -50,3 +50,24 @@ describe('loadGraphData avatar mapping', () => {
     expect(getPersonMedias('p-2')[0]?.source).toBe('Album familial')
   })
 })
+
+describe('loadGraphData, union à un seul parent', () => {
+  it('relie les enfants directement au parent connu au lieu de les perdre', async () => {
+    const { getParents, getChildren } = await import('./mockData')
+    const person = (id, firstName) => ({ id, firstName, lastName: 'Lemaire', birthDate: null, deathDate: null, notes: null, avatarUrlPath: null })
+    loadGraphData({
+      persons: [person('julien', 'Julien'), person('hugo', 'Hugo'), person('lea', 'Léa')],
+      unions: [{ id: 'u-seul', partner1PersonId: 'julien', partner2PersonId: null }],
+      filiations: [
+        { id: 'f-1', parentPersonId: 'julien', childPersonId: 'hugo', viaUnionId: 'u-seul' },
+        { id: 'f-2', parentPersonId: 'julien', childPersonId: 'lea', viaUnionId: 'u-seul' },
+        { id: 'f-3', parentPersonId: 'julien', childPersonId: 'lea', viaUnionId: 'u-seul' },
+      ],
+      medias: [],
+      annotations: [],
+    })
+
+    expect(getParents('hugo').map((p) => p.id)).toEqual(['julien'])
+    expect(getChildren('julien').map((p) => p.id).sort()).toEqual(['hugo', 'lea'])
+  })
+})
