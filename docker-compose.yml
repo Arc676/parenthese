@@ -4,6 +4,9 @@
 #   docker compose logs -f api    suivre l'API
 #   docker compose down           arrêter (les volumes db-data et media sont conservés)
 #   bash tools/docker-smoke.sh    vérifier l'installation
+# Les images de l'API et du front sont publiées sur ghcr.io (version choisie par PARENTHESE_VERSION,
+# `latest` par défaut) : ce fichier et le .env suffisent, sans le code. Si l'image est introuvable,
+# compose la construit depuis les sources (dépôt cloné) ; `--build` force cette construction.
 
 name: parenthese
 
@@ -24,6 +27,7 @@ services:
       retries: 12
 
   api:
+    image: ghcr.io/iliesallali/parenthese-api:${PARENTHESE_VERSION:-latest}
     build: ./backend
     restart: unless-stopped
     depends_on:
@@ -46,9 +50,12 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      # Premier lancement : les migrations passent avant que l'API réponde, 30 s ne suffisaient pas
+      # et le conteneur web, qui attend une API prête, abandonnait (signalé sur Reddit le 11/10).
+      start_period: 120s
 
   web:
+    image: ghcr.io/iliesallali/parenthese-web:${PARENTHESE_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile.web

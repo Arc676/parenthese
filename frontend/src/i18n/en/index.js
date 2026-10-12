@@ -4,6 +4,7 @@ import arbre from './arbre.js'
 import fiche from './fiche.js'
 import contribution from './contribution.js'
 import compte from './compte.js'
+import photos from './photos.js'
 
 export default {
   ...app,
@@ -11,5 +12,6 @@ export default {
   ...fiche,
   ...contribution,
   ...compte,
+  ...photos,
 }
 

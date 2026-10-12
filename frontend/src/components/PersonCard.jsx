@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useRef, forwardRef } from 'react'
-import { Save, Trash2, Plus, X, Search, Check, Play, Sparkles } from 'lucide-react'
+import { Save, Trash2, Plus, X, Search, Check, Play, ImagePlus, Sparkles } from 'lucide-react'
 import { getParents, getChildren, getPersonUnions, getPersonMedias, filiations, persons, unions } from '../data/mockData'
 import GeoMediaThumbnail from './GeoMediaThumbnail'
 import ImmichFacePanel from './ImmichFacePanel.jsx'
@@ -338,21 +338,36 @@ const PersonCard = ({
       {/* ── En-tête : visage, nom, repères ── */}
       <header className="pc-head">
         <div className="pc-photo-wrap">
-          <div className="pc-photo">
-            {person.photo
-              ? <img src={person.photo} alt={`${person.firstName} ${person.lastName || ''}`} />
-              : <span className="pc-photo-initials">{initials}</span>}
-          </div>
+          {onAvatarUpload && (
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              className="pc-hidden-input"
+              onChange={handleAvatarFileChange}
+              disabled={avatarActionLoading}
+            />
+          )}
+          {/* Portrait vide chez le propriétaire : le cadre lui-même invite à poser la photo, sans passer par l'édition */}
+          {!person.photo && onAvatarUpload && !editMode ? (
+            <button
+              type="button"
+              className="pc-photo pc-photo--add"
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={avatarActionLoading}
+            >
+              <ImagePlus size={22} strokeWidth={1.8} aria-hidden="true" />
+              <span>{avatarActionLoading ? t('Envoi') : t('Ajouter une photo')}</span>
+            </button>
+          ) : (
+            <div className="pc-photo">
+              {person.photo
+                ? <img src={person.photo} alt={`${person.firstName} ${person.lastName || ''}`} />
+                : <span className="pc-photo-initials">{initials}</span>}
+            </div>
+          )}
           {editMode && onAvatarUpload && (
             <div className="pc-photo-actions">
-              <input
-                ref={avatarInputRef}
-                type="file"
-                accept="image/*"
-                className="pc-hidden-input"
-                onChange={handleAvatarFileChange}
-                disabled={avatarActionLoading}
-              />
               <button type="button" className="pc-photo-btn" onClick={() => avatarInputRef.current?.click()} disabled={avatarActionLoading}>
                 {person.photo ? t('Changer') : t('Ajouter une photo')}
               </button>

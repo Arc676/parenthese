@@ -1,0 +1,20 @@
+# Contexte de build de Dockerfile.aio (BuildKit lit ce fichier à la place de .dockerignore) :
+# l'API, le front, la configuration nginx et le script de démarrage
+*
+!backend
+!frontend
+!deploy/nginx.docker.conf
+!deploy/aio
+backend/node_modules
+backend/dist
+backend/.local
+backend/storage
+backend/test
+backend/openapi
+backend/.env
+backend/.env.*
+frontend/node_modules
+frontend/dist
+frontend/.env
+frontend/.env.*
+**/*.log

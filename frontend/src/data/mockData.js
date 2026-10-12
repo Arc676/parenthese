@@ -163,22 +163,32 @@ export function loadGraphData(graph, options = {}) {
   const unionIdSet = new Set(unions.map((union) => union.id))
 
   const seenUnionChildKey = new Set()
+  const seenDirectKey = new Set()
   filiations = remoteFiliations
-    .map((filiation, index) => ({
-      id: filiation.id,
-      childId: filiation.childPersonId,
-      unionId: filiation.viaUnionId || null,
-      parentId: filiation.viaUnionId ? null : filiation.parentPersonId,
-      parentageType: filiation.parentageType || 'biologique',
-      displayOrder: Number.isFinite(filiation.displayOrder) ? filiation.displayOrder : index + 1,
-    }))
+    .map((filiation, index) => {
+      // Union à un seul parent connu (fréquente dans un GEDCOM) : l'union est écartée plus haut, l'enfant
+      // est relié directement à ce parent, sinon il flotterait dans l'arbre sans aucun lien
+      const viaKeptUnion = filiation.viaUnionId && unionIdSet.has(filiation.viaUnionId)
+      return {
+        id: filiation.id,
+        childId: filiation.childPersonId,
+        unionId: viaKeptUnion ? filiation.viaUnionId : null,
+        parentId: viaKeptUnion ? null : filiation.parentPersonId,
+        parentageType: filiation.parentageType || 'biologique',
+        displayOrder: Number.isFinite(filiation.displayOrder) ? filiation.displayOrder : index + 1,
+      }
+    })
     .filter((filiation) => {
       if (!personIdSet.has(filiation.childId)) {
         return false
       }
 
       if (!filiation.unionId) {
-        return filiation.parentId ? personIdSet.has(filiation.parentId) : false
+        if (!filiation.parentId || !personIdSet.has(filiation.parentId)) return false
+        const key = `${filiation.parentId}:${filiation.childId}`
+        if (seenDirectKey.has(key)) return false
+        seenDirectKey.add(key)
+        return true
       }
 
       if (!unionIdSet.has(filiation.unionId)) {

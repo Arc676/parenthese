@@ -1,0 +1,153 @@
+name: Images
+
+# Publie les images Docker de l'API et du front sur ghcr.io, pour un auto-hébergement sans le code
+# source : docker-compose.yml + .env suffisent.
+#   - après une CI réussie sur un push sur main : tags `latest` et `sha-<commit>`
+#   - sur un tag de version vX.Y.Z : tags `X.Y.Z` et `X.Y`
+# Puis l'installation est testée dans un dossier vide, avec ces deux seuls fichiers.
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+    branches:
+      - main
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: images-${{ github.event.workflow_run.head_sha || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build and push (${{ matrix.image }})
+    if: >-
+      github.repository == 'IliesAllali/parenthese' &&
+      (
+        github.event_name != 'workflow_run' ||
+        (
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_repository.full_name == 'IliesAllali/parenthese'
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: parenthese-api
+            context: backend
+            file: backend/Dockerfile
+          - image: parenthese-web
+            context: .
+            file: Dockerfile.web
+          # Tout-en-un (base, API, front) pour Unraid et les NAS
+          - image: parenthese-aio
+            context: .
+            file: Dockerfile.aio
+    steps:
+      # Sur workflow_run, le commit exact que la CI a validé, pas la tête de main au moment du run.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Short commit
+        id: commit
+        run: echo "sha=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags and labels
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/iliesallali/${{ matrix.image }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ github.event_name == 'workflow_run' }}
+            type=raw,value=sha-${{ steps.commit.outputs.sha }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha || github.sha }}
+            org.opencontainers.image.licenses=PolyForm-Noncommercial-1.0.0
+
+      - name: Build and push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  compose-only:
+    name: Install from the images only
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          path: src
+          persist-credentials: false
+
+      # Tant que les paquets ne sont pas publics, le pull demande une connexion.
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Empty folder with docker-compose.yml and .env only
+        run: |
+          set -euo pipefail
+          mkdir parenthese
+          cp src/docker-compose.yml src/.env.example parenthese/
+          cd parenthese
+          cp .env.example .env
+          sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 24)|" .env
+          sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -base64 48)|" .env
+          echo "PARENTHESE_VERSION=sha-$(git -C ../src rev-parse --short=7 HEAD)" >> .env
+          ls -A
+
+      - name: docker compose up -d (pull, no build)
+        working-directory: parenthese
+        run: docker compose up -d --pull always --no-build --wait --wait-timeout 300
+
+      - name: Smoke test through the web port
+        run: bash src/tools/docker-smoke.sh http://localhost
+
+      - name: Containers and logs on failure
+        if: failure()
+        working-directory: parenthese
+        run: |
+          docker compose ps -a
+          docker compose logs --no-color --timestamps

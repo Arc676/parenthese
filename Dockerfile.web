@@ -19,7 +19,14 @@ RUN npm run build
 
 FROM nginx:1.30-alpine
 
-COPY deploy/nginx.docker.conf /etc/nginx/conf.d/default.conf
+# Adresse de l'API lue au démarrage du conteneur, `api:4000` par défaut (le service de docker-compose.yml).
+# À changer quand le nom `api` est déjà pris sur le réseau, comme sur Umbrel où les apps partagent un réseau.
+# L'image nginx passe les fichiers de /etc/nginx/templates par envsubst et n'y remplace que les variables
+# d'environnement définies : $host, $uri et les autres variables de nginx restent telles quelles.
+ENV API_UPSTREAM=api:4000
+COPY deploy/nginx.docker.conf /etc/nginx/templates/default.conf.template
+RUN sed -i 's|http://api:4000|http://${API_UPSTREAM}|g' /etc/nginx/templates/default.conf.template \
+  && ! grep -q 'api:4000' /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 80

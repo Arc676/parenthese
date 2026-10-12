@@ -38,6 +38,14 @@ cd parenthese
 cp .env.example .env
 ```
 
+You can also skip the clone. The API and front-end images are published on GitHub's registry (`ghcr.io/iliesallali/parenthese-api` and `ghcr.io/iliesallali/parenthese-web`, for amd64 and arm64), so two files are enough:
+
+```bash
+mkdir parenthese && cd parenthese
+curl -fsSLO https://raw.githubusercontent.com/IliesAllali/parenthese/main/docker-compose.yml
+curl -fsSL https://raw.githubusercontent.com/IliesAllali/parenthese/main/.env.example -o .env
+```
+
 Open `.env` and fill in the two empty values:
 
 - `POSTGRES_PASSWORD`: a password for the database (letters and digits only).
@@ -49,9 +57,9 @@ Then:
 docker compose up -d
 ```
 
-The first start builds the images, applies the database migrations, then serves the app on [http://localhost](http://localhost). Create your account from the home screen. The first account is an account like any other, there is no global administrator.
+The first start downloads the images (or builds them from the source when they can't be pulled), applies the database migrations, then serves the app on [http://localhost](http://localhost). Create your account from the home screen. The first account is an account like any other, there is no global administrator.
 
-Three containers run: `db` (PostgreSQL 16), `api` (the Node API) and `web` (nginx, which serves the front end and proxies the API). Only `web` is exposed, on the port set by `WEB_PORT` (80 by default). If that port is taken, change `WEB_PORT` in `.env` and update `CORS_ORIGIN` to match.
+Three containers run: `db` (PostgreSQL 16), `api` (the Node API) and `web` (nginx, which serves the front end and proxies the API). Only `web` is exposed, on the port set by `WEB_PORT` (80 by default). If that port is taken, change `WEB_PORT` in `.env` and update `CORS_ORIGIN` to match. The `web` container finds the API at `api:4000`; if you run the images under other service names, set `API_UPSTREAM` on `web` (for example `API_UPSTREAM=myapi:4000`).
 
 To open the instance to your family over the Internet, put an HTTPS reverse proxy in front of the `web` port (Caddy, Traefik, nginx) and set the public address in `CORS_ORIGIN`, for example `https://tree.your-domain.com`.
 
@@ -68,6 +76,16 @@ docker compose down            # stop, data is kept
 ```
 
 To check that an installation works end to end, run `bash tools/docker-smoke.sh http://localhost` (add the port if `WEB_PORT` is not 80). The script needs `curl` and `jq`. It goes through the web port like a browser: home page, API health, account creation, sign-in, creating then deleting a test tree. The test account (`smoke-...@example.com`) stays in the database.
+
+### Single container (Unraid, NAS)
+
+For systems that install one container per app, `ghcr.io/iliesallali/parenthese-aio` runs the database, the API and the front end together:
+
+```bash
+docker run -d --name parenthese --restart unless-stopped -p 8080:80 -v /path/to/appdata/parenthese:/data ghcr.io/iliesallali/parenthese-aio
+```
+
+There is nothing to fill in. On first start the container creates the database, its password and the session key in `/data`, and reuses them afterwards. Photos and videos go to `/data/media`. Back up the whole `/data` folder with the container stopped, or dump the database while it runs with `docker exec parenthese runuser -u postgres -- pg_dump parenthese > parenthese.sql`. The database is PostgreSQL 15 here, the compose setup uses 16.
 
 ### Where the data lives
 
@@ -94,8 +112,10 @@ The `deploy/backup.sh` script does the same (PostgreSQL dump, media archive, che
 ### Updating
 
 ```bash
-git pull && docker compose up -d --build
+docker compose pull && docker compose up -d
 ```
+
+`latest` follows the main branch. To stay on a version, set `PARENTHESE_VERSION` in `.env` (for example `1.0`). From a clone, `git pull && docker compose up -d --build` builds from the source instead.
 
 Database migrations apply on their own when the API starts. Make a backup first, as a habit.
 

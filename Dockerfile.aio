@@ -1,0 +1,94 @@
+# syntax=docker/dockerfile:1
+# Parenthèse en un seul conteneur : PostgreSQL, API et front servi par nginx. Contexte de build : la racine du dépôt.
+# Pour les systèmes qui installent une application par conteneur (Unraid, NAS). docker-compose.yml reste
+# l'installation de référence, avec un conteneur par service.
+#
+#   docker run -d --name parenthese -p 8080:80 -v parenthese-data:/data ghcr.io/iliesallali/parenthese-aio
+#
+# Tout ce qui doit survivre à une mise à jour vit dans /data : base (postgres/), photos et vidéos (media/),
+# secrets générés au premier démarrage (secrets/). Voir deploy/aio/entrypoint.sh.
+
+# Étape 1 : API (mêmes étapes que backend/Dockerfile).
+FROM node:24-bookworm-slim AS api-build
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY backend/package.json backend/package-lock.json ./
+COPY backend/prisma ./prisma
+RUN npm ci --no-audit --no-fund
+RUN npx prisma generate
+
+COPY backend/tsconfig.json ./
+COPY backend/src ./src
+RUN npm run build
+
+
+# Étape 2 : front (mêmes étapes que Dockerfile.web).
+FROM node:24-alpine AS web-build
+
+WORKDIR /app
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend/ ./
+
+ENV VITE_API_BASE_URL=""
+RUN npm run build
+
+
+# Étape 3 : image finale.
+FROM node:24-bookworm-slim
+
+# postgresql-common d'abord, pour qu'il ne crée pas de base par défaut à l'installation de PostgreSQL :
+# la base vit dans /data et naît au premier démarrage.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends postgresql-common \
+  && sed -i 's/^#\?\s*create_main_cluster.*/create_main_cluster = false/' /etc/postgresql-common/createcluster.conf \
+  && apt-get install -y --no-install-recommends postgresql-15 nginx openssl ca-certificates tini \
+  && rm -rf /var/lib/apt/lists/* \
+  && rm -f /etc/nginx/sites-enabled/default \
+  && mkdir -p /run/postgresql && chown postgres:postgres /run/postgresql
+
+WORKDIR /app
+
+COPY backend/package.json backend/package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund \
+  && npm cache clean --force
+
+# CLI Prisma à part, à la version du package-lock (voir backend/Dockerfile).
+RUN PRISMA_VERSION="$(node -p "require('./package-lock.json').packages['node_modules/prisma'].version")" \
+  && mkdir -p /opt/prisma \
+  && cd /opt/prisma \
+  && echo '{"private":true}' > package.json \
+  && npm install --no-audit --no-fund "prisma@${PRISMA_VERSION}" \
+  && npm cache clean --force
+
+COPY --from=api-build /app/node_modules/.prisma ./node_modules/.prisma
+COPY backend/prisma ./prisma
+COPY --from=api-build /app/dist ./dist
+
+# nginx : la configuration du conteneur web de compose, l'API étant ici sur la même machine.
+COPY deploy/nginx.docker.conf /etc/nginx/conf.d/default.conf
+RUN sed -i 's|http://api:4000|http://127.0.0.1:4000|g' /etc/nginx/conf.d/default.conf \
+  && ! grep -q 'api:4000' /etc/nginx/conf.d/default.conf
+COPY --from=web-build /app/dist /usr/share/nginx/html
+
+COPY deploy/aio/entrypoint.sh /usr/local/bin/parenthese-aio
+RUN chmod 755 /usr/local/bin/parenthese-aio
+
+ENV NODE_ENV=production \
+    CHECKPOINT_DISABLE=1 \
+    PATH=/opt/prisma/node_modules/.bin:/usr/lib/postgresql/15/bin:$PATH
+
+VOLUME /data
+EXPOSE 80
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=5 \
+  CMD node -e "fetch('http://127.0.0.1/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+
+ENTRYPOINT ["tini", "--", "/usr/local/bin/parenthese-aio"]

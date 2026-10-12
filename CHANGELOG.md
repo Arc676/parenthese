@@ -2,6 +2,48 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
+## Unreleased
+
+### First photos
+
+- Tree creation offers "I already have a tree": the .ged file is imported right away, without creating a "you" entry that would end up duplicated.
+- GEDCOM import reads the photos each person had in the original software (`OBJE` / `FILE`, inline or by reference, primary photo first). After an import, the owner picks the folder where those photos live and Parenthèse places each portrait by file name. Paths stay on the device, nothing is stored on the server.
+- After an import, a window suggests five faces to start with: the close family of the person marked "Me", otherwise the most recent generations.
+- For the owner, an empty portrait invites a photo: the empty frame on a profile is a button outside edit mode, and hovering an empty portrait in the tree shows "+ photo".
+- Phone photos over 5 MB are scaled down to 2000 px before upload instead of being refused.
+- Owner portrait uploads are limited to 120 per minute (was 30), still within the tree's storage quota.
+- Anonymous events: `gedcom_imported`, `portraits_bulk_placed`, `portrait_added` (rounded counts, no names, paths or tree address).
+
+### Fixes
+
+- Docker: on a first `docker compose up`, the API now gets 120 s to run its migrations before its health check counts (was 30 s). The web container waits for a healthy API and used to give up, so it had to be started again by hand.
+- Children of a family with only one known parent (common in GEDCOM files) are linked to that parent, under a single "Unknown" partner, instead of floating in the tree without a link.
+- Importing a GEDCOM file into a tree that already holds it no longer duplicates everyone: people with the same first name, last name, birth and death dates are reused, and existing unions and parent links are kept.
+
+## 1.0.3 (2026-10-10)
+
+### Self-hosting
+
+- Single-container image `ghcr.io/iliesallali/parenthese-aio` (PostgreSQL, API and front end), for Unraid and NAS systems that install one container per app. It needs no configuration: the database, its password and the session key are created in `/data` on first start. Tested in CI by a fresh start, a restart and the smoke test.
+- The `parenthese-web` image reads the API address from `API_UPSTREAM` (`api:4000` by default, unchanged for existing installs). Set it when the name `api` is already taken on the Docker network, for example on Umbrel where apps share one network.
+
+## 1.0.2 (2026-10-09)
+
+### Self-hosting
+
+- Docker images for the API and the front end are published on GitHub's registry, for amd64 and arm64: `ghcr.io/iliesallali/parenthese-api` and `ghcr.io/iliesallali/parenthese-web`. `docker-compose.yml` and `.env` are enough, no clone needed. `PARENTHESE_VERSION` in `.env` pins a version (`latest` follows main). Each publication is tested by an install in an empty folder with those two files only.
+- Creating a tree works on an instance served over plain HTTP on a local network. The browser only offers `crypto.randomUUID` over HTTPS or on localhost, and the sharing password now falls back to `crypto.getRandomValues` (#44, fixed in #45 by @coutadeurf).
+
+### Security
+
+- fast-jwt 6.3.4: its verifier cache could accept an expired token that has no `iat` claim.
+- Build tools only, nothing that runs in the browser or on the server: source-map-js 1.2.2 and postcss-selector-parser 7.1.6 (CPU exhaustion on crafted input).
+
+### Dependencies
+
+- Landing on Vite 8 and @vitejs/plugin-react 6, with the same target browsers as before, like the app.
+- Minor and patch updates (lucide, posthog-js, ESLint, PostCSS).
+
 ## 1.0.1 (2026-10-01)
 
 Security release, from an independent review of 1.0.0.
