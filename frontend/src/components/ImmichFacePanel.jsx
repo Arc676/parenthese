@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ImagePlus, Loader2, Search, Unlink, UserRound, X } from 'lucide-react'
+import { createPortal } from 'react-dom'
 
 import {
   assignImmichPerson,
@@ -128,7 +129,7 @@ const ImmichFacePanel = ({ person, treeId, token, onClose, onImmichChange }) => 
     }
   }
 
-  return (
+  return createPortal(
     <div className="pz-overlay immich-modal-overlay" onClick={handleOverlayClick}>
       <div className="pz-modal immich-modal-card" role="dialog" aria-modal="true" aria-labelledby="immichFaceTitle">
         <div className="pz-modal-head">
@@ -213,7 +214,8 @@ const ImmichFacePanel = ({ person, treeId, token, onClose, onImmichChange }) => 
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
