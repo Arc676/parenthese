@@ -134,6 +134,22 @@ export class ImmichClient {
     return people
   }
 
+  // Une personne précise : 200 avec ses données, 404 si elle n'existe pas. Le 404 de la
+  // vignette ne prouve rien (personne absente ou simple vignette manquante), l'existence
+  // se vérifie donc ici.
+  async getPerson(personId: string): Promise<ImmichPersonSummary> {
+    const response = await this.fetch(`/api/people/${encodeURIComponent(personId)}`)
+    const person = (await response.json()) as { id?: unknown; name?: unknown; thumbnailPath?: unknown }
+    if (typeof person?.id !== 'string' || typeof person?.name !== 'string') {
+      throw new ImmichUnavailableError('Réponse Immich inattendue sur /api/people/{id}')
+    }
+    return {
+      id: person.id,
+      name: person.name,
+      hasThumbnail: typeof person.thumbnailPath === 'string' && person.thumbnailPath.length > 0,
+    }
+  }
+
   // Vignette d'une personne, en octets bruts (JPEG côté Immich). Absente -> ImmichNotFoundError.
   async getPersonThumbnail(personId: string): Promise<Buffer> {
     const response = await this.fetch(`/api/people/${encodeURIComponent(personId)}/thumbnail`)

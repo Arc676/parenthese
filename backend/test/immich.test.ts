@@ -46,6 +46,20 @@ async function jsonResponse(payload: unknown, status = 200): Promise<Response> {
   return new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } })
 }
 
+// Association : deux appels Immich possibles, la personne (JSON) puis sa vignette (image).
+// Le 404 de /api/people/{id} dit que la personne n'existe pas ; celui de /thumbnail seul
+// ne dit rien (personne absente ou vignette manquante).
+function mockImmichPerson(options: { thumbnailPath?: string; thumbnailStatus?: number } = {}): void {
+  const { thumbnailPath = '/thumb/a.jpg', thumbnailStatus = 200 } = options
+  fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.endsWith('/thumbnail')) {
+      return new Response(new Uint8Array(jpegBytes), { status: thumbnailStatus })
+    }
+    return jsonResponse({ id: immichPersonId, name: 'Jean Dupont', thumbnailPath, isHidden: false, birthDate: null })
+  })
+}
+
 async function createUserToken(app: FastifyInstance, userId = 'user-1'): Promise<string> {
   await app.ready()
   return (app as any).jwt.sign(
@@ -305,7 +319,7 @@ describe('Immich integration: assign', () => {
     await writeFile(await absStoragePath(oldAvatarRelative), 'old avatar')
 
     prismaMock.person.findFirst.mockResolvedValue({ id: 'person-1', avatarPath: oldAvatarRelative })
-    fetchMock.mockResolvedValue(new Response(new Uint8Array(jpegBytes), { status: 200 }))
+    mockImmichPerson()
 
     const response = await app.inject({
       method: 'POST',
@@ -346,7 +360,36 @@ describe('Immich integration: assign', () => {
     const token = await createUserToken(app)
 
     prismaMock.person.findFirst.mockResolvedValue({ id: 'person-1', avatarPath: 'tree-1/person-1/avatar-keep.jpg' })
-    fetchMock.mockResolvedValue(new Response('', { status: 404 }))
+    mockImmichPerson({ thumbnailPath: '' })
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/trees/tree-1/immich/assign',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { personId: 'person-1', immichPersonId },
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({ ok: true, avatarUpdated: false, immichPersonId })
+
+    // Sans vignette annoncée, l'appel de vignette n'a même pas lieu.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    const updateData = prismaMock.person.update.mock.calls[0][0].data
+    expect(updateData.immichPersonId).toBe(immichPersonId)
+    expect(updateData).not.toHaveProperty('avatarPath')
+    expect(updateData).not.toHaveProperty('avatarMimeType')
+    await app.close()
+  })
+
+  it('still assigns without the avatar when the thumbnail vanishes after the person was found', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+
+    // Immich annonce une vignette qui répond pourtant 404 : la personne existe,
+    // l'association se fait sans portrait.
+    prismaMock.person.findFirst.mockResolvedValue({ id: 'person-1', avatarPath: null })
+    mockImmichPerson({ thumbnailStatus: 404 })
 
     const response = await app.inject({
       method: 'POST',
@@ -362,6 +405,64 @@ describe('Immich integration: assign', () => {
     expect(updateData.immichPersonId).toBe(immichPersonId)
     expect(updateData).not.toHaveProperty('avatarPath')
     expect(updateData).not.toHaveProperty('avatarMimeType')
+    await app.close()
+  })
+
+  it('refuses the assignment when the Immich person does not exist', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+
+    // Portrait en place : un refus ne doit rien changer.
+    // Dossier dédié : les autres tests laissent leurs portraits dans tree-1/person-1.
+    const avatarRelative = 'tree-1/person-missing/avatar-keep.jpg'
+    await mkdir(path.dirname(await absStoragePath(avatarRelative)), { recursive: true })
+    await writeFile(await absStoragePath(avatarRelative), 'existing avatar')
+
+    prismaMock.person.findFirst.mockResolvedValue({ id: 'person-missing', avatarPath: avatarRelative })
+    // GET /api/people/{id} : la personne n'existe pas. Un 404 sur la vignette ne suffirait
+    // pas à le distinguer d'une simple vignette manquante.
+    fetchMock.mockResolvedValue(new Response('', { status: 404 }))
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/trees/tree-1/immich/assign',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { personId: 'person-missing', immichPersonId },
+    })
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({ error: 'immich_person_not_found' })
+
+    // Base, journal d'audit et fichiers : rien n'a bougé.
+    expect(prismaMock.person.update).not.toHaveBeenCalled()
+    expect(prismaMock.auditLog.create).not.toHaveBeenCalled()
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
+    await expect(fsExists(await absStoragePath(avatarRelative))).resolves.toBe(true)
+
+    const files = await fsListDir(path.join(storageRoot, 'tree-1', 'person-missing'))
+    expect(files.filter((name) => name.startsWith('immich-'))).toEqual([])
+    await app.close()
+  })
+
+  it('maps an Immich auth failure during assignment to 502 without touching the database', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+
+    prismaMock.person.findFirst.mockResolvedValue({ id: 'person-1', avatarPath: null })
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ message: 'Invalid API key' }), { status: 401 }))
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/trees/tree-1/immich/assign',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { personId: 'person-1', immichPersonId },
+    })
+
+    // Un refus d'authentification n'est jamais pris pour une personne manquante.
+    expect(response.statusCode).toBe(502)
+    expect(response.json()).toEqual({ error: 'immich_auth_failed' })
+    expect(prismaMock.person.update).not.toHaveBeenCalled()
+    expect(prismaMock.auditLog.create).not.toHaveBeenCalled()
     await app.close()
   })
 
@@ -426,7 +527,7 @@ describe('Immich integration: assign', () => {
     await writeFile(path.join(storageRoot, 'tree-quota', 'big.bin'), Buffer.alloc(1024 * 1024))
 
     prismaMock.person.findFirst.mockResolvedValue({ id: 'person-quota', avatarPath: null })
-    fetchMock.mockResolvedValue(new Response(new Uint8Array(jpegBytes), { status: 200 }))
+    mockImmichPerson()
 
     const response = await app.inject({
       method: 'POST',
@@ -449,7 +550,7 @@ describe('Immich integration: assign', () => {
     await writeFile(await absStoragePath(oldAvatarRelative), 'old avatar')
 
     prismaMock.person.findFirst.mockResolvedValue({ id: 'person-tx', avatarPath: oldAvatarRelative })
-    fetchMock.mockResolvedValue(new Response(new Uint8Array(jpegBytes), { status: 200 }))
+    mockImmichPerson()
     prismaMock.$transaction.mockRejectedValue(new Error('db down'))
 
     const response = await app.inject({

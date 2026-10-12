@@ -11,6 +11,7 @@ import {
   ImmichAuthError,
   ImmichNotFoundError,
   ImmichUnavailableError,
+  type ImmichPersonSummary,
 } from '../lib/immich.js'
 import { InvalidMediaError, removeStoredFile, sniffMimeType } from '../lib/media-files.js'
 import { exceedsStorageQuota, getStorageRoot, prepareUploadedFile, requireAdminMembership } from './media.js'
@@ -184,15 +185,28 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: 'person_not_found' })
     }
 
-    // Vignette de la personne Immich : absente -> on associe sans toucher au portrait existant.
-    let thumbnail: Buffer | null = null
+    // La personne Immich doit exister : le 404 de la vignette ne le prouve pas (personne
+    // absente ou simple vignette manquante), on la vérifie donc explicitement. Un refus
+    // d'authentification ou une erreur serveur ne sont jamais pris pour une absence.
+    let immichPerson: ImmichPersonSummary
     try {
-      thumbnail = await client.getPersonThumbnail(immichPersonId)
+      immichPerson = await client.getPerson(immichPersonId)
     } catch (error) {
-      if (!(error instanceof ImmichNotFoundError)) {
-        return replyImmichError(request, reply, error)
+      return replyImmichError(request, reply, error)
+    }
+
+    // Vignette de la personne Immich : absente -> on associe sans toucher au portrait existant.
+    // Demandée seulement si Immich en annonce une : sans vignette, l'appel est inutile.
+    let thumbnail: Buffer | null = null
+    if (immichPerson.hasThumbnail) {
+      try {
+        thumbnail = await client.getPersonThumbnail(immichPersonId)
+      } catch (error) {
+        if (!(error instanceof ImmichNotFoundError)) {
+          return replyImmichError(request, reply, error)
+        }
+        // Vignette absente : l'association se fait sans portrait.
       }
-      // Vignette absente : l'association se fait sans portrait.
     }
 
     if (!thumbnail) {
