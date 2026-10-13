@@ -19,6 +19,9 @@ const { prismaMock } = vi.hoisted(() => ({
     treeMembership: {
       findUnique: vi.fn(),
     },
+    treeImmichConfig: {
+      findUnique: vi.fn(),
+    },
     mediaItem: {
       aggregate: vi.fn(),
     },
@@ -37,6 +40,7 @@ vi.mock('../src/lib/prisma.js', () => ({
 let createApp: () => FastifyInstance
 let storageRoot: string
 let jpegBytes: Buffer
+let treeApiKeyEnc = ''
 const immichPersonId = '123e4567-e89b-42d3-a456-426614174000'
 const otherImmichId = '123e4567-e89b-42d3-a456-426614174111'
 
@@ -97,9 +101,13 @@ beforeAll(async () => {
   process.env.JWT_EXPIRES_IN = '7d'
   process.env.JWT_TREE_ACCESS_EXPIRES_IN = '24h'
   process.env.CORS_ORIGIN = 'http://localhost:5173'
+  // Plus de variables d'environnement Immich : la connexion de l'arbre vit en base,
+  // un arbre sans ligne n'a jamais accès à l'instance d'un autre.
   process.env.IMMICH_ENABLED = 'true'
-  process.env.IMMICH_API_URL = 'http://immich.test'
-  process.env.IMMICH_API_KEY = 'test-key'
+  process.env.IMMICH_API_URL = 'http://env-immich.example.org'
+  process.env.IMMICH_API_KEY = 'env-key'
+  // L'instance de l'arbre fait partie de la liste autorisée par l'opérateur.
+  process.env.IMMICH_ALLOWED_API_URLS = 'http://immich.test'
 
   storageRoot = await mkdtemp(path.join(os.tmpdir(), 'parenthese-immich-'))
   process.env.MEDIA_STORAGE_PATH = storageRoot
@@ -107,6 +115,11 @@ beforeAll(async () => {
   process.env.MEDIA_QUOTA_PER_TREE_MB = '1'
 
   jpegBytes = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#aabbcc' } }).jpeg().toBuffer()
+
+  // Clé chiffrée avec le secret effectif de l'application : import dynamique pour que
+  // la configuration d'environnement ci-dessus soit déjà en place.
+  const secret = await import('../src/lib/immich-secret.js')
+  treeApiKeyEnc = secret.encryptImmichApiKey('test-key')
 
   const module = await import('../src/app.js')
   createApp = module.createApp
@@ -139,6 +152,9 @@ beforeEach(async () => {
     tree: { deletedAt: null },
   })
 
+  // Connexion Immich de l'arbre : résolue en base, clé chiffrée comme en production.
+  prismaMock.treeImmichConfig.findUnique.mockResolvedValue({ apiUrl: 'http://immich.test', apiKeyEnc: treeApiKeyEnc })
+
   prismaMock.person.findFirst.mockResolvedValue(null)
   prismaMock.person.update.mockResolvedValue({ id: 'person-1' })
   prismaMock.auditLog.create.mockResolvedValue({ id: 'audit-1' })
@@ -149,6 +165,34 @@ beforeEach(async () => {
 })
 
 describe('Immich integration: status and people', () => {
+  it('talks to the tree\'s own Immich instance, never to the server environment', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    fetchMock.mockResolvedValue(await jsonResponse({ res: 'pong' }))
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/trees/tree-1/immich/status',
+      headers: { authorization: `Bearer ${token}` },
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({ available: true, reason: null })
+
+    // La connexion vient de la base (http://immich.test), pas des variables d'environnement
+    // (http://env-immich.example.org), et la clé passe par l'en-tête, jamais dans l'URL.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(String(fetchMock.mock.calls[0][0])).toBe('http://immich.test/api/server/ping')
+    expect((fetchMock.mock.calls[0][1] as RequestInit).headers).toMatchObject({ 'x-api-key': 'test-key' })
+
+    // La clé est lue depuis l'arbre demandé, pas depuis un autre.
+    expect(prismaMock.treeImmichConfig.findUnique).toHaveBeenCalledWith({
+      where: { treeId: 'tree-1' },
+      select: { apiUrl: true, apiKeyEnc: true },
+    })
+    await app.close()
+  })
+
   it('reports Immich available when ping answers pong', async () => {
     const app = createApp()
     const token = await createUserToken(app)

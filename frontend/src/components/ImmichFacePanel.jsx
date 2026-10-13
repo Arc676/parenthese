@@ -129,6 +129,17 @@ const ImmichFacePanel = ({ person, treeId, token, onClose, onImmichChange }) => 
     }
   }
 
+  // L'association en place se retire aussi bien sans connexion : changer ou retirer le serveur
+  // Immich ne laisse jamais une ancienne image impossible à nettoyer manuellement.
+  const currentAssociation = person.immichPersonId && (
+    <div className="immich-current">
+      <p>{t('{name} est déjà associée à une personne Immich.', { name: person.firstName || person.lastName })}</p>
+      <button type="button" className="pz-btn pz-btn--danger-ghost" onClick={handleUnassign} disabled={actionLoading}>
+        <Unlink size={16} aria-hidden="true" /> {t('Retirer l’association')}
+      </button>
+    </div>
+  )
+
   return createPortal(
     <div className="pz-overlay immich-modal-overlay" onClick={handleOverlayClick}>
       <div className="pz-modal immich-modal-card" role="dialog" aria-modal="true" aria-labelledby="immichFaceTitle">
@@ -144,22 +155,17 @@ const ImmichFacePanel = ({ person, treeId, token, onClose, onImmichChange }) => 
           <div className="immich-body"><PzBusy /></div>
         ) : available === false ? (
           <div className="immich-body">
+            {currentAssociation}
             <p className="immich-empty">
               {unavailableReason === 'not_configured'
-                ? t('Immich n’est pas configuré sur le serveur.')
+                ? t('Immich n’est pas configuré pour cet arbre. Ses administrateurs le règlent dans Paramètres de l’arbre.')
                 : t('Immich est injoignable.')}
             </p>
+            {error && <div className="pz-error immich-error">{error}</div>}
           </div>
         ) : (
           <div className="immich-body">
-            {person.immichPersonId && (
-              <div className="immich-current">
-                <p>{t('{name} est déjà associée à une personne Immich.', { name: person.firstName || person.lastName })}</p>
-                <button type="button" className="pz-btn pz-btn--danger-ghost" onClick={handleUnassign} disabled={actionLoading}>
-                  <Unlink size={16} aria-hidden="true" /> {t('Retirer l’association')}
-                </button>
-              </div>
-            )}
+            {currentAssociation}
 
             <div className="pz-field">
               <span className="pz-label" id="immichSearchLabel">{t('Personne à associer dans Immich')}</span>
