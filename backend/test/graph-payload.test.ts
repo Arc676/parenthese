@@ -42,6 +42,24 @@ describe('buildGraphPayload', () => {
           updatedAt: new Date(),
           deletedAt: null,
         },
+        {
+          id: 'p-3',
+          treeId: 't-1',
+          firstName: 'Paul',
+          lastName: 'Durand',
+          birthName: null,
+          birthDate: null,
+          deathDate: null,
+          sex: 'male',
+          notes: null,
+          avatarPath: 't-1/p-3/immich-abc.jpg',
+          immichPersonId: '123e4567-e89b-42d3-a456-426614174999',
+          createdBy: null,
+          updatedBy: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          deletedAt: null,
+        },
       ] as any,
       [
         {
@@ -99,8 +117,13 @@ describe('buildGraphPayload', () => {
     expect(graph.persons[0].birthName).toBe('Durand')
     expect(graph.persons[0].avatarUrlPath).toBe('/trees/t-1/persons/p-2/avatar')
     // L'identifiant Immich ne part jamais dans le graphe : il ne sert qu'aux administrateurs.
+    // Seule l'origine du portrait (fichier préfixé « immich- ») est publiée.
     expect(graph.persons[0]).not.toHaveProperty('immichPersonId')
     expect(graph.persons[1]).not.toHaveProperty('immichPersonId')
+    expect(graph.persons[2]).not.toHaveProperty('immichPersonId')
+    expect(graph.persons[0].avatarFromImmich).toBe(false)
+    expect(graph.persons[1].avatarFromImmich).toBe(false)
+    expect(graph.persons[2].avatarFromImmich).toBe(true)
     expect(graph.persons[1].avatarUrlPath).toBeNull()
     expect(graph.unions[0].id).toBe('u-1')
     expect(graph.filiations[0].viaUnionId).toBe('u-1')

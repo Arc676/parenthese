@@ -15,6 +15,7 @@ describe('loadGraphData avatar mapping', () => {
             deathDate: null,
             notes: null,
             avatarUrlPath: '/trees/t-1/persons/p-1/avatar',
+            avatarFromImmich: true,
           },
           {
             id: 'p-2',
@@ -24,6 +25,7 @@ describe('loadGraphData avatar mapping', () => {
             deathDate: null,
             notes: null,
             avatarUrlPath: null,
+            avatarFromImmich: false,
           },
         ],
         unions: [],
@@ -48,6 +50,9 @@ describe('loadGraphData avatar mapping', () => {
     expect(getPersonById('p-1')?.photo).toBe('/api/trees/t-1/persons/p-1/avatar?token=abc')
     expect(getPersonById('p-2')?.photo).toBeNull()
     expect(getPersonMedias('p-2')[0]?.source).toBe('Album familial')
+    // Origine du portrait portée par la personne (faux quand il ne vient pas d'Immich)
+    expect(getPersonById('p-1')?.avatarFromImmich).toBe(true)
+    expect(getPersonById('p-2')?.avatarFromImmich).toBe(false)
   })
 })
 

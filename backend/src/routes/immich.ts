@@ -16,7 +16,7 @@ import {
   type ImmichPersonSummary,
 } from '../lib/immich.js'
 import { encryptImmichApiKey } from '../lib/immich-secret.js'
-import { InvalidMediaError, removeStoredFile, sniffMimeType } from '../lib/media-files.js'
+import { InvalidMediaError, isImmichAvatarPath, removeStoredFile, sniffMimeType } from '../lib/media-files.js'
 import { exceedsStorageQuota, getStorageRoot, prepareUploadedFile, requireAdminMembership } from './media.js'
 
 // Reconnaissance des visages : associer une personne de l'arbre à une personne Immich, dont la
@@ -503,7 +503,7 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
 
     // Le portrait vient d'Immich uniquement si son fichier porte notre préfixe. Un portrait
     // envoyé à la main reste en place : seule l'association est retirée.
-    const avatarFromImmich = person.avatarPath !== null && path.basename(person.avatarPath).startsWith('immich-')
+    const avatarFromImmich = isImmichAvatarPath(person.avatarPath)
 
     const updateData: {
       immichPersonId: null

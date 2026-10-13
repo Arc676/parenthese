@@ -113,7 +113,7 @@ const ImmichFacePanel = ({ person, treeId, token, onClose, onImmichChange }) => 
   }, [selected, actionLoading, treeId, person, token, onImmichChange, onClose])
 
   const handleUnassign = useCallback(async () => {
-    if (actionLoading) return
+    if (!person.avatarFromImmich || actionLoading) return
     setActionLoading(true)
     setError('')
     try {
@@ -137,13 +137,12 @@ const ImmichFacePanel = ({ person, treeId, token, onClose, onImmichChange }) => 
     }
   }
 
-  // Le retrait se propose toujours : le graphe ne dit plus qui est associé. Une association en
-  // place se retire aussi bien sans connexion : changer ou retirer le serveur Immich ne laisse
-  // jamais une ancienne image impossible à nettoyer manuellement. Sans association, le retrait
-  // ne fait rien côté serveur.
-  const unassignBlock = (
+  // L'association en place se retire aussi bien sans connexion : changer ou retirer le serveur
+  // Immich ne laisse jamais une ancienne image impossible à nettoyer manuellement. Le graphe
+  // ne dit que l'origine du portrait (avatarFromImmich), jamais l'identifiant Immich.
+  const unassignBlock = person.avatarFromImmich && (
     <div className="immich-current">
-      <p>{t('{name} peut être détachée d’une personne Immich, même si Immich est injoignable.', { name: person.firstName || person.lastName })}</p>
+      <p>{t('{name} est déjà associée à une personne Immich.', { name: person.firstName || person.lastName })}</p>
       <button type="button" className="pz-btn pz-btn--danger-ghost" onClick={handleUnassign} disabled={actionLoading}>
         <Unlink size={16} aria-hidden="true" /> {t('Retirer l’association')}
       </button>
