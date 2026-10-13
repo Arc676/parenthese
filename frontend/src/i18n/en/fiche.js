@@ -261,6 +261,8 @@ export default {
   'Inconnu': 'Unknown',
   // Visages venus d'Immich (PersonCard, ImmichFacePanel, immichApi)
   'Depuis Immich': 'From Immich',
+  'Depuis un fichier': 'From a file',
+  'Source du portrait': 'Portrait source',
   'Visage Immich': 'Immich face',
   'Reconnaissance des visages': 'Face recognition',
   'Immich n’est pas configuré pour cet arbre.': 'Immich is not configured for this tree.',
