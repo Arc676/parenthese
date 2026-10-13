@@ -357,7 +357,8 @@ describe('Immich integration: assign', () => {
     const app = createApp()
     const token = await createUserToken(app)
 
-    // Portrait manuel en place : il doit être supprimé une fois la base à jour.
+    // Portrait manuel en place : l'administrateur a confirmé son remplacement, il doit
+    // être supprimé une fois la base à jour.
     const oldAvatarRelative = 'tree-1/person-1/avatar-old.jpg'
     await mkdir(path.dirname(await absStoragePath(oldAvatarRelative)), { recursive: true })
     await writeFile(await absStoragePath(oldAvatarRelative), 'old avatar')
@@ -369,7 +370,7 @@ describe('Immich integration: assign', () => {
       method: 'POST',
       url: '/trees/tree-1/immich/assign',
       headers: { authorization: `Bearer ${token}` },
-      payload: { personId: 'person-1', immichPersonId },
+      payload: { personId: 'person-1', immichPersonId, replaceAvatar: true },
     })
 
     expect(response.statusCode).toBe(200)
@@ -399,10 +400,62 @@ describe('Immich integration: assign', () => {
     await app.close()
   })
 
+  it('asks before replacing an existing portrait, whatever its origin', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    mockImmichPerson()
+
+    // Portrait manuel en place : l'association ne le remplace pas sans accord explicite.
+    const manualAvatarRelative = 'tree-1/person-confirm/avatar-manuel.jpg'
+    await mkdir(path.dirname(await absStoragePath(manualAvatarRelative)), { recursive: true })
+    await writeFile(await absStoragePath(manualAvatarRelative), 'portrait manuel')
+
+    prismaMock.person.findFirst.mockResolvedValue({ id: 'person-confirm', avatarPath: manualAvatarRelative })
+
+    const manual = await app.inject({
+      method: 'POST',
+      url: '/trees/tree-1/immich/assign',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { personId: 'person-confirm', immichPersonId },
+    })
+
+    expect(manual.statusCode).toBe(409)
+    expect(manual.json()).toEqual({ error: 'avatar_exists' })
+
+    // Même garde pour un portrait venu d'une association Immich précédente.
+    prismaMock.person.findFirst.mockResolvedValue({
+      id: 'person-confirm',
+      avatarPath: `tree-1/person-confirm/immich-${randomUUID()}.jpg`,
+      immichPersonId: otherImmichId,
+    })
+
+    const fromImmich = await app.inject({
+      method: 'POST',
+      url: '/trees/tree-1/immich/assign',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { personId: 'person-confirm', immichPersonId },
+    })
+
+    expect(fromImmich.statusCode).toBe(409)
+    expect(fromImmich.json()).toEqual({ error: 'avatar_exists' })
+
+    // Base, journal d'audit et fichiers : rien n'a bougé.
+    expect(prismaMock.person.update).not.toHaveBeenCalled()
+    expect(prismaMock.auditLog.create).not.toHaveBeenCalled()
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
+    await expect(fsExists(await absStoragePath(manualAvatarRelative))).resolves.toBe(true)
+
+    const files = await fsListDir(path.join(storageRoot, 'tree-1', 'person-confirm'))
+    expect(files.filter((name) => name.startsWith('immich-'))).toEqual([])
+    await app.close()
+  })
+
   it('assigns without touching the avatar when Immich has no thumbnail', async () => {
     const app = createApp()
     const token = await createUserToken(app)
 
+    // Portrait manuel conservé : sans vignette Immich, l'association ne le remplace pas,
+    // aucune confirmation n'est donc nécessaire.
     prismaMock.person.findFirst.mockResolvedValue({ id: 'person-1', avatarPath: 'tree-1/person-1/avatar-keep.jpg' })
     mockImmichPerson({ thumbnailPath: '' })
 
@@ -601,7 +654,7 @@ describe('Immich integration: assign', () => {
       method: 'POST',
       url: '/trees/tree-1/immich/assign',
       headers: { authorization: `Bearer ${token}` },
-      payload: { personId: 'person-tx', immichPersonId },
+      payload: { personId: 'person-tx', immichPersonId, replaceAvatar: true },
     })
 
     expect(response.statusCode).toBe(500)

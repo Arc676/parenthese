@@ -25,6 +25,7 @@ const ImmichFacePanel = ({ person, treeId, token, onClose, onImmichChange }) => 
   const [selected, setSelected] = useState(null)
   const [thumbnailUrl, setThumbnailUrl] = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
+  const [confirmReplace, setConfirmReplace] = useState(false)
   const [error, setError] = useState('')
   const thumbnailRef = useRef(null)
 
@@ -82,6 +83,7 @@ const ImmichFacePanel = ({ person, treeId, token, onClose, onImmichChange }) => 
   const handleSelect = useCallback((immichPerson) => {
     setSelected(immichPerson)
     setError('')
+    setConfirmReplace(false)
     if (immichPerson?.hasThumbnail && immichPerson?.id) {
       loadThumbnail(immichPerson.id)
     } else {
@@ -89,16 +91,22 @@ const ImmichFacePanel = ({ person, treeId, token, onClose, onImmichChange }) => 
     }
   }, [loadThumbnail, releaseThumbnail])
 
-  const handleAssign = useCallback(async () => {
+  const handleAssign = useCallback(async (replaceAvatar = false) => {
     if (!selected || actionLoading) return
     setActionLoading(true)
     setError('')
     try {
-      await assignImmichPerson(treeId, person.id, selected.id, token)
+      await assignImmichPerson(treeId, person.id, selected.id, token, { replaceAvatar })
       onImmichChange?.(person.id)
       onClose?.()
     } catch (err) {
-      setError(getImmichErrorMessage(err, t))
+      // Un portrait est déjà en place : le serveur refuse le remplacement en silence
+      // (409 avatar_exists) ; il revient à l'administrateur de le confirmer.
+      if (!replaceAvatar && err?.payload?.error === 'avatar_exists') {
+        setConfirmReplace(true)
+      } else {
+        setError(getImmichErrorMessage(err, t))
+      }
     } finally {
       setActionLoading(false)
     }
@@ -210,12 +218,32 @@ const ImmichFacePanel = ({ person, treeId, token, onClose, onImmichChange }) => 
 
             {error && <div className="pz-error immich-error">{error}</div>}
 
+            {confirmReplace && (
+              <p className="immich-confirm">
+                {t('Un portrait est déjà en place. Associer cette personne Immich remplacera le portrait actuel et supprimera son fichier.')}
+              </p>
+            )}
+
             <div className="pz-modal-actions">
-              <button type="button" className="pz-btn pz-btn--ghost" onClick={onClose}>{t('Annuler')}</button>
-              <button type="button" className="pz-btn pz-btn--primary" onClick={handleAssign} disabled={!selected || actionLoading}>
-                {actionLoading ? <Loader2 size={16} className="immich-spin" aria-hidden="true" /> : null}
-                {t('Associer et prendre le portrait')}
-              </button>
+              {confirmReplace ? (
+                <>
+                  <button type="button" className="pz-btn pz-btn--ghost" onClick={() => setConfirmReplace(false)}>
+                    {t('Garder le portrait actuel')}
+                  </button>
+                  <button type="button" className="pz-btn pz-btn--danger" onClick={() => handleAssign(true)} disabled={actionLoading}>
+                    {actionLoading ? <Loader2 size={16} className="immich-spin" aria-hidden="true" /> : null}
+                    {t('Remplacer le portrait et associer')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="pz-btn pz-btn--ghost" onClick={onClose}>{t('Annuler')}</button>
+                  <button type="button" className="pz-btn pz-btn--primary" onClick={() => handleAssign()} disabled={!selected || actionLoading}>
+                    {actionLoading ? <Loader2 size={16} className="immich-spin" aria-hidden="true" /> : null}
+                    {t('Associer et prendre le portrait')}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}

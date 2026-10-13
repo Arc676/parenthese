@@ -285,4 +285,8 @@ export default {
   'Sans nom': 'Unnamed',
   'Aucune sélection': 'No selection',
   'Associer et prendre le portrait': 'Link and use as portrait',
+  'Un portrait est déjà en place. Associer cette personne Immich remplacera le portrait actuel et supprimera son fichier.':
+    'A portrait is already in place. Linking this Immich person will replace the current portrait and delete its file.',
+  'Garder le portrait actuel': 'Keep the current portrait',
+  'Remplacer le portrait et associer': 'Replace the portrait and link',
 }

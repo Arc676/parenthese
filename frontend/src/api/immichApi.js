@@ -70,10 +70,12 @@ export async function fetchImmichThumbnail(treeId, immichPersonId, token) {
   return URL.createObjectURL(await response.blob())
 }
 
-export async function assignImmichPerson(treeId, personId, immichPersonId, token) {
+export async function assignImmichPerson(treeId, personId, immichPersonId, token, { replaceAvatar = false } = {}) {
   return apiRequest(`/trees/${encodeURIComponent(treeId)}/immich/assign`, withAuth({
     method: 'POST',
-    body: JSON.stringify({ personId, immichPersonId }),
+    // replaceAvatar : accord explicite pour remplacer un portrait déjà en place — le serveur
+    // refuse sinon (409 avatar_exists), quelle que soit l'origine du portrait actuel.
+    body: JSON.stringify({ personId, immichPersonId, ...(replaceAvatar ? { replaceAvatar: true } : {}) }),
   }, token))
 }
 

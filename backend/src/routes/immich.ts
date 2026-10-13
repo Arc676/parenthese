@@ -30,6 +30,9 @@ const treeParamSchema = z.object({ id: z.string().min(1) })
 const assignSchema = z.object({
   personId: z.string().min(1),
   immichPersonId: z.string().refine(isImmichPersonId, 'invalid_immich_person_id'),
+  // Remplacer un portrait déjà en place demande un accord explicite, quelle que soit son
+  // origine (posé à la main ou venu d'une association Immich précédente).
+  replaceAvatar: z.boolean().optional(),
 })
 
 const unassignSchema = z.object({
@@ -383,6 +386,13 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
       ])
 
       return reply.send({ ok: true, avatarUpdated: false, immichPersonId })
+    }
+
+    // Un portrait déjà en place ne se remplace jamais en silence : sans accord explicite,
+    // l'association s'arrête avant d'écrire quoi que ce soit. Le front transforme ce refus
+    // en demande de confirmation puis rejoue la requête avec replaceAvatar.
+    if (person.avatarPath && !payload.data.replaceAvatar) {
+      return reply.code(409).send({ error: 'avatar_exists' })
     }
 
     // La vignette passe par le même traitement qu'un portrait envoyé : type lu dans les octets,
