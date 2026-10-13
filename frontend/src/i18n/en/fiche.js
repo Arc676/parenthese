@@ -261,7 +261,6 @@ export default {
   'Inconnu': 'Unknown',
   // Visages venus d'Immich (PersonCard, ImmichFacePanel, immichApi)
   'Depuis Immich': 'From Immich',
-  'Visage Immich': 'Immich face',
   'Reconnaissance des visages': 'Face recognition',
   'Immich n’est pas configuré pour cet arbre.': 'Immich is not configured for this tree.',
   'Immich n’est pas configuré pour cet arbre. Ses administrateurs le règlent dans Paramètres de l’arbre.': 'Immich is not configured for this tree. Its administrators set it up in Tree settings.',
@@ -275,7 +274,8 @@ export default {
   'Cette adresse Immich n’est pas autorisée par l’opérateur du serveur.': 'This Immich address is not authorized by the server operator.',
   'Seuls les administrateurs de l’arbre peuvent associer un visage Immich.': 'Only tree administrators can link an Immich face.',
   'Erreur inattendue.': 'Unexpected error.',
-  '{name} est déjà associée à une personne Immich.': '{name} is already linked to an Immich person.',
+  '{name} peut être détachée d’une personne Immich, même si Immich est injoignable.':
+    '{name} can be detached from an Immich person, even when Immich cannot be reached.',
   'Retirer l’association': 'Remove the link',
   'Personne à associer dans Immich': 'Immich person to link',
   'Rechercher par nom': 'Search by name',

@@ -113,7 +113,7 @@ const ImmichFacePanel = ({ person, treeId, token, onClose, onImmichChange }) => 
   }, [selected, actionLoading, treeId, person, token, onImmichChange, onClose])
 
   const handleUnassign = useCallback(async () => {
-    if (!person.immichPersonId || actionLoading) return
+    if (actionLoading) return
     setActionLoading(true)
     setError('')
     try {
@@ -137,11 +137,13 @@ const ImmichFacePanel = ({ person, treeId, token, onClose, onImmichChange }) => 
     }
   }
 
-  // L'association en place se retire aussi bien sans connexion : changer ou retirer le serveur
-  // Immich ne laisse jamais une ancienne image impossible à nettoyer manuellement.
-  const currentAssociation = person.immichPersonId && (
+  // Le retrait se propose toujours : le graphe ne dit plus qui est associé. Une association en
+  // place se retire aussi bien sans connexion : changer ou retirer le serveur Immich ne laisse
+  // jamais une ancienne image impossible à nettoyer manuellement. Sans association, le retrait
+  // ne fait rien côté serveur.
+  const unassignBlock = (
     <div className="immich-current">
-      <p>{t('{name} est déjà associée à une personne Immich.', { name: person.firstName || person.lastName })}</p>
+      <p>{t('{name} peut être détachée d’une personne Immich, même si Immich est injoignable.', { name: person.firstName || person.lastName })}</p>
       <button type="button" className="pz-btn pz-btn--danger-ghost" onClick={handleUnassign} disabled={actionLoading}>
         <Unlink size={16} aria-hidden="true" /> {t('Retirer l’association')}
       </button>
@@ -163,7 +165,7 @@ const ImmichFacePanel = ({ person, treeId, token, onClose, onImmichChange }) => 
           <div className="immich-body"><PzBusy /></div>
         ) : available === false ? (
           <div className="immich-body">
-            {currentAssociation}
+            {unassignBlock}
             <p className="immich-empty">
               {unavailableReason === 'not_configured'
                 ? t('Immich n’est pas configuré pour cet arbre. Ses administrateurs le règlent dans Paramètres de l’arbre.')
@@ -173,7 +175,7 @@ const ImmichFacePanel = ({ person, treeId, token, onClose, onImmichChange }) => 
           </div>
         ) : (
           <div className="immich-body">
-            {currentAssociation}
+            {unassignBlock}
 
             <div className="pz-field">
               <span className="pz-label" id="immichSearchLabel">{t('Personne à associer dans Immich')}</span>

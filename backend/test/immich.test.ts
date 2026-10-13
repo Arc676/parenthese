@@ -737,6 +737,26 @@ describe('Immich integration: unassign', () => {
     await app.close()
   })
 
+  it('does nothing when no association is in place', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+
+    prismaMock.person.findFirst.mockResolvedValue({ id: 'person-1', avatarPath: null, immichPersonId: null })
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/trees/tree-1/immich/unassign',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { personId: 'person-1' },
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({ ok: true, avatarRemoved: false })
+    expect(prismaMock.person.update).not.toHaveBeenCalled()
+    expect(prismaMock.auditLog.create).not.toHaveBeenCalled()
+    await app.close()
+  })
+
   it('rejects unknown persons and non-admin members', async () => {
     const app = createApp()
     const token = await createUserToken(app)

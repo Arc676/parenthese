@@ -495,6 +495,12 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: 'person_not_found' })
     }
 
+    // Le graphe ne dit plus qui est associé : le retrait se propose toujours côté front. Sans
+    // association en place, il ne fait rien — pas d'écriture, pas d'entrée d'audit.
+    if (!person.immichPersonId) {
+      return reply.send({ ok: true, avatarRemoved: false })
+    }
+
     // Le portrait vient d'Immich uniquement si son fichier porte notre préfixe. Un portrait
     // envoyé à la main reste en place : seule l'association est retirée.
     const avatarFromImmich = person.avatarPath !== null && path.basename(person.avatarPath).startsWith('immich-')

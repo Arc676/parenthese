@@ -378,7 +378,7 @@ const PersonCard = ({
               )}
               {treeId && onImmichChange && (
                 <button type="button" className="pc-photo-btn" onClick={() => setShowImmichPanel(true)} disabled={avatarActionLoading}>
-                  <Sparkles size={14} aria-hidden="true" /> {person.immichPersonId ? t('Visage Immich') : t('Depuis Immich')}
+                  <Sparkles size={14} aria-hidden="true" /> {t('Depuis Immich')}
                 </button>
               )}
             </div>

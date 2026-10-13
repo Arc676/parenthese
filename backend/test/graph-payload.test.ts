@@ -18,6 +18,7 @@ describe('buildGraphPayload', () => {
           sex: null,
           notes: null,
           avatarPath: 't-1/p-2/avatar.jpg',
+          immichPersonId: '123e4567-e89b-42d3-a456-426614174000',
           createdBy: null,
           updatedBy: null,
           createdAt: new Date(),
@@ -97,6 +98,9 @@ describe('buildGraphPayload', () => {
     expect(graph.persons[0].birthDate).toBe('1994-06-02')
     expect(graph.persons[0].birthName).toBe('Durand')
     expect(graph.persons[0].avatarUrlPath).toBe('/trees/t-1/persons/p-2/avatar')
+    // L'identifiant Immich ne part jamais dans le graphe : il ne sert qu'aux administrateurs.
+    expect(graph.persons[0]).not.toHaveProperty('immichPersonId')
+    expect(graph.persons[1]).not.toHaveProperty('immichPersonId')
     expect(graph.persons[1].avatarUrlPath).toBeNull()
     expect(graph.unions[0].id).toBe('u-1')
     expect(graph.filiations[0].viaUnionId).toBe('u-1')
