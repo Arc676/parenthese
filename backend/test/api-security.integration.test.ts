@@ -456,11 +456,15 @@ describe('API security and authz', () => {
       payload: {
         firstName: 'Alice',
         notes: 'Mise a jour',
+        layoutX: 321.5,
+        layoutY: 654.25,
       },
     })
 
     expect(patchResponse.statusCode).toBe(200)
-    expect(prismaMock.person.updateMany).toHaveBeenCalled()
+    expect(prismaMock.person.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ layoutX: 321.5, layoutY: 654.25 }),
+    }))
 
     prismaMock.union.updateMany.mockResolvedValueOnce({ count: 2 })
     prismaMock.parentChildLink.updateMany.mockResolvedValueOnce({ count: 3 })

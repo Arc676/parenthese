@@ -1,5 +1,5 @@
 import { memo, useEffect, useImperativeHandle, useRef, useState, useCallback } from 'react'
-import { getPersonMedias, getParents, getChildren, getPersonUnions } from '../data/mockData'
+import { getPersonById, getPersonMedias, getParents, getChildren, getPersonUnions } from '../data/mockData'
 import { PERSON_R, FLOAT_SPEED, FLOAT_AMPLITUDE, REPULSION_RADIUS, REPULSION_STRENGTH, MAX_ORBIT_MEDIAS, ENTRANCE_GEN_DELAY, ENTRANCE_NODE_DURATION, ENTRANCE_NODE_STAGGER, ENTRANCE_MAX_GEN_SPAN, ENTRANCE_MAX_NODE_SPAN, ENTRANCE_LINE_DELAY, ENTRANCE_LINE_DURATION, ENTRANCE_ORBIT_DELAY, ENTRANCE_ORBIT_DURATION, ENTRANCE_ORBIT_STAGGER } from './galaxy/constants'
 import { easeOutCubic } from './galaxy/utils'
 import { computeLayout, generateNodeRandomData, coupleBarMeta } from './galaxy/elkLayout'
@@ -12,6 +12,11 @@ import { drawBackground, drawCoupleLinks, drawFiliations, drawAnnotations, drawP
 import { annotations as annotationData } from '../data/mockData'
 import { useImageCache } from './galaxy/useImageCache'
 import { useGalaxyInteractions } from './galaxy/useGalaxyInteractions'
+import {
+  applyManualPersonPositions,
+  captureAutomaticPersonPositions,
+  positionUnionJunctions,
+} from './galaxy/layoutPositions'
 import './Galaxy.css'
 
 // Assez bas pour cadrer un grand arbre entier à l'ouverture
@@ -29,7 +34,7 @@ const MAX_SCALE = 3.2
 const FOCUS_MIN_READABLE_SCALE = 0.5
 const FOCUS_SCALE = 0.95
 
-const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, photoHint = false }) => {
+const Galaxy = ({ onPersonSelect, onMediaSelect, onPersonPositionChange, editModeActive = false, manualPositionOverrides = {}, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, photoHint = false }) => {
   const canvasRef = useRef(null)
   // Lu au calcul du cadrage seulement : changer de personne de départ ne recadre pas une vue en cours
   const focusPersonIdRef = useRef(focusPersonId)
@@ -38,7 +43,10 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   // Propriétaire : un portrait vide survolé montre « + photo »
   const photoHintRef = useRef(photoHint)
   useEffect(() => { photoHintRef.current = photoHint }, [photoHint])
+  const manualPositionOverridesRef = useRef(manualPositionOverrides)
+  useEffect(() => { manualPositionOverridesRef.current = manualPositionOverrides }, [manualPositionOverrides])
   const layoutDataRef = useRef(null)
+  const automaticPersonPositionsRef = useRef(new Map())
   const [layoutReady, setLayoutReady] = useState(false)
   const transformRef = useRef({ x: 0, y: 0, scale: 1 })
 
@@ -84,6 +92,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   const getAnimatedPos = useCallback((node, time) => {
     const baseCx = node.x + node.width / 2
     const baseCy = node.y + node.height / 2
+    if (node._manualPosition) return { cx: baseCx, cy: baseCy }
     const rd = nodeRandomDataRef.current.get(node.id)
     if (!rd) return { cx: baseCx, cy: baseCy }
 
@@ -117,6 +126,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     layoutDataRef, nodeRandomDataRef, entranceRef,
     hoveredNodeIdRef: hoveredNodeId, hoveredMediaKeyRef: hoveredMediaKey, mouseWorldPosRef: mouseWorldPos,
     getAnimatedPos, onPersonSelect, onMediaSelect,
+    onPersonPositionChange, editModeActive,
     annotationHandlers,
     minScale: MIN_SCALE,
     maxScale: MAX_SCALE,
@@ -201,6 +211,12 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   // Layout
   useEffect(() => {
     const result = USE_BLOCK_LAYOUT ? computeBlockLayout() : computeLayout()
+    automaticPersonPositionsRef.current = captureAutomaticPersonPositions(result)
+    applyManualPersonPositions(result, {
+      draftPositions: manualPositionOverridesRef.current,
+      getPersonById,
+      automaticPositions: automaticPersonPositionsRef.current,
+    })
 
     const canvas = canvasRef.current
     if (!canvas) return
@@ -330,6 +346,15 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     setLayoutReady(true)
   }, [graphRevision])
 
+  useEffect(() => {
+    applyManualPersonPositions(layoutDataRef.current, {
+      draftPositions: manualPositionOverrides,
+      getPersonById,
+      automaticPositions: automaticPersonPositionsRef.current,
+    })
+    needsRedrawRef.current = true
+  }, [graphRevision, manualPositionOverrides])
+
   // Sync selectedPersonId
   useEffect(() => {
     selectedPersonIdRef.current = selectedPersonId
@@ -394,6 +419,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       layoutData.children.forEach(node => {
         posMap.set(node.id, getAnimatedPos(node, timestamp))
       })
+      positionUnionJunctions(coupleBarMeta, posMap)
 
       const nodeMap = new Map()
       layoutData.children.forEach(n => nodeMap.set(n.id, n))

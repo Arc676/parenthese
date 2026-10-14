@@ -283,6 +283,8 @@ function buildContributionChangesFromDraft(draft = {}) {
     if (Object.prototype.hasOwnProperty.call(source, 'region')) after.region = (source.region || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(source, 'nationality')) after.nationality = (source.nationality || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(source, 'note')) after.notes = source.note || null
+    if (Object.prototype.hasOwnProperty.call(source, 'layoutX')) after.layoutX = source.layoutX
+    if (Object.prototype.hasOwnProperty.call(source, 'layoutY')) after.layoutY = source.layoutY
     if (Object.prototype.hasOwnProperty.call(source, 'isAlive') && source.isAlive === true) after.deathDate = null
 
     if (Object.keys(after).length > 0) {
@@ -625,6 +627,28 @@ function App() {
     treeId: tree.treeContext.treeId,
     canEdit: canEditInCurrentMode,
   })
+  const manualPositionOverrides = useMemo(() => {
+    if (!editMode.hasDraft) return {}
+    const positions = {}
+    for (const [personId, changes] of Object.entries(editMode.restoreDraft().modifiedPersons || {})) {
+      if (Number.isFinite(changes?.layoutX) && Number.isFinite(changes?.layoutY)) {
+        positions[String(personId)] = { layoutX: changes.layoutX, layoutY: changes.layoutY }
+      }
+    }
+    return positions
+  }, [editMode.hasDraft, editMode.restoreDraft])
+  const handlePersonPositionChange = useCallback((personId, position) => {
+    const draft = editMode.restoreDraft()
+    editMode.updateDraft({
+      modifiedPersons: {
+        ...(draft.modifiedPersons || {}),
+        [String(personId)]: {
+          ...(draft.modifiedPersons?.[String(personId)] || {}),
+          ...position,
+        },
+      },
+    })
+  }, [editMode.restoreDraft, editMode.updateDraft])
 
   const localEntityCounterRef = useRef(0)
   const makeLocalId = useCallback((prefix) => {
@@ -1192,6 +1216,8 @@ function App() {
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'nationality')) payload.nationality = (rawChanges.nationality || '').trim() || null
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'isAlive') && rawChanges.isAlive === true) payload.deathDate = null
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'note')) payload.notes = rawChanges.note || null
+          if (Object.prototype.hasOwnProperty.call(rawChanges, 'layoutX')) payload.layoutX = rawChanges.layoutX
+          if (Object.prototype.hasOwnProperty.call(rawChanges, 'layoutY')) payload.layoutY = rawChanges.layoutY
 
           if (Object.keys(payload).length > 0) {
             try {
@@ -2826,6 +2852,9 @@ function App() {
       <Galaxy
         onPersonSelect={handlePersonSelect}
         onMediaSelect={handleMediaSelectFresh}
+        onPersonPositionChange={handlePersonPositionChange}
+        editModeActive={editMode.isActive}
+        manualPositionOverrides={manualPositionOverrides}
         selectedPersonId={tree.selectedPerson?.id || null}
         searchHighlightIds={search.matchedPersonIds}
         graphRevision={tree.graphRevision}
@@ -2966,7 +2995,5 @@ function App() {
 }
 
 export default App
-
-
 
 

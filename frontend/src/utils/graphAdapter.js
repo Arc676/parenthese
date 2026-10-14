@@ -46,6 +46,8 @@ export function adaptGraphForGalaxy(apiGraph, _treeId) {
   // Adapter les personnes
   const adaptedPersons = persons.map((p) => ({
     id: p.id,
+    layoutX: Number.isFinite(p.layoutX) ? p.layoutX : null,
+    layoutY: Number.isFinite(p.layoutY) ? p.layoutY : null,
     firstName: p.firstName || '',
     lastName: p.lastName || '',
     birthName: p.birthName || null,

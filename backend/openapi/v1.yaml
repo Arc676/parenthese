@@ -228,6 +228,14 @@ components:
         deathDate:
           type: string
           nullable: true
+        layoutX:
+          type: number
+          nullable: true
+          description: Manual tree-layout X coordinate for the person.
+        layoutY:
+          type: number
+          nullable: true
+          description: Manual tree-layout Y coordinate for the person.
         sex:
           type: string
           nullable: true
@@ -344,6 +352,12 @@ components:
           nullable: true
         deathDate:
           type: string
+          nullable: true
+        layoutX:
+          type: number
+          nullable: true
+        layoutY:
+          type: number
           nullable: true
         sex:
           type: string

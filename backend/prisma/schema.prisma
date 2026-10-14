@@ -198,6 +198,8 @@ model Person {
   birthName  String?
   birthDate  DateTime?
   deathDate  DateTime?
+  layoutX    Float?
+  layoutY    Float?
   birthPlace String?
   profession String?
   region     String?

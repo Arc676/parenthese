@@ -101,6 +101,8 @@ const patchPersonSchema = z
     birthName: z.string().max(120).optional().nullable(),
     birthDate: z.string().regex(isoDateRegex).optional().nullable(),
     deathDate: z.string().regex(isoDateRegex).optional().nullable(),
+    layoutX: z.number().finite().optional().nullable(),
+    layoutY: z.number().finite().optional().nullable(),
     birthPlace: z.string().max(200).optional().nullable(),
     profession: z.string().max(200).optional().nullable(),
     region: z.string().max(120).optional().nullable(),
@@ -1302,6 +1304,8 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
       birthName?: string | null
       birthDate?: Date | null
       deathDate?: Date | null
+      layoutX?: number | null
+      layoutY?: number | null
       birthPlace?: string | null
       profession?: string | null
       region?: string | null
@@ -1329,6 +1333,14 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
 
     if (payload.data.deathDate !== undefined) {
       data.deathDate = toDateOrNull(payload.data.deathDate)
+    }
+
+    if (payload.data.layoutX !== undefined) {
+      data.layoutX = payload.data.layoutX
+    }
+
+    if (payload.data.layoutY !== undefined) {
+      data.layoutY = payload.data.layoutY
     }
 
     if (payload.data.birthPlace !== undefined) {

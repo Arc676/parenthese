@@ -8,7 +8,7 @@ Site et démo : [parenthese.io](https://parenthese.io) · [English version](READ
 
 ## Ce que fait l'application
 
-- Un arbre par famille : personnes, unions, liens parent-enfant, mise en page automatique.
+- Un arbre par famille : personnes, unions, liens parent-enfant, mise en page automatique réagençable par glisser-déposer en mode édition.
 - Des médias sur chaque personne : photos, vidéos (fichier ou lien YouTube), enregistrements audio pour garder une voix, documents, traces GPS.
 - Des annotations libres sur l'arbre : dessins, stickers, textes, photos posées où l'on veut.
 - Un partage par lien : chaque arbre a une adresse `/arbre/<nom>` protégée par un mot de passe de partage, qui permet de regarder et de proposer des ajouts.

@@ -545,7 +545,7 @@ describe('Journey 4 — Admin reviews a contribution session', () => {
           action: 'update',
           entityId: 'person-1',
           beforeJson: { firstName: 'Pierre' },
-          afterJson: { notes: 'Surnomme Pierrot' },
+          afterJson: { notes: 'Surnomme Pierrot', layoutX: 234.5, layoutY: 678.25 },
           conflictState: 'none',
         },
       ],
@@ -581,7 +581,9 @@ describe('Journey 4 — Admin reviews a contribution session', () => {
 
     // Both changes should be applied
     expect(prismaMock.person.create).toHaveBeenCalled()
-    expect(prismaMock.person.updateMany).toHaveBeenCalled()
+    expect(prismaMock.person.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ layoutX: 234.5, layoutY: 678.25 }),
+    }))
 
     // Audit log for review
     expect(prismaMock.auditLog.create).toHaveBeenCalledWith(

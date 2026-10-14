@@ -210,7 +210,9 @@ export function computeBlockLayout(graphData = null) {
   const renvoisByUnion = new Map()
   for (const e of result.edges) {
     const u = e.sources[0], c = e.targets[0]
-    if (!externalEdges.has(`${u}>${c}`) || Math.abs(centerX(u) - centerX(c)) <= RENVOI_MIN_DX) continue
+    if (!externalEdges.has(`${u}>${c}`)) continue
+    e._renvoiEligible = true
+    if (Math.abs(centerX(u) - centerX(c)) <= RENVOI_MIN_DX) continue
     e._renvoi = true
     e._renvoiIndex = renvoisByUnion.get(u) || 0
     renvoisByUnion.set(u, e._renvoiIndex + 1)

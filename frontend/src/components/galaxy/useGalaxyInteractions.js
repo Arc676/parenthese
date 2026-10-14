@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useEffect } from 'react'
 import { getPersonMedias } from '../../data/mockData'
 import { MAX_ORBIT_MEDIAS, ORBIT_MEDIA_SIZE } from './constants'
 import { nodeRadius, renvoiHitAreas } from './renderers'
@@ -8,6 +8,7 @@ import { getEntranceProgress } from './utils'
 
 const CURSOR_GRAB = 'default'
 const CURSOR_GRABBING = 'grabbing'
+const CURSOR_NODE_GRAB = 'grab'
 const CURSOR_POINTER = 'pointer'
 const CURSOR_CROSSHAIR = 'crosshair'
 
@@ -22,6 +23,7 @@ export function useGalaxyInteractions({
   layoutDataRef, nodeRandomDataRef, entranceRef,
   hoveredNodeIdRef, hoveredMediaKeyRef, mouseWorldPosRef,
   getAnimatedPos, onPersonSelect, onMediaSelect,
+  onPersonPositionChange, editModeActive = false,
   annotationHandlers,
   minScale = 0.2,
   maxScale = 4,
@@ -32,6 +34,11 @@ export function useGalaxyInteractions({
   const lastMouse = useRef({ x: 0, y: 0 })
   const hasDragged = useRef(false)
   const annotationDragging = useRef(false)
+  const draggedPersonRef = useRef(null)
+  const handleMouseUpRef = useRef(null)
+  const handleGlobalMouseUp = useCallback(() => {
+    handleMouseUpRef.current?.()
+  }, [])
 
   const getWorldPos = useCallback((e) => {
     const rect = canvasRef.current?.getBoundingClientRect()
@@ -65,11 +72,37 @@ export function useGalaxyInteractions({
       }
     }
 
+    if (editModeActive && (!ah || ah.activeTool === 'pointer') && worldPos && layoutDataRef.current) {
+      const now = performance.now()
+      for (let index = layoutDataRef.current.children.length - 1; index >= 0; index -= 1) {
+        const node = layoutDataRef.current.children[index]
+        if (node._type !== 'person') continue
+        const pos = getAnimatedPos(node, now)
+        if (Math.hypot(pos.cx - worldPos.x, pos.cy - worldPos.y) >= nodeRadius(node)) continue
+
+        draggedPersonRef.current = {
+          node,
+          offsetX: worldPos.x - pos.cx,
+          offsetY: worldPos.y - pos.cy,
+          startClientX: e.clientX,
+          startClientY: e.clientY,
+        }
+        hoveredNodeIdRef.current = node.id
+        hasDragged.current = false
+        lastMouse.current = { x: e.clientX, y: e.clientY }
+        setCanvasCursor(canvasRef, CURSOR_GRABBING)
+        if (e.nativeEvent?.type === 'mousedown' && typeof window !== 'undefined' && handleMouseUpRef.current) {
+          window.addEventListener('mouseup', handleGlobalMouseUp)
+        }
+        return
+      }
+    }
+
     isDragging.current = true
     hasDragged.current = false
     lastMouse.current = { x: e.clientX, y: e.clientY }
     setCanvasCursor(canvasRef, CURSOR_GRABBING)
-  }, [canvasRef, annotationHandlers, getWorldPos])
+  }, [canvasRef, annotationHandlers, getWorldPos, editModeActive, layoutDataRef, getAnimatedPos, hoveredNodeIdRef, handleGlobalMouseUp])
 
   const handleMouseMove = useCallback((e) => {
     const rect = canvasRef.current?.getBoundingClientRect()
@@ -82,6 +115,19 @@ export function useGalaxyInteractions({
     }
 
     const ah = annotationHandlers
+
+    if (draggedPersonRef.current) {
+      const drag = draggedPersonRef.current
+      if (!hasDragged.current && Math.hypot(e.clientX - drag.startClientX, e.clientY - drag.startClientY) <= 2) return
+      hasDragged.current = true
+      drag.node.x = mouseWorldPosRef.current.x - drag.offsetX - drag.node.width / 2
+      drag.node.y = mouseWorldPosRef.current.y - drag.offsetY - drag.node.height / 2
+      drag.node._manualPosition = true
+      hoveredNodeIdRef.current = drag.node.id
+      lastMouse.current = { x: e.clientX, y: e.clientY }
+      setCanvasCursor(canvasRef, CURSOR_GRABBING)
+      return
+    }
 
     // Drawing tool: accumulate points
     if (ah && ah.activeTool === 'drawing' && ah.drawingPathRef.current) {
@@ -142,7 +188,9 @@ export function useGalaxyInteractions({
       hoveredMediaKeyRef.current = newHoveredMedia
 
       if (!ah || ah.activeTool === 'pointer') {
-        const cursor = isOverClickable ? CURSOR_POINTER : CURSOR_GRAB
+        const cursor = editModeActive && newHoveredNode
+          ? CURSOR_NODE_GRAB
+          : isOverClickable ? CURSOR_POINTER : CURSOR_GRAB
         setCanvasCursor(canvasRef, cursor)
       }
     }
@@ -157,7 +205,7 @@ export function useGalaxyInteractions({
       x: targetTransformRef.current.x + dx,
       y: targetTransformRef.current.y + dy,
     }
-  }, [canvasRef, transformRef, targetTransformRef, layoutDataRef, nodeRandomDataRef, entranceRef, hoveredNodeIdRef, hoveredMediaKeyRef, mouseWorldPosRef, getAnimatedPos, annotationHandlers])
+  }, [canvasRef, transformRef, targetTransformRef, layoutDataRef, nodeRandomDataRef, entranceRef, hoveredNodeIdRef, hoveredMediaKeyRef, mouseWorldPosRef, getAnimatedPos, annotationHandlers, editModeActive])
 
   const handleMouseUp = useCallback(() => {
     const ah = annotationHandlers
@@ -177,15 +225,42 @@ export function useGalaxyInteractions({
       return
     }
 
+    if (draggedPersonRef.current) {
+      const { node } = draggedPersonRef.current
+      draggedPersonRef.current = null
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('mouseup', handleGlobalMouseUp)
+      }
+      if (hasDragged.current) {
+        onPersonPositionChange?.(node._data.id, {
+          layoutX: node.x + node.width / 2,
+          layoutY: node.y + node.height / 2,
+        })
+      }
+      hoveredNodeIdRef.current = node.id
+      setCanvasCursor(canvasRef, editModeActive ? CURSOR_NODE_GRAB : CURSOR_POINTER)
+      return
+    }
+
     isDragging.current = false
     const isOverClickable = hoveredNodeIdRef.current || hoveredMediaKeyRef.current
     setCanvasCursor(canvasRef, isOverClickable ? CURSOR_POINTER : CURSOR_GRAB)
-  }, [canvasRef, hoveredNodeIdRef, hoveredMediaKeyRef, mouseWorldPosRef, annotationHandlers])
+  }, [canvasRef, hoveredNodeIdRef, hoveredMediaKeyRef, mouseWorldPosRef, annotationHandlers, onPersonPositionChange, editModeActive, handleGlobalMouseUp])
+
+  useEffect(() => {
+    handleMouseUpRef.current = handleMouseUp
+  }, [handleMouseUp])
+
+  useEffect(() => () => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('mouseup', handleGlobalMouseUp)
+    }
+  }, [handleGlobalMouseUp])
 
   const handleMouseLeave = useCallback(() => {
     isDragging.current = false
     annotationDragging.current = false
-    setCanvasCursor(canvasRef, CURSOR_GRAB)
+    setCanvasCursor(canvasRef, draggedPersonRef.current ? CURSOR_GRABBING : CURSOR_GRAB)
     mouseWorldPosRef.current = { x: -9999, y: -9999 }
     hoveredNodeIdRef.current = null
     hoveredMediaKeyRef.current = null

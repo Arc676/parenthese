@@ -10,6 +10,8 @@ export type GraphPayload = {
     birthName: string | null
     birthDate: string | null
     deathDate: string | null
+    layoutX: number | null
+    layoutY: number | null
     birthPlace: string | null
     profession: string | null
     region: string | null
@@ -83,6 +85,8 @@ export function buildGraphPayload(
         birthName: person.birthName,
         birthDate: formatDate(person.birthDate),
         deathDate: formatDate(person.deathDate),
+        layoutX: person.layoutX ?? null,
+        layoutY: person.layoutY ?? null,
         birthPlace: person.birthPlace,
         profession: person.profession,
         region: person.region,
