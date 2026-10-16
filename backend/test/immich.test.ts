@@ -997,3 +997,37 @@ describe('Immich integration: durcissement des vignettes et des réponses', () =
     await app.close()
   })
 })
+
+describe('Immich integration: lien d’une fiche', () => {
+  it('tells an administrator which Immich person a file is linked to, and refuses others', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    prismaMock.person.findFirst.mockResolvedValue({ immichPersonId })
+
+    const linked = await app.inject({
+      method: 'GET',
+      url: '/trees/tree-1/immich/links/person-1',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(linked.statusCode).toBe(200)
+    expect(linked.json()).toEqual({ immichPersonId })
+
+    const memberToken = await createUserToken(app, 'user-member')
+    prismaMock.treeMembership.findUnique.mockResolvedValueOnce({ treeId: 'tree-1', userId: 'user-member', role: 'member', tree: { deletedAt: null } })
+    const member = await app.inject({
+      method: 'GET',
+      url: '/trees/tree-1/immich/links/person-1',
+      headers: { authorization: `Bearer ${memberToken}` },
+    })
+    expect(member.statusCode).toBe(403)
+
+    prismaMock.person.findFirst.mockResolvedValue(null)
+    const missing = await app.inject({
+      method: 'GET',
+      url: '/trees/tree-1/immich/links/person-unknown',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(missing.statusCode).toBe(404)
+    await app.close()
+  })
+})

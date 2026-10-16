@@ -26,6 +26,7 @@ import { exceedsStorageQuota, getStorageRoot, prepareUploadedFile, requireAdminM
 // administrateurs, et ne parlent jamais à l'instance d'un autre arbre.
 
 const treeParamSchema = z.object({ id: z.string().min(1) })
+const treePersonParamsSchema = z.object({ id: z.string().min(1), personId: z.string().min(1) })
 
 const assignSchema = z.object({
   personId: z.string().min(1),
@@ -322,6 +323,33 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
     reply.header('X-Content-Type-Options', 'nosniff')
     reply.header('Cache-Control', 'private, max-age=3600')
     return reply.send(thumbnail)
+  })
+
+  // Personne Immich déjà associée à une fiche, pour la marquer dans le sélecteur. Réservé aux
+  // administrateurs : l'identifiant n'entre jamais dans le graphe public.
+  app.get('/trees/:id/immich/links/:personId', async (request, reply) => {
+    if (!request.actor || request.actor.kind !== 'user') {
+      return reply.code(401).send({ error: 'authentication_required' })
+    }
+
+    const params = treePersonParamsSchema.safeParse(request.params)
+    if (!params.success) {
+      return reply.code(400).send({ error: 'invalid_params' })
+    }
+
+    if (!(await requireAdminMembership(app, request.actor.userId, params.data.id))) {
+      return reply.code(403).send({ error: 'forbidden' })
+    }
+
+    const person = await app.prisma.person.findFirst({
+      where: { id: params.data.personId, treeId: params.data.id, deletedAt: null },
+      select: { immichPersonId: true },
+    })
+    if (!person) {
+      return reply.code(404).send({ error: 'person_not_found' })
+    }
+
+    return reply.send({ immichPersonId: person.immichPersonId })
   })
 
   app.post('/trees/:id/immich/assign', async (request, reply) => {
