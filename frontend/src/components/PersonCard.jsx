@@ -89,16 +89,17 @@ const PersonCard = ({
 
   // Connexion Immich de l'arbre : métadonnées sans clé. Une erreur (rôle périmé, réseau) se
   // traduit par « non configuré » : la fiche reste utilisable, simplement sans choix de source.
+  // Seul un administrateur de l'arbre voit l'option Immich, comme côté serveur.
   useEffect(() => {
     let cancelled = false
     setImmichConfigured(null)
     setShowSourceMenu(false)
-    if (!editMode || !treeId || !onImmichChange || !immichToken) return undefined
+    if (!editMode || !isAdmin || !treeId || !onImmichChange || !immichToken) return undefined
     fetchImmichConfig(treeId, immichToken)
       .then(({ config }) => { if (!cancelled) setImmichConfigured(Boolean(config?.configured)) })
       .catch(() => { if (!cancelled) setImmichConfigured(false) })
     return () => { cancelled = true }
-  }, [editMode, treeId, immichToken, onImmichChange])
+  }, [editMode, isAdmin, treeId, immichToken, onImmichChange])
 
   useEffect(() => {
     if (!showSourceMenu) return undefined
@@ -107,7 +108,7 @@ const PersonCard = ({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [showSourceMenu])
 
-  const immichUsable = Boolean(immichConfigured || person.avatarFromImmich)
+  const immichUsable = isAdmin && Boolean(immichConfigured || person.avatarFromImmich)
   const openAvatarPicker = () => {
     if (avatarActionLoading) return
     if (immichUsable) {
