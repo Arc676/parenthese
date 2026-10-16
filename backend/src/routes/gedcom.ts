@@ -2,7 +2,9 @@ import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 
 import { UPLOAD_BODY_LIMIT } from '../config/env.js'
-import { indexGedcomRecords, mediaRefsForPerson, photoPathForPerson } from '../lib/gedcom-photos.js'
+import { parseGedcomDate } from '../lib/gedcom-dates.js'
+import { indexGedcomRecords, mediaRefsForPerson, photoPathForPerson, plainNoteText } from '../lib/gedcom-photos.js'
+import type { GedcomRecords } from '../lib/gedcom-photos.js'
 import type { MembershipRole } from '../types/auth.js'
 import { nextSiblingOrder } from '../lib/sibling-order.js'
 
@@ -69,6 +71,9 @@ type GedcomNode = {
   xref?: string
   tag: string
   value: string
+  // Valeur telle qu'écrite, espaces compris : une ligne coupée en CONC se recolle sans rien perdre
+  // (« pendant » + « 2 CONC  trente-cinq ans » ou « pendant  » + « 2 CONC trente-cinq ans »)
+  rawValue?: string
   children: GedcomNode[]
 }
 
@@ -79,20 +84,21 @@ export function parseGedcom(text: string): GedcomNode[] {
   let nodeCount = 0
 
   for (const raw of lines) {
-    const line = raw.trim()
-    if (!line || line.length > MAX_LINE_LENGTH) continue
+    const line = raw.replace(/^[\s﻿]+/, '')
+    if (!line.trim() || line.length > MAX_LINE_LENGTH) continue
     nodeCount += 1
     if (nodeCount > MAX_GEDCOM_NODES) throw new GedcomTooLargeError()
 
-    const match = line.match(/^(\d+)\s+(?:(@[^@]+@)\s+)?(\w+)(?:\s+(.*))?$/)
+    const match = line.match(/^(\d+)\s+(?:(@[^@]+@)\s+)?(\w+)(?:[ \t](.*))?$/)
     if (!match) continue
 
     const level = parseInt(match[1], 10)
     const xref = match[2] ? match[2].slice(1, -1) : undefined
     const tag = match[3]
-    const value = match[4]?.trim() ?? ''
+    const rawValue = match[4] ?? ''
+    const value = rawValue.trim()
 
-    const node: GedcomNode = { level, xref, tag, value, children: [] }
+    const node: GedcomNode = { level, xref, tag, value, rawValue, children: [] }
 
     while (stack.length > 0 && stack[stack.length - 1].level >= level) {
       stack.pop()
@@ -120,36 +126,30 @@ function findAllChildren(node: GedcomNode | undefined, tag: string): GedcomNode[
 
 // ─── Date Conversion ────────────────────────────────────────────────────────
 
-const MONTH_MAP: Record<string, string> = {
-  JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06',
-  JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12',
-}
-
 const MONTHS_ARR = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
 
+// Lecture complète dans lib/gedcom-dates.ts : vers, avant, après, entre, julien, républicain, double année
 function gedcomDateToIso(value: string): string | null {
-  if (!value) return null
-  // Remove qualifiers (ABT, BEF, AFT, EST, CAL, etc.)
-  const cleaned = value.trim().toUpperCase().replace(/^(ABT|BEF|AFT|EST|CAL|INT|FROM|TO|BET|AND)\s+/, '')
+  return parseGedcomDate(value)?.iso ?? null
+}
 
-  // "15 JAN 1900" → "1900-01-15"
-  const ddMmmYyyy = cleaned.match(/^(\d{1,2})\s+([A-Z]{3})\s+(\d{4})$/)
-  if (ddMmmYyyy) {
-    const month = MONTH_MAP[ddMmmYyyy[2]]
-    if (month) return `${ddMmmYyyy[3]}-${month}-${ddMmmYyyy[1].padStart(2, '0')}`
+// Notes d'une personne : écrites sous elle ou partagées (« 1 NOTE @N1@ »), lignes recollées (CONT, CONC),
+// RTF de Heredis Mac nettoyé. Plusieurs notes sont séparées par une ligne vide.
+export function personNotes(indi: GedcomNode, records: GedcomRecords): string | null {
+  const texts: string[] = []
+  for (const note of findAllChildren(indi, 'NOTE')) {
+    const pointer = note.value.match(/^@([^@]+)@$/)?.[1]
+    const source = pointer ? records.note.get(pointer) : note
+    if (!source) continue
+    let text = (pointer ? source.rawValue ?? source.value : note.rawValue ?? note.value)
+    for (const part of source.children) {
+      if (part.tag === 'CONT') text += `\n${part.rawValue ?? part.value}`
+      else if (part.tag === 'CONC') text += part.rawValue ?? part.value
+    }
+    const clean = plainNoteText(text)
+    if (clean) texts.push(clean)
   }
-
-  // "JAN 1900" → "1900-01"
-  const mmmYyyy = cleaned.match(/^([A-Z]{3})\s+(\d{4})$/)
-  if (mmmYyyy) {
-    const month = MONTH_MAP[mmmYyyy[1]]
-    if (month) return `${mmmYyyy[2]}-${month}`
-  }
-
-  // "1900" → "1900"
-  if (/^\d{4}$/.test(cleaned)) return cleaned
-
-  return null
+  return texts.length ? texts.join('\n\n') : null
 }
 
 function isoDateToDbDate(iso: string | null): Date | null {
@@ -550,12 +550,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
 
         const profession = clip(findChild(indi, 'OCCU')?.value ?? null, 200)
 
-        const noteNode = findChild(indi, 'NOTE')
-        let notes: string | null = null
-        if (noteNode?.value) {
-          const contLines = findAllChildren(noteNode, 'CONT').map((n) => n.value)
-          notes = clip([noteNode.value, ...contLines].join('\n'), 2000)
-        }
+        const notes = clip(personNotes(indi, records), 2000)
 
         const personFirstName = (firstName || '?').slice(0, 120)
         const personLastName = (lastName || '').slice(0, 120)
