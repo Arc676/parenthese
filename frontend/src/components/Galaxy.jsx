@@ -119,7 +119,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, onPersonPositionChange, editMod
 
   const {
     isDragging, isZooming, zoomTimeoutRef, hasDragged,
-    handleMouseDown, handleMouseMove, handleMouseUp,
+    handleMouseDown, handleMouseMove, handleMouseUp, cancelPersonDrag,
     handleMouseLeave, handleWheel, handleClick,
   } = useGalaxyInteractions({
     canvasRef, transformRef, targetTransformRef,
@@ -706,7 +706,8 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, onPersonPositionChange, editMod
           handleMouseDown({ clientX: t.clientX, clientY: t.clientY, preventDefault: () => e.preventDefault() })
         } else if (e.touches.length === 2) {
           e.preventDefault()
-          // Stop any ongoing single-finger pan before starting pinch
+          // Un second doigt annule le glisser d'une personne (rien n'est enregistré) puis arrête le pan
+          cancelPersonDrag()
           handleMouseUp()
           const [a, b] = e.touches
           const dx = a.clientX - b.clientX
@@ -744,15 +745,16 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, onPersonPositionChange, editMod
           // and mark hasDragged=true so the lift doesn't fire an accidental click
           const t = e.touches[0]
           handleMouseUp()
-          handleMouseDown({ clientX: t.clientX, clientY: t.clientY, preventDefault: () => e.preventDefault() })
+          handleMouseDown({ clientX: t.clientX, clientY: t.clientY, preventDefault: () => e.preventDefault() }, { panOnly: true })
           hasDragged.current = true
         } else {
           handleMouseUp()
         }
       }}
       onTouchCancel={() => {
-        // System interruption (notification, keyboard, etc.) — reset all touch state
+        // System interruption (notification, keyboard, etc.) — reset all touch state, sans enregistrer de position
         pinchRef.current = null
+        cancelPersonDrag()
         handleMouseUp()
       }}
       onClick={handleClick}

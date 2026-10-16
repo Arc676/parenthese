@@ -50,7 +50,8 @@ export function useGalaxyInteractions({
     }
   }, [canvasRef, transformRef])
 
-  const handleMouseDown = useCallback((e) => {
+  // panOnly : un doigt qui reste après un pincement ne saisit pas de personne, il ne fait que déplacer l'arbre
+  const handleMouseDown = useCallback((e, { panOnly = false } = {}) => {
     const ah = annotationHandlers
     const worldPos = getWorldPos(e)
 
@@ -72,7 +73,7 @@ export function useGalaxyInteractions({
       }
     }
 
-    if (editModeActive && (!ah || ah.activeTool === 'pointer') && worldPos && layoutDataRef.current) {
+    if (editModeActive && !panOnly && (!ah || ah.activeTool === 'pointer') && worldPos && layoutDataRef.current) {
       const now = performance.now()
       for (let index = layoutDataRef.current.children.length - 1; index >= 0; index -= 1) {
         const node = layoutDataRef.current.children[index]
@@ -86,6 +87,10 @@ export function useGalaxyInteractions({
           offsetY: worldPos.y - pos.cy,
           startClientX: e.clientX,
           startClientY: e.clientY,
+          // Place d'origine, pour un glisser annulé (second doigt, interruption)
+          originX: node.x,
+          originY: node.y,
+          originManual: node._manualPosition,
         }
         hoveredNodeIdRef.current = node.id
         hasDragged.current = false
@@ -257,6 +262,22 @@ export function useGalaxyInteractions({
     }
   }, [handleGlobalMouseUp])
 
+  // Annule le glisser d'une personne sans rien enregistrer : la personne revient à sa place d'avant
+  const cancelPersonDrag = useCallback(() => {
+    const drag = draggedPersonRef.current
+    if (!drag) return
+    draggedPersonRef.current = null
+    const { node, originX, originY, originManual } = drag
+    node.x = originX
+    node.y = originY
+    node._manualPosition = originManual
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('mouseup', handleGlobalMouseUp)
+    }
+    hoveredNodeIdRef.current = node.id
+    setCanvasCursor(canvasRef, editModeActive ? CURSOR_NODE_GRAB : CURSOR_POINTER)
+  }, [canvasRef, hoveredNodeIdRef, editModeActive, handleGlobalMouseUp])
+
   const handleMouseLeave = useCallback(() => {
     isDragging.current = false
     annotationDragging.current = false
@@ -366,6 +387,6 @@ export function useGalaxyInteractions({
   return {
     isDragging, isZooming, zoomTimeoutRef, hasDragged,
     handleMouseDown, handleMouseMove, handleMouseUp,
-    handleMouseLeave, handleWheel, handleClick,
+    handleMouseLeave, handleWheel, handleClick, cancelPersonDrag,
   }
 }
