@@ -609,6 +609,8 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
       data: {
         avatarPath: null,
         avatarMimeType: null,
+        // Retirer le portrait retire aussi le lien Immich : l'association ne survit pas au portrait.
+        immichPersonId: null,
         updatedBy: request.actor.userId,
       },
     })

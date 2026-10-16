@@ -303,21 +303,23 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(503).send({ error: 'immich_not_configured' })
     }
 
-    let thumbnail: Buffer
+    let thumbnail: Buffer | null
     try {
-      thumbnail = await client.getPersonThumbnail(params.data.immichPersonId)
+      thumbnail = await client.getPersonThumbnail(params.data.immichPersonId, MAX_THUMBNAIL_BYTES)
     } catch (error) {
       return replyImmichError(request, reply, error)
     }
 
-    if (!thumbnail.length || thumbnail.length > MAX_THUMBNAIL_BYTES) {
-      request.log.warn({ size: thumbnail.length }, 'Vignette Immich vide ou trop grande')
+    // Le type se lit dans les octets, pas dans ce qu'Immich déclare : la vignette finit dans une
+    // balise <img>. Vide, trop grande ou pas une image : rien à montrer.
+    const mimeType = thumbnail?.length ? sniffMimeType(thumbnail, 'photo') : null
+    if (!thumbnail || !mimeType?.startsWith('image/')) {
+      request.log.warn('Vignette Immich vide, trop grande ou qui n’est pas une image')
       return reply.code(404).send({ error: 'thumbnail_not_found' })
     }
 
-    // Le type se lit dans les octets, pas dans ce qu'Immich déclare : la vignette finit dans une balise <img>.
-    const mimeType = sniffMimeType(thumbnail, 'photo') ?? 'image/jpeg'
     reply.header('Content-Type', mimeType)
+    reply.header('X-Content-Type-Options', 'nosniff')
     reply.header('Cache-Control', 'private, max-age=3600')
     return reply.send(thumbnail)
   })
@@ -368,7 +370,7 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
     let thumbnail: Buffer | null = null
     if (immichPerson.hasThumbnail) {
       try {
-        thumbnail = await client.getPersonThumbnail(immichPersonId)
+        thumbnail = await client.getPersonThumbnail(immichPersonId, MAX_THUMBNAIL_BYTES)
       } catch (error) {
         if (!(error instanceof ImmichNotFoundError)) {
           return replyImmichError(request, reply, error)

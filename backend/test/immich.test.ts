@@ -918,3 +918,82 @@ describe('Immich integration: adresse de l’instance', () => {
     expect(normalizeImmichApiUrl('ftp://immich.test')).toBeNull()
   })
 })
+
+describe('Immich integration: durcissement des vignettes et des réponses', () => {
+  it('serves only images, with nosniff, and refuses bytes that are not an image', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+
+    fetchMock.mockResolvedValueOnce(new Response(new Uint8Array(jpegBytes), { status: 200 }))
+    const image = await app.inject({
+      method: 'GET',
+      url: `/trees/tree-1/immich/thumbnail/${immichPersonId}`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(image.statusCode).toBe(200)
+    expect(image.headers['content-type']).toBe('image/jpeg')
+    expect(image.headers['x-content-type-options']).toBe('nosniff')
+
+    // Un corps HTML déclaré image n'est jamais servi comme tel.
+    fetchMock.mockResolvedValueOnce(new Response('<script>alert(1)</script>', { status: 200, headers: { 'content-type': 'image/png' } }))
+    const notImage = await app.inject({
+      method: 'GET',
+      url: `/trees/tree-1/immich/thumbnail/${immichPersonId}`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(notImage.statusCode).toBe(404)
+    expect(notImage.json()).toEqual({ error: 'thumbnail_not_found' })
+    await app.close()
+  })
+
+  it('stops reading a thumbnail above 5 MB without loading the rest of it', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    // Un flux sans taille annoncée, plus grand que la limite : la lecture doit s'arrêter en route.
+    const big = new Uint8Array(5 * 1024 * 1024 + 1024)
+    big.set(jpegBytes.subarray(0, Math.min(jpegBytes.length, big.length)))
+    fetchMock.mockResolvedValueOnce(new Response(big, { status: 200 }))
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/trees/tree-1/immich/thumbnail/${immichPersonId}`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({ error: 'thumbnail_not_found' })
+    await app.close()
+  })
+
+  it('answers 503 when an Immich response body cannot be read as JSON', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    fetchMock.mockResolvedValue(new Response('<html>passerelle en panne</html>', { status: 200 }))
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/trees/tree-1/immich/people',
+      headers: { authorization: `Bearer ${token}` },
+    })
+
+    expect(response.statusCode).toBe(503)
+    expect(response.json()).toEqual({ error: 'immich_unreachable' })
+    await app.close()
+  })
+
+  it('clears the Immich link when the portrait is deleted by hand', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    prismaMock.person.findFirst.mockResolvedValue({ id: 'person-1', avatarPath: 'tree-1/person-1/avatar-a.jpg', immichPersonId })
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/trees/tree-1/persons/person-1/avatar',
+      headers: { authorization: `Bearer ${token}` },
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls[0][0].data).toMatchObject({ avatarPath: null, immichPersonId: null })
+    await app.close()
+  })
+})

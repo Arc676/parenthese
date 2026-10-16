@@ -39,6 +39,8 @@ export class ImmichNotFoundError extends Error {
 
 const IMMICH_PEOPLE_PAGE_SIZE = 1000
 const IMMICH_TIMEOUT_MS = 10_000
+// Délai global de la liste complète : chaque page a son propre délai, la liste entière aussi.
+const IMMICH_LIST_DEADLINE_MS = 30_000
 
 // Identifiants de personnes Immich : UUID v4 (spécification OpenAPI).
 const IMMICH_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -69,6 +71,16 @@ export class ImmichClient {
 
   // Le chemin de l'instance (ex. /immich) reste devant les chemins de l'API : on concatène,
   // on ne résout pas une URL relative (qui effacerait ce chemin).
+  // Corps JSON lu hors de toute gestion d'erreur : un corps illisible est une instance
+  // défaillante (503), pas une erreur serveur.
+  private async readJson(response: Response): Promise<unknown> {
+    try {
+      return await response.json()
+    } catch {
+      throw new ImmichUnavailableError('Réponse Immich illisible')
+    }
+  }
+
   private buildUrl(path: string): string {
     return `${this.apiUrl}${path}`
   }
@@ -119,10 +131,14 @@ export class ImmichClient {
     const people: ImmichPersonSummary[] = []
     let page = 1
 
+    const deadline = Date.now() + IMMICH_LIST_DEADLINE_MS
     // Garde-fou : une instance qui répondrait toujours hasNextPage ne doit pas nous faire boucler.
     for (let guard = 0; guard < 1000; guard += 1, page += 1) {
+      if (Date.now() > deadline) {
+        throw new ImmichUnavailableError('Liste des personnes Immich trop longue')
+      }
       const response = await this.fetch(`/api/people?page=${page}&size=${IMMICH_PEOPLE_PAGE_SIZE}`)
-      const payload = (await response.json()) as ImmichPeoplePage
+      const payload = (await this.readJson(response)) as ImmichPeoplePage
 
       if (!Array.isArray(payload.people)) {
         throw new ImmichUnavailableError('Réponse Immich inattendue sur /api/people')
@@ -148,7 +164,7 @@ export class ImmichClient {
   // se vérifie donc ici.
   async getPerson(personId: string): Promise<ImmichPersonSummary> {
     const response = await this.fetch(`/api/people/${encodeURIComponent(personId)}`)
-    const person = (await response.json()) as { id?: unknown; name?: unknown; thumbnailPath?: unknown }
+    const person = (await this.readJson(response)) as { id?: unknown; name?: unknown; thumbnailPath?: unknown }
     if (typeof person?.id !== 'string' || typeof person?.name !== 'string') {
       throw new ImmichUnavailableError('Réponse Immich inattendue sur /api/people/{id}')
     }
@@ -160,9 +176,36 @@ export class ImmichClient {
   }
 
   // Vignette d'une personne, en octets bruts (JPEG côté Immich). Absente -> ImmichNotFoundError.
-  async getPersonThumbnail(personId: string): Promise<Buffer> {
+  // Lue en flux : au-delà de maxBytes, la lecture s'arrête et renvoie null sans charger le reste.
+  async getPersonThumbnail(personId: string, maxBytes: number): Promise<Buffer | null> {
     const response = await this.fetch(`/api/people/${encodeURIComponent(personId)}/thumbnail`)
-    return Buffer.from(await response.arrayBuffer())
+    const declared = Number(response.headers.get('content-length'))
+    if (Number.isFinite(declared) && declared > maxBytes) {
+      await response.body?.cancel().catch(() => {})
+      return null
+    }
+    if (!response.body) {
+      return Buffer.alloc(0)
+    }
+
+    const reader = response.body.getReader()
+    const chunks: Buffer[] = []
+    let total = 0
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        total += value.byteLength
+        if (total > maxBytes) {
+          await reader.cancel().catch(() => {})
+          return null
+        }
+        chunks.push(Buffer.from(value))
+      }
+    } catch {
+      throw new ImmichUnavailableError('Lecture de la vignette Immich interrompue')
+    }
+    return Buffer.concat(chunks, total)
   }
 }
 
