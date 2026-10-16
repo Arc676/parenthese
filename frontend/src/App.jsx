@@ -59,6 +59,7 @@ import { useAnnotations } from './hooks/useAnnotations'
 import AnnotationToolbar from './components/annotations/AnnotationToolbar'
 import TextInputOverlay from './components/annotations/TextInputOverlay'
 import { filiations, getChildren, getParents, getPersonUnions, medias, persons, unions } from './data/mockData'
+import { readGedcomFile } from './utils/gedcomText'
 import { loadMediaRefs, loadPhotoRefs, pickFirstFaces, prepareImageForUpload, saveMediaRefs, savePhotoRefs, sizeBucket } from './utils/photoImport'
 import { fileToBase64, getAccountErrorMessage } from './utils/errorMessages'
 import { getSiblingParentLinks } from './utils/familyLinks'
@@ -2373,7 +2374,7 @@ function App() {
         let imported = null
         let importError = ''
         try {
-          const content = await payload.gedcomFile.text()
+          const content = (await readGedcomFile(payload.gedcomFile)).text
           imported = content.trim()
             ? await importGedcom(createdTree.id, content, token)
             : null
