@@ -108,7 +108,7 @@ beforeAll(async () => {
   process.env.IMMICH_API_URL = 'http://env-immich.example.org'
   process.env.IMMICH_API_KEY = 'env-key'
   // L'instance de l'arbre fait partie de la liste autorisée par l'opérateur.
-  process.env.IMMICH_ALLOWED_API_URLS = 'http://immich.test,http://immich.test/immich'
+  process.env.IMMICH_ALLOWED_API_URLS = 'http://immich.test,Partage=http://immich.test/immich'
 
   storageRoot = await mkdtemp(path.join(os.tmpdir(), 'parenthese-immich-'))
   process.env.MEDIA_STORAGE_PATH = storageRoot

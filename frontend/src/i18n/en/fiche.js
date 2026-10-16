@@ -274,7 +274,7 @@ export default {
   'La vignette Immich n’est pas une image valide.': 'The Immich thumbnail is not a valid image.',
   'Espace disque de l’arbre dépassé.': 'Tree storage quota exceeded.',
   'Indiquez la clé d’accès à Immich pour la première configuration.': 'Enter the Immich access key for the first setup.',
-  'Cette adresse Immich n’est pas autorisée par l’opérateur du serveur.': 'This Immich address is not authorized by the server operator.',
+  'Cette instance Immich n’est pas autorisée par l’opérateur du serveur.': 'This Immich instance is not authorized by the server operator.',
   'Seuls les administrateurs de l’arbre peuvent associer un visage Immich.': 'Only tree administrators can link an Immich face.',
   'Erreur inattendue.': 'Unexpected error.',
   '{name} est déjà associée à une personne Immich.': '{name} is already linked to an Immich person.',

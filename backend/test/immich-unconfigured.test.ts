@@ -92,9 +92,9 @@ describe('Immich integration: tree without configuration', () => {
       headers: { authorization: `Bearer ${token}` },
     })
     expect(config.statusCode).toBe(200)
-    expect(config.json().config).toEqual({ configured: false, apiUrl: null, updatedAt: null })
+    expect(config.json().config).toEqual({ configured: false, instanceId: null, label: null, updatedAt: null })
     // Aucune instance autorisée par l'opérateur : le menu des adresses est vide.
-    expect(config.json().allowedApiUrls).toEqual([])
+    expect(config.json().instances).toEqual([])
 
     const people = await app.inject({
       method: 'GET',
@@ -164,11 +164,11 @@ describe('Immich integration: tree without configuration', () => {
       method: 'PUT',
       url: '/trees/tree-1/immich/config',
       headers: { authorization: `Bearer ${token}` },
-      payload: { apiUrl: 'http://immich.example.org', apiKey: 'some-key' },
+      payload: { instanceId: '2c47e4ca85342f88', apiKey: 'some-key' },
     })
 
     expect(response.statusCode).toBe(400)
-    expect(response.json()).toEqual({ error: 'api_url_not_allowed' })
+    expect(response.json()).toEqual({ error: 'instance_not_allowed' })
     await app.close()
   })
 })

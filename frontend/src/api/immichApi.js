@@ -20,26 +20,26 @@ export function getImmichErrorMessage(error, t) {
   if (code === 'invalid_avatar_image') return t('La vignette Immich n’est pas une image valide.')
   if (code === 'storage_quota_exceeded') return t('Espace disque de l’arbre dépassé.')
   if (code === 'api_key_required') return t('Indiquez la clé d’accès à Immich pour la première configuration.')
-  if (code === 'api_url_not_allowed') return t('Cette adresse Immich n’est pas autorisée par l’opérateur du serveur.')
+  if (code === 'instance_not_allowed') return t('Cette instance Immich n’est pas autorisée par l’opérateur du serveur.')
   if (code === 'forbidden') return t('Seuls les administrateurs de l’arbre peuvent associer un visage Immich.')
   if (error?.status === 0 || error?.message === 'Failed to fetch') return t('Immich est injoignable.')
   return error?.message || t('Erreur inattendue.')
 }
 
-// Connexion Immich de l'arbre : métadonnées sûres (jamais la clé) et adresses autorisées par
-// l'opérateur, dont le panneau d'administration fait un menu.
+// Connexion Immich de l'arbre : métadonnées sûres (jamais la clé, jamais l'adresse) et instances
+// autorisées par l'opérateur, nommées par leur libellé, dont le panneau d'administration fait un menu.
 export async function fetchImmichConfig(treeId, token) {
   const data = await apiRequest(`/trees/${encodeURIComponent(treeId)}/immich/config`, withAuth({}, token))
   return {
-    config: data?.config || { configured: false, apiUrl: null, updatedAt: null },
-    allowedApiUrls: Array.isArray(data?.allowedApiUrls) ? data.allowedApiUrls : [],
+    config: data?.config || { configured: false, instanceId: null, label: null, updatedAt: null },
+    instances: Array.isArray(data?.instances) ? data.instances : [],
   }
 }
 
-export async function saveImmichConfig(treeId, { apiUrl, apiKey }, token) {
+export async function saveImmichConfig(treeId, { instanceId, apiKey }, token) {
   const data = await apiRequest(`/trees/${encodeURIComponent(treeId)}/immich/config`, withAuth({
     method: 'PUT',
-    body: JSON.stringify({ apiUrl, ...(apiKey ? { apiKey } : {}) }),
+    body: JSON.stringify({ instanceId, ...(apiKey ? { apiKey } : {}) }),
   }, token))
   return data?.config || null
 }

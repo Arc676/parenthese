@@ -61,7 +61,7 @@ beforeAll(async () => {
   process.env.CORS_ORIGIN = 'http://localhost:5173'
   // Instances autorisées par l'opérateur du serveur : les administrateurs d'un arbre
   // choisissent parmi elles, jamais en champ libre.
-  process.env.IMMICH_ALLOWED_API_URLS = 'http://immich-tree-1.test,http://immich-tree-2.test,http://immich.example.org:2283,http://immich.example.org,http://immich-moved.example.org'
+  process.env.IMMICH_ALLOWED_API_URLS = 'http://immich-tree-1.test,http://immich-tree-2.test,Maison=http://immich.example.org:2283,http://immich.example.org,http://immich-moved.example.org'
 
   // Les clés chiffrées se calculent après la mise en place de JWT_SECRET, comme en production.
   const secret = await import('../src/lib/immich-secret.js')
@@ -132,8 +132,10 @@ describe('Immich configuration: read', () => {
 
     expect(response.statusCode).toBe(200)
     const body = response.json()
-    expect(body.config).toMatchObject({ configured: true, apiUrl: 'http://immich-tree-1.test' })
+    expect(body.config).toMatchObject({ configured: true, instanceId: 'c2ec51abd0edebf3', label: 'immich-tree-1.test' })
     const serialized = JSON.stringify(body)
+    // Aucune adresse brute : ni l'instance, ni la liste ne laissent voir une URL.
+    expect(serialized).not.toContain('http://')
     expect(serialized).not.toContain('secret-key-tree-1')
     expect(serialized).not.toContain('apiKey')
     expect(serialized).not.toContain(TREE_1_ENC)
@@ -153,14 +155,15 @@ describe('Immich configuration: read', () => {
 
     // Un arbre fraîchement créé n'a pas de ligne : rien de configuré, rien d'hérité.
     expect(response.statusCode).toBe(200)
-    expect(response.json().config).toEqual({ configured: false, apiUrl: null, updatedAt: null })
-    expect(response.json().allowedApiUrls).toEqual([
-      'http://immich-tree-1.test',
-      'http://immich-tree-2.test',
-      'http://immich.example.org:2283',
-      'http://immich.example.org',
-      'http://immich-moved.example.org',
+    expect(response.json().config).toEqual({ configured: false, instanceId: null, label: null, updatedAt: null })
+    expect(response.json().instances).toEqual([
+      { id: 'c2ec51abd0edebf3', label: 'immich-tree-1.test' },
+      { id: '0715d0c35f2b0405', label: 'immich-tree-2.test' },
+      { id: '6fc8e421ad9b5371', label: 'Maison' },
+      { id: '2c47e4ca85342f88', label: 'immich.example.org' },
+      { id: '2d46a51941003fcd', label: 'immich-moved.example.org' },
     ])
+    expect(JSON.stringify(response.json())).not.toContain('http://')
     await app.close()
   })
 })
@@ -175,11 +178,13 @@ describe('Immich configuration: write', () => {
       method: 'PUT',
       url: '/trees/tree-1/immich/config',
       headers: { authorization: `Bearer ${token}` },
-      payload: { apiUrl: 'http://immich.example.org:2283', apiKey: 'my-new-key' },
+      payload: { instanceId: '6fc8e421ad9b5371', apiKey: 'my-new-key' },
     })
 
     expect(response.statusCode).toBe(200)
-    expect(response.json().config).toMatchObject({ configured: true, apiUrl: 'http://immich.example.org:2283' })
+    expect(response.json().config).toMatchObject({ configured: true, instanceId: '6fc8e421ad9b5371', label: 'Maison' })
+    // L'adresse stockée est celle de la liste de l'opérateur, jamais une valeur envoyée par le client.
+    expect(prismaMock.treeImmichConfig.upsert.mock.calls[0][0].create.apiUrl).toBe('http://immich.example.org:2283')
 
     const upsertArgs = prismaMock.treeImmichConfig.upsert.mock.calls[0][0]
     expect(upsertArgs.where).toEqual({ treeId: 'tree-1' })
@@ -195,7 +200,7 @@ describe('Immich configuration: write', () => {
         action: 'immich_config_updated',
         entityType: 'tree_immich_config',
         entityId: 'tree-1',
-        payloadJson: { apiUrl: 'http://immich.example.org:2283', apiKeyChanged: true },
+        payloadJson: { instanceId: '6fc8e421ad9b5371', apiKeyChanged: true },
       },
     })
 
@@ -211,18 +216,18 @@ describe('Immich configuration: write', () => {
       method: 'PUT',
       url: '/trees/tree-1/immich/config',
       headers: { authorization: `Bearer ${token}` },
-      payload: { apiUrl: 'http://immich-tree-1.test' },
+      payload: { instanceId: 'c2ec51abd0edebf3' },
     })
 
     expect(response.statusCode).toBe(200)
-    expect(response.json().config.apiUrl).toBe('http://immich-tree-1.test')
+    expect(response.json().config.instanceId).toBe('c2ec51abd0edebf3')
 
     const upsertArgs = prismaMock.treeImmichConfig.upsert.mock.calls[0][0]
     // La clé en place est conservée telle quelle : pas de nouvelle clé, pas de déchiffrage.
     expect(upsertArgs.create.apiKeyEnc).toBe(TREE_1_ENC)
     expect(upsertArgs.update.apiKeyEnc).toBe(TREE_1_ENC)
     expect(prismaMock.auditLog.create.mock.calls[0][0].data.payloadJson).toEqual({
-      apiUrl: 'http://immich-tree-1.test',
+      instanceId: 'c2ec51abd0edebf3',
       apiKeyChanged: false,
     })
     await app.close()
@@ -236,7 +241,7 @@ describe('Immich configuration: write', () => {
       method: 'PUT',
       url: '/trees/tree-1/immich/config',
       headers: { authorization: `Bearer ${token}` },
-      payload: { apiUrl: 'http://immich-moved.example.org' },
+      payload: { instanceId: '2d46a51941003fcd' },
     })
 
     // La clé de l'ancienne instance ne vaut rien pour la nouvelle, et ne lui est jamais
@@ -256,7 +261,7 @@ describe('Immich configuration: write', () => {
       method: 'PUT',
       url: '/trees/tree-1/immich/config',
       headers: { authorization: `Bearer ${token}` },
-      payload: { apiUrl: 'http://immich.example.org' },
+      payload: { instanceId: '2c47e4ca85342f88' },
     })
 
     expect(response.statusCode).toBe(400)
@@ -265,7 +270,7 @@ describe('Immich configuration: write', () => {
     await app.close()
   })
 
-  it('rejects a non-http URL', async () => {
+  it('rejects an identifier that is not an instance id', async () => {
     const app = createApp()
     const token = await createUserToken(app)
 
@@ -273,7 +278,7 @@ describe('Immich configuration: write', () => {
       method: 'PUT',
       url: '/trees/tree-1/immich/config',
       headers: { authorization: `Bearer ${token}` },
-      payload: { apiUrl: 'ftp://immich.example.org', apiKey: 'my-new-key' },
+      payload: { instanceId: 'ftp://immich.example.org', apiKey: 'my-new-key' },
     })
 
     expect(response.statusCode).toBe(400)
@@ -291,7 +296,7 @@ describe('Immich configuration: write', () => {
       method: 'PUT',
       url: '/trees/tree-1/immich/config',
       headers: { authorization: `Bearer ${memberToken}` },
-      payload: { apiUrl: 'http://immich.example.org', apiKey: 'stolen-key' },
+      payload: { instanceId: '2c47e4ca85342f88', apiKey: 'stolen-key' },
     })
     expect(member.statusCode).toBe(403)
 
@@ -300,14 +305,14 @@ describe('Immich configuration: write', () => {
       method: 'PUT',
       url: '/trees/tree-2/immich/config',
       headers: { authorization: `Bearer ${ownerToken}` },
-      payload: { apiUrl: 'http://evil.example.org', apiKey: 'evil-key' },
+      payload: { instanceId: '2c47e4ca85342f88', apiKey: 'evil-key' },
     })
     expect(otherTree.statusCode).toBe(403)
 
     const anonymous = await app.inject({
       method: 'PUT',
       url: '/trees/tree-1/immich/config',
-      payload: { apiUrl: 'http://immich.example.org', apiKey: 'key' },
+      payload: { instanceId: '2c47e4ca85342f88', apiKey: 'key' },
     })
     expect(anonymous.statusCode).toBe(401)
 
@@ -329,7 +334,7 @@ describe('Immich configuration: removal', () => {
     })
 
     expect(response.statusCode).toBe(200)
-    expect(response.json().config).toEqual({ configured: false, apiUrl: null, updatedAt: null })
+    expect(response.json().config).toEqual({ configured: false, instanceId: null, label: null, updatedAt: null })
     expect(prismaMock.treeImmichConfig.deleteMany).toHaveBeenCalledWith({ where: { treeId: 'tree-1' } })
     expect(prismaMock.auditLog.create).toHaveBeenCalledWith({
       data: {
@@ -423,7 +428,7 @@ describe('Immich credentials: tree isolation', () => {
 })
 
 describe('Immich configuration: operator allowlist', () => {
-  it('rejects an address outside the list and changes nothing', async () => {
+  it('rejects an instance outside the list and changes nothing', async () => {
     const app = createApp()
     const token = await createUserToken(app)
 
@@ -431,18 +436,18 @@ describe('Immich configuration: operator allowlist', () => {
       method: 'PUT',
       url: '/trees/tree-1/immich/config',
       headers: { authorization: `Bearer ${token}` },
-      payload: { apiUrl: 'http://internal-service.example.org:8080', apiKey: 'stolen-key' },
+      payload: { instanceId: '1234567890abcdef', apiKey: 'stolen-key' },
     })
 
     // Le serveur ne devient jamais un proxy vers un service interne choisi librement.
     expect(response.statusCode).toBe(400)
-    expect(response.json()).toEqual({ error: 'api_url_not_allowed' })
+    expect(response.json()).toEqual({ error: 'instance_not_allowed' })
     expect(prismaMock.treeImmichConfig.upsert).not.toHaveBeenCalled()
     expect(prismaMock.auditLog.create).not.toHaveBeenCalled()
     await app.close()
   })
 
-  it('accepts a listed address modulo a trailing slash', async () => {
+  it('stores the canonical address of the instance chosen by its identifier', async () => {
     const app = createApp()
     const token = await createUserToken(app)
 
@@ -450,13 +455,12 @@ describe('Immich configuration: operator allowlist', () => {
       method: 'PUT',
       url: '/trees/tree-1/immich/config',
       headers: { authorization: `Bearer ${token}` },
-      payload: { apiUrl: 'http://immich-tree-1.test/', apiKey: 'my-new-key' },
+      payload: { instanceId: 'c2ec51abd0edebf3', apiKey: 'my-new-key' },
     })
 
     expect(response.statusCode).toBe(200)
-    // Stockée telle quelle (le client retire le slash final à l'usage) : c'est la comparaison
-    // avec la liste qui se fait modulo le slash final, pas le stockage.
-    expect(response.json().config).toMatchObject({ configured: true, apiUrl: 'http://immich-tree-1.test/' })
+    expect(response.json().config).toMatchObject({ configured: true, instanceId: 'c2ec51abd0edebf3', label: 'immich-tree-1.test' })
+    expect(prismaMock.treeImmichConfig.upsert.mock.calls[0][0].create.apiUrl).toBe('http://immich-tree-1.test')
     await app.close()
   })
 
@@ -476,7 +480,7 @@ describe('Immich configuration: operator allowlist', () => {
       headers: { authorization: `Bearer ${token}` },
     })
     expect(config.statusCode).toBe(200)
-    expect(config.json().config).toEqual({ configured: false, apiUrl: null, updatedAt: null })
+    expect(config.json().config).toEqual({ configured: false, instanceId: null, label: null, updatedAt: null })
 
     const status = await app.inject({
       method: 'GET',

@@ -61,8 +61,8 @@ const AdminPanel = ({
   // Connexion Immich propre à cet arbre : l'adresse se choisit parmi celles autorisées par
   // l'opérateur du serveur, la clé n'est jamais relue et le champ vide la conserve.
   const [immichConfig, setImmichConfig] = useState(null)
-  const [immichAllowedUrls, setImmichAllowedUrls] = useState([])
-  const [immichApiUrl, setImmichApiUrl] = useState('')
+  const [immichInstances, setImmichInstances] = useState([])
+  const [immichInstanceId, setImmichInstanceId] = useState('')
   const [immichApiKey, setImmichApiKey] = useState('')
   const [immichStatus, setImmichStatus] = useState(null) // null : inconnu, 'ok', sinon le motif
   const [immichBusy, setImmichBusy] = useState(false)
@@ -83,16 +83,16 @@ const AdminPanel = ({
     setImportingGedcom(false)
 
     setImmichConfig(null)
-    setImmichAllowedUrls([])
-    setImmichApiUrl('')
+    setImmichInstances([])
+    setImmichInstanceId('')
     setImmichApiKey('')
     setImmichStatus(null)
     fetchImmichConfig(treeId, authToken)
-      .then(({ config, allowedApiUrls }) => {
+      .then(({ config, instances }) => {
         if (!active) return
         setImmichConfig(config)
-        setImmichAllowedUrls(allowedApiUrls)
-        setImmichApiUrl(allowedApiUrls.includes(config?.apiUrl) ? config.apiUrl : '')
+        setImmichInstances(instances)
+        setImmichInstanceId(instances.some((instance) => instance.id === config?.instanceId) ? config.instanceId : '')
       })
       .catch(() => {
         // Configuration non chargée : l'onglet Immich affichera l'état inconnu
@@ -303,15 +303,15 @@ const AdminPanel = ({
     event.preventDefault()
     if (!treeId || !authToken || immichBusy) return
 
-    const apiUrl = immichApiUrl
-    if (!apiUrl) {
-      setErrorMessage(t('Choisissez l’adresse de l’instance Immich.'))
+    const instanceId = immichInstanceId
+    if (!instanceId) {
+      setErrorMessage(t('Choisissez l’instance Immich.'))
       return
     }
     const apiKey = immichApiKey.trim()
     // Changer d'instance réclame une nouvelle clé : l'ancienne n'est ni conservée ni envoyée
     // au nouveau serveur.
-    const changingInstance = Boolean(immichConfig?.configured && immichConfig.apiUrl && immichConfig.apiUrl !== apiUrl)
+    const changingInstance = Boolean(immichConfig?.configured && immichConfig.instanceId && immichConfig.instanceId !== instanceId)
     if (changingInstance && !apiKey) {
       setErrorMessage(t('L’instance Immich change : indiquez la clé d’accès de la nouvelle instance, l’ancienne n’est pas conservée.'))
       return
@@ -325,8 +325,8 @@ const AdminPanel = ({
     setErrorMessage('')
     setSuccessMessage('')
     try {
-      const config = await saveImmichConfig(treeId, { apiUrl, apiKey }, authToken)
-      setImmichConfig(config || { configured: true, apiUrl, updatedAt: null })
+      const config = await saveImmichConfig(treeId, { instanceId, apiKey }, authToken)
+      setImmichConfig(config || { configured: true, instanceId, label: null, updatedAt: null })
       setImmichApiKey('')
       setSuccessMessage(t('Connexion Immich enregistrée.'))
       await testImmichConnection()
@@ -348,8 +348,8 @@ const AdminPanel = ({
     setSuccessMessage('')
     try {
       await removeImmichConfig(treeId, authToken)
-      setImmichConfig({ configured: false, apiUrl: null, updatedAt: null })
-      setImmichApiUrl('')
+      setImmichConfig({ configured: false, instanceId: null, label: null, updatedAt: null })
+      setImmichInstanceId('')
       setImmichApiKey('')
       setImmichStatus(null)
       setSuccessMessage(t('Connexion Immich supprimée.'))
@@ -567,7 +567,7 @@ const AdminPanel = ({
                     )}
                   </div>
 
-                  {immichAllowedUrls.length === 0 ? (
+                  {immichInstances.length === 0 ? (
                     <p className="pz-small">
                       {immichConfig === null
                         ? t('État inconnu')
@@ -576,16 +576,16 @@ const AdminPanel = ({
                   ) : (
                   <form className="ts-panel" onSubmit={handleSaveImmichConfig}>
                     <div className="pz-field">
-                      <label htmlFor="immichApiUrl">{t('Adresse de l’instance Immich')}</label>
+                      <label htmlFor="immichInstance">{t('Instance Immich')}</label>
                       <select
-                        id="immichApiUrl"
-                        value={immichApiUrl}
-                        onChange={(event) => setImmichApiUrl(event.target.value)}
+                        id="immichInstance"
+                        value={immichInstanceId}
+                        onChange={(event) => setImmichInstanceId(event.target.value)}
                         required
                       >
                         <option value="">{t('Choisir une instance…')}</option>
-                        {immichAllowedUrls.map((url) => (
-                          <option key={url} value={url}>{url}</option>
+                        {immichInstances.map((instance) => (
+                          <option key={instance.id} value={instance.id}>{instance.label}</option>
                         ))}
                       </select>
                     </div>
@@ -600,7 +600,7 @@ const AdminPanel = ({
                         autoComplete="new-password"
                         onChange={(event) => setImmichApiKey(event.target.value)}
                         placeholder={immichConfig?.configured
-                          ? (immichConfig.apiUrl && immichApiUrl !== immichConfig.apiUrl
+                          ? (immichConfig.instanceId && immichInstanceId !== immichConfig.instanceId
                               ? t('Clé d’accès de la nouvelle instance requise')
                               : t('Laisser vide pour conserver la clé actuelle'))
                           : t('Clé créée dans Immich (Paramètres > Clés d’API)')}

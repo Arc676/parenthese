@@ -5,9 +5,9 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { z } from 'zod'
 
 import {
-  getImmichAllowedApiUrls,
+  getImmichInstanceByApiUrl,
+  getImmichInstances,
   getTreeImmichClient,
-  isImmichApiUrlAllowed,
   isImmichPersonId,
   normalizeImmichApiUrl,
   ImmichAuthError,
@@ -44,14 +44,12 @@ const thumbnailParamSchema = z.object({
   immichPersonId: z.string().refine(isImmichPersonId, 'invalid_immich_person_id'),
 })
 
-// Connexion Immich d'un arbre : adresse choisie parmi celles autorisées par l'opérateur du
-// serveur (IMMICH_ALLOWED_API_URLS). La clé se joint à la mise à jour ou, si le champ reste
-// vide, celle en place est conservée — jamais relue par le front.
+// Connexion Immich d'un arbre : instance choisie parmi celles autorisées par l'opérateur du
+// serveur (IMMICH_ALLOWED_API_URLS), désignée par son identifiant opaque. L'adresse ne circule
+// jamais vers le front. La clé se joint à la mise à jour ou, si le champ reste vide, celle en
+// place est conservée — jamais relue par le front.
 const configPayloadSchema = z.object({
-  apiUrl: z
-    .string()
-    .url()
-    .refine((value) => value.startsWith('http://') || value.startsWith('https://'), 'invalid_api_url'),
+  instanceId: z.string().regex(/^[0-9a-f]{16}$/, 'invalid_instance_id'),
   apiKey: z.string().min(1).max(512).optional(),
 })
 
@@ -71,13 +69,15 @@ function replyImmichError(request: FastifyRequest, reply: FastifyReply, error: u
   return reply.code(500).send({ error: 'immich_api_error' })
 }
 
-// Métadonnées sûres d'une connexion Immich d'arbre : jamais la clé, jamais son chiffré. Une
-// adresse sortie de la liste de l'opérateur vaut « non configuré » : la connexion est inerte.
+// Métadonnées sûres d'une connexion Immich d'arbre : jamais la clé, jamais son chiffré, jamais
+// l'adresse (l'instance se nomme par son libellé). Une adresse sortie de la liste de l'opérateur
+// vaut « non configuré » : la connexion est inerte.
 function immichConfigSummary(config: { apiUrl: string; updatedAt: Date } | null) {
-  if (!config || !isImmichApiUrlAllowed(config.apiUrl)) {
-    return { configured: false, apiUrl: null, updatedAt: null }
+  const instance = config ? getImmichInstanceByApiUrl(config.apiUrl) : undefined
+  if (!config || !instance) {
+    return { configured: false, instanceId: null, label: null, updatedAt: null }
   }
-  return { configured: true, apiUrl: config.apiUrl, updatedAt: config.updatedAt }
+  return { configured: true, instanceId: instance.id, label: instance.label, updatedAt: config.updatedAt }
 }
 
 // Portraits venus d'Immich : même nommage que les envois manuels (« avatar-<uuid> »), avec le
@@ -112,8 +112,8 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
 
     return reply.send({
       config: immichConfigSummary(config),
-      // Les administrateurs choisissent parmi cette liste : le front en fait un menu, pas un champ libre.
-      allowedApiUrls: getImmichAllowedApiUrls(),
+      // Les administrateurs choisissent parmi ces instances : le front en fait un menu, pas un champ libre.
+      instances: getImmichInstances().map(({ id, label }) => ({ id, label })),
     })
   })
 
@@ -135,10 +135,12 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(403).send({ error: 'forbidden' })
     }
 
-    // L'adresse doit faire partie de la liste de l'opérateur : le serveur ne devient jamais
-    // un proxy vers un service interne choisi librement (SSRF).
-    if (!isImmichApiUrlAllowed(payload.data.apiUrl)) {
-      return reply.code(400).send({ error: 'api_url_not_allowed' })
+    // L'instance doit faire partie de la liste de l'opérateur : le serveur ne devient jamais
+    // un proxy vers un service interne choisi librement (SSRF). L'adresse vient de la liste,
+    // jamais de la requête.
+    const instance = getImmichInstances().find((candidate) => candidate.id === payload.data.instanceId)
+    if (!instance) {
+      return reply.code(400).send({ error: 'instance_not_allowed' })
     }
 
     const treeId = params.data.id
@@ -156,7 +158,7 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
     // Changer d'instance n'emmène jamais la clé de l'ancienne : elle ne vaut rien pour la
     // nouvelle, et on ne l'envoie pas à un serveur qui n'est pas le sien.
     if (existing && !payload.data.apiKey
-      && normalizeImmichApiUrl(existing.apiUrl) !== normalizeImmichApiUrl(payload.data.apiUrl)) {
+      && normalizeImmichApiUrl(existing.apiUrl) !== instance.apiUrl) {
       return reply.code(400).send({ error: 'api_key_required' })
     }
 
@@ -166,8 +168,8 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
 
     const config = await app.prisma.treeImmichConfig.upsert({
       where: { treeId },
-      create: { treeId, apiUrl: payload.data.apiUrl, apiKeyEnc },
-      update: { apiUrl: payload.data.apiUrl, apiKeyEnc },
+      create: { treeId, apiUrl: instance.apiUrl, apiKeyEnc },
+      update: { apiUrl: instance.apiUrl, apiKeyEnc },
       select: { apiUrl: true, updatedAt: true },
     })
 
@@ -180,7 +182,7 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
         action: 'immich_config_updated',
         entityType: 'tree_immich_config',
         entityId: treeId,
-        payloadJson: { apiUrl: payload.data.apiUrl, apiKeyChanged: Boolean(payload.data.apiKey) },
+        payloadJson: { instanceId: instance.id, apiKeyChanged: Boolean(payload.data.apiKey) },
       },
     })
 
@@ -218,7 +220,7 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
       })
     }
 
-    return reply.send({ config: { configured: false, apiUrl: null, updatedAt: null } })
+    return reply.send({ config: { configured: false, instanceId: null, label: null, updatedAt: null } })
   })
 
   app.get('/trees/:id/immich/status', async (request, reply) => {

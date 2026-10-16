@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 import type { PrismaClient } from '@prisma/client'
 
 import { env } from '../config/env.js'
@@ -183,39 +185,63 @@ export function normalizeImmichApiUrl(value: string): string | null {
   }
 }
 
-let allowedApiUrlsCache: string[] | undefined
+export type ImmichInstance = {
+  // Identifiant opaque, dérivé de l'adresse (stable même si l'opérateur réordonne la liste).
+  id: string
+  label: string
+  apiUrl: string
+}
+
+let instancesCache: ImmichInstance[] | undefined
+
+export function immichInstanceId(apiUrl: string): string {
+  return createHash('sha256').update(apiUrl).digest('hex').slice(0, 16)
+}
 
 // Instances Immich autorisées par l'opérateur du serveur (IMMICH_ALLOWED_API_URLS). C'est la seule
 // liste d'adresses possibles : les administrateurs d'un arbre y choisissent la leur, le serveur
-// ne devient jamais un proxy vers un service interne choisi librement. Les entrées invalides sont
-// ignorées avec un avertissement.
-export function getImmichAllowedApiUrls(): string[] {
-  if (allowedApiUrlsCache !== undefined) {
-    return allowedApiUrlsCache
+// ne devient jamais un proxy vers un service interne choisi librement. Format d'une entrée :
+// « Libellé=https://adresse » ou « https://adresse ». Sans libellé, le nom d'hôte sert de nom.
+// Entrées invalides, doublons et libellés en conflit sont ignorés avec un avertissement.
+export function getImmichInstances(): ImmichInstance[] {
+  if (instancesCache !== undefined) {
+    return instancesCache
   }
 
-  const urls: string[] = []
+  const instances: ImmichInstance[] = []
   for (const entry of env.IMMICH_ALLOWED_API_URLS.split(',')) {
     const trimmed = entry.trim()
     if (!trimmed) {
       continue
     }
-    const normalized = normalizeImmichApiUrl(trimmed)
-    if (!normalized) {
+    const named = /^(.*?)\s*=\s*(https?:\/\/.+)$/i.exec(trimmed)
+    const rawUrl = named ? named[2] : trimmed
+    const apiUrl = normalizeImmichApiUrl(rawUrl)
+    if (!apiUrl) {
       console.warn(`IMMICH_ALLOWED_API_URLS : entrée ignorée (URL http(s) invalide) : ${trimmed}`)
       continue
     }
-    if (!urls.includes(normalized)) {
-      urls.push(normalized)
+    if (instances.some((instance) => instance.apiUrl === apiUrl)) {
+      continue
     }
+    const label = (named?.[1] ?? '').trim() || new URL(apiUrl).hostname
+    if (instances.some((instance) => instance.label.toLowerCase() === label.toLowerCase())) {
+      console.warn(`IMMICH_ALLOWED_API_URLS : entrée ignorée, le nom « ${label} » est déjà pris : donnez-lui un libellé (Libellé=https://…)`)
+      continue
+    }
+    instances.push({ id: immichInstanceId(apiUrl), label, apiUrl })
   }
-  allowedApiUrlsCache = urls
-  return urls
+  instancesCache = instances
+  return instances
+}
+
+export function getImmichInstanceByApiUrl(value: string): ImmichInstance | undefined {
+  const normalized = normalizeImmichApiUrl(value)
+  return normalized === null ? undefined : getImmichInstances().find((instance) => instance.apiUrl === normalized)
 }
 
 export function isImmichApiUrlAllowed(value: string): boolean {
-  const normalized = normalizeImmichApiUrl(value)
-  return normalized !== null && getImmichAllowedApiUrls().includes(normalized)
+  return getImmichInstanceByApiUrl(value) !== undefined
 }
 
 // Connexion Immich d'un arbre : résolue par arbre, côté serveur, à chaque requête. Pas de client
@@ -241,5 +267,5 @@ export async function getTreeImmichClient(prisma: PrismaClient, treeId: string):
   }
 
   // Le client reçoit l'adresse autorisée, normalisée : pas celle, brute, de la base.
-  return new ImmichClient(normalizeImmichApiUrl(config.apiUrl)!, apiKey)
+  return new ImmichClient(getImmichInstanceByApiUrl(config.apiUrl)!.apiUrl, apiKey)
 }
