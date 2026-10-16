@@ -3,6 +3,7 @@ import { z } from 'zod'
 
 import { UPLOAD_BODY_LIMIT } from '../config/env.js'
 import { parseGedcomDate } from '../lib/gedcom-dates.js'
+import { adoptedFamilies, FAMILY_EVENT_TYPES, familyExtras, PERSON_EVENT_TYPES, personExtras } from '../lib/gedcom-events.js'
 import { indexGedcomRecords, mediaRefsForPerson, photoPathForPerson, plainNoteText } from '../lib/gedcom-photos.js'
 import type { GedcomRecords } from '../lib/gedcom-photos.js'
 import type { MembershipRole } from '../types/auth.js'
@@ -179,6 +180,82 @@ function isoToGedcomDate(value: string | Date | null): string | null {
   return null
 }
 
+// Date avec sa précision (ABT 1879, BET 1914 AND 1918…). Une date exacte reste telle quelle.
+const PRECISION_PREFIX: Record<string, string> = {
+  about: 'ABT', estimated: 'EST', calculated: 'CAL', before: 'BEF', after: 'AFT', interpreted: 'INT',
+}
+
+// Une date tronquée au 1er janvier vient d'une année seule : on la réécrit comme une année
+function exportedDate(value: Date | null): string | null {
+  if (!value) return null
+  const iso = value.toISOString().slice(0, 10)
+  return isoToGedcomDate(iso.endsWith('-01-01') ? iso.slice(0, 4) : iso)
+}
+
+function qualifiedGedcomDate(start: Date | null, end: Date | null, precision: string | null, text?: string | null): string | null {
+  // Le texte d'origine (calendrier républicain, julien, période) prime : on le rend tel qu'il a été lu
+  if (text && precision) return oneLine(text)
+  const from = exportedDate(start)
+  const to = exportedDate(end)
+  if (!from) return text ? oneLine(text) : null
+  if (!precision || precision === 'exact') return from
+  if (precision === 'between') return to ? `BET ${from} AND ${to}` : `AFT ${from}`
+  if (precision === 'from') return to ? `FROM ${from} TO ${to}` : `FROM ${from}`
+  if (precision === 'to') return `TO ${from}`
+  const prefix = PRECISION_PREFIX[precision]
+  return prefix ? `${prefix} ${from}` : from
+}
+
+type ExportedEvent = {
+  type: string
+  label: string | null
+  date: Date | null
+  dateEnd: Date | null
+  datePrecision: string | null
+  dateText: string | null
+  place: string | null
+  description: string | null
+  notes: string | null
+  sources: string | null
+}
+
+// Balise GEDCOM de chaque type : la première rencontrée dans la table de lecture (BAPM avant CHR)
+const reverseTags = (table: Record<string, string>) => {
+  const out: Record<string, string> = {}
+  for (const [tag, type] of Object.entries(table)) if (!out[type]) out[type] = tag
+  return out
+}
+const PERSON_EVENT_TAGS = reverseTags(PERSON_EVENT_TYPES)
+const FAMILY_EVENT_TAGS = reverseTags(FAMILY_EVENT_TYPES)
+
+function pushMultiline(lines: string[], level: number, tag: string, text: string) {
+  const [first, ...rest] = text.split(/\r\n|\r|\n/)
+  lines.push(`${level} ${tag} ${first}`.trimEnd())
+  for (const line of rest) lines.push(`${level + 1} CONT ${line}`.trimEnd())
+}
+
+function pushNotesAndSources(lines: string[], level: number, event: Pick<ExportedEvent, 'notes' | 'sources'> | undefined) {
+  if (!event) return
+  if (event.notes) pushMultiline(lines, level, 'NOTE', event.notes)
+  for (const source of (event.sources ?? '').split('\n').map((s) => s.trim()).filter(Boolean)) {
+    lines.push(`${level} SOUR ${source}`)
+  }
+}
+
+function pushLifeEvent(lines: string[], event: ExportedEvent, tags: Record<string, string>) {
+  const tag = tags[event.type] ?? 'EVEN'
+  const value = event.description ? ` ${oneLine(event.description)}` : ''
+  lines.push(`1 ${tag}${value}`)
+  if (tag === 'EVEN' || tag === 'FACT') {
+    const label = event.label ?? (tags[event.type] ? null : event.type)
+    if (label) lines.push(`2 TYPE ${oneLine(label)}`)
+  }
+  const date = qualifiedGedcomDate(event.date, event.dateEnd, event.datePrecision, event.dateText)
+  if (date) lines.push(`2 DATE ${date}`)
+  if (event.place) lines.push(`2 PLAC ${oneLine(event.place)}`)
+  pushNotesAndSources(lines, 2, event)
+}
+
 // ─── Name Parsing ────────────────────────────────────────────────────────────
 
 // « Jean /Dupont/ » : lu par indexOf, l'ancienne expression régulière était quadratique sur les espaces
@@ -261,10 +338,11 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
-    const [persons, unions, links] = await Promise.all([
+    const [persons, unions, links, lifeEvents] = await Promise.all([
       app.prisma.person.findMany({ where: { treeId, deletedAt: null } }),
       app.prisma.union.findMany({ where: { treeId, deletedAt: null } }),
       app.prisma.parentChildLink.findMany({ where: { treeId, deletedAt: null } }),
+      app.prisma.lifeEvent.findMany({ where: { treeId, deletedAt: null }, orderBy: [{ date: 'asc' }, { displayOrder: 'asc' }] }),
     ])
 
     const personById = new Map(persons.map((p) => [p.id, p]))
@@ -301,6 +379,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
 
     // Assign each child to a union FAM
     const childrenByUnion = new Map<string, Set<string>>()
+    const adoptedInUnion = new Set<string>()
     for (const link of links) {
       const childId = link.childPersonId
       let unionId: string | undefined
@@ -321,6 +400,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
       }
 
       if (!unionId) continue
+      if (link.parentageType === 'adoption') adoptedInUnion.add(`${unionId}|${childId}`)
       const set = childrenByUnion.get(unionId) ?? new Set()
       set.add(childId)
       childrenByUnion.set(unionId, set)
@@ -347,6 +427,16 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
+    // Événements de vie : rangés par personne et par union, pour les réécrire sous leur propriétaire
+    const eventsByPerson = new Map<string, typeof lifeEvents>()
+    const eventsByUnion = new Map<string, typeof lifeEvents>()
+    for (const event of lifeEvents) {
+      const target = event.personId ? eventsByPerson : event.unionId ? eventsByUnion : null
+      const key = event.personId ?? event.unionId
+      if (!target || !key) continue
+      target.set(key, [...(target.get(key) ?? []), event])
+    }
+
     // ── Write GEDCOM ──
     const lines: string[] = []
     const now = new Date()
@@ -364,24 +454,39 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
       const xref = sanitizeXref(person.id)
       lines.push(`0 @I${xref}@ INDI`)
       lines.push(`1 NAME ${oneLine(person.firstName)} /${oneLine(person.lastName).replace(/\//g, '')}/`)
+      if (person.nickname) lines.push(`2 NICK ${oneLine(person.nickname)}`)
 
       if (person.sex === 'male' || person.sex === 'M') lines.push('1 SEX M')
       else if (person.sex === 'female' || person.sex === 'F') lines.push('1 SEX F')
 
-      const birthDate = isoToGedcomDate(person.birthDate)
-      if (birthDate || person.birthPlace) {
+      const personEvents = eventsByPerson.get(person.id) ?? []
+      const birthDetails = personEvents.find((event) => event.type === 'birth')
+      const deathDetails = personEvents.find((event) => event.type === 'death')
+
+      const birthDate = qualifiedGedcomDate(person.birthDate, person.birthDateEnd, person.birthDatePrecision)
+      if (birthDate || person.birthPlace || birthDetails) {
         lines.push('1 BIRT')
         if (birthDate) lines.push(`2 DATE ${birthDate}`)
         if (person.birthPlace) lines.push(`2 PLAC ${oneLine(person.birthPlace)}`)
+        pushNotesAndSources(lines, 2, birthDetails)
       }
 
-      const deathDate = isoToGedcomDate(person.deathDate)
-      if (deathDate) {
+      const deathDate = qualifiedGedcomDate(person.deathDate, person.deathDateEnd, person.deathDatePrecision)
+      if (deathDate || person.deathPlace || deathDetails) {
         lines.push('1 DEAT')
-        lines.push(`2 DATE ${deathDate}`)
+        if (deathDate) lines.push(`2 DATE ${deathDate}`)
+        if (person.deathPlace) lines.push(`2 PLAC ${oneLine(person.deathPlace)}`)
+        pushNotesAndSources(lines, 2, deathDetails)
       }
 
-      if (person.profession) lines.push(`1 OCCU ${oneLine(person.profession)}`)
+      // Le champ « profession » s'écrit seulement s'il n'est pas déjà un des métiers datés
+      const professionKnown = personEvents.some(
+        (event) => event.type === 'occupation' && event.description?.trim().toLowerCase() === person.profession?.trim().toLowerCase(),
+      )
+      if (person.profession && !professionKnown) lines.push(`1 OCCU ${oneLine(person.profession)}`)
+      for (const event of personEvents) {
+        if (event.type !== 'birth' && event.type !== 'death') pushLifeEvent(lines, event, PERSON_EVENT_TAGS)
+      }
 
       if (person.notes) {
         const noteLines = person.notes.split(/\r\n|\r|\n/)
@@ -399,6 +504,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
       // FAMC: links this person to their parent family (as child)
       for (const uid of famcByPerson.get(person.id) ?? []) {
         lines.push(`1 FAMC @F${sanitizeXref(uid)}@`)
+        if (adoptedInUnion.has(`${uid}|${person.id}`)) lines.push('2 PEDI adopted')
       }
     }
 
@@ -426,10 +532,17 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
         lines.push(`1 CHIL @I${sanitizeXref(childId)}@`)
       }
 
-      const marriageDate = isoToGedcomDate(union.startDate)
-      if (marriageDate) {
+      const unionEvents = eventsByUnion.get(union.id) ?? []
+      const marriageDetails = unionEvents.find((event) => event.type === 'marriage')
+      const marriageDate = qualifiedGedcomDate(union.startDate, null, union.startDatePrecision)
+      if (marriageDate || union.startPlace || marriageDetails) {
         lines.push('1 MARR')
-        lines.push(`2 DATE ${marriageDate}`)
+        if (marriageDate) lines.push(`2 DATE ${marriageDate}`)
+        if (union.startPlace) lines.push(`2 PLAC ${oneLine(union.startPlace)}`)
+        pushNotesAndSources(lines, 2, marriageDetails)
+      }
+      for (const event of unionEvents) {
+        if (event.type !== 'marriage') pushLifeEvent(lines, event, FAMILY_EVENT_TAGS)
       }
     }
 
@@ -528,6 +641,9 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
     let personsReused = 0
     let unionsCreated = 0
     let linksCreated = 0
+    let eventsCreated = 0
+    // Adoptions déclarées sous l'enfant (« 2 PEDI adopted ») : enfant → familles où il est adopté
+    const adoptedByChild = new Map(indiNodes.map((indi) => [indi.xref!, adoptedFamilies(indi)]))
 
     importInProgress = true
     try {
@@ -567,6 +683,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
           continue
         }
 
+        const { events, ...extras } = personExtras(indi, records)
         const person = await tx.person.create({
           data: {
             treeId,
@@ -578,10 +695,15 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
             birthPlace,
             profession,
             notes,
+            ...extras,
             createdBy: actor.userId,
             updatedBy: actor.userId,
           },
         })
+        if (events.length) {
+          await tx.lifeEvent.createMany({ data: events.map((event, index) => ({ ...event, treeId, personId: person.id, displayOrder: index + 1 })) })
+          eventsCreated += events.length
+        }
 
         xrefToPersonId.set(indi.xref!, person.id)
         personsCreated++
@@ -608,17 +730,23 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
         const secondPartner = partner1Id ? (partner2Id ?? null) : null
         let unionId = unionByPair.get(pairKey(firstPartner, secondPartner))
         if (!unionId) {
+          const { events: familyEvents, ...unionExtras } = familyExtras(fam, records)
           const union = await tx.union.create({
             data: {
               treeId,
               partner1PersonId: firstPartner,
               partner2PersonId: secondPartner,
               startDate: isoDateToDbDate(marriageDateIso),
+              ...unionExtras,
             },
           })
           unionId = union.id
           unionByPair.set(pairKey(firstPartner, secondPartner), unionId)
           unionsCreated++
+          if (familyEvents.length) {
+            await tx.lifeEvent.createMany({ data: familyEvents.map((event, index) => ({ ...event, treeId, unionId: union.id, displayOrder: index + 1 })) })
+            eventsCreated += familyEvents.length
+          }
         }
 
         const chilNodes = findAllChildren(fam, 'CHIL')
@@ -643,6 +771,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
                 parentPersonId: parentId,
                 childPersonId: childId,
                 viaUnionId: unionId,
+                ...(adoptedByChild.get(chilXref)?.has(fam.xref!) ? { parentageType: 'adoption' } : {}),
                 displayOrder: await nextSiblingOrder(tx, treeId, parentId),
               },
             })
@@ -660,7 +789,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
           action: 'gedcom_imported',
           entityType: 'tree',
           entityId: treeId,
-          payloadJson: { personsCreated, personsReused, unionsCreated, linksCreated, photoRefs: photoRefs.length, mediaRefs: mediaRefs.length },
+          payloadJson: { personsCreated, personsReused, unionsCreated, linksCreated, eventsCreated, photoRefs: photoRefs.length, mediaRefs: mediaRefs.length },
         },
       })
     }, { timeout: 60000 })
@@ -670,6 +799,6 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
 
     // photoRefs : chemin de la photo que le logiciel d'origine associait à chaque personne ; mediaRefs : les
     // autres fichiers cités, avec leur titre et leur source (rien n'est gardé en base)
-    return reply.send({ personsCreated, personsReused, unionsCreated, linksCreated, photoRefs, mediaRefs })
+    return reply.send({ personsCreated, personsReused, unionsCreated, linksCreated, eventsCreated, photoRefs, mediaRefs })
   })
 }

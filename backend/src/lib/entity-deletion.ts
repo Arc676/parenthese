@@ -72,6 +72,15 @@ export async function softDeletePersonCascade(
       where: { treeId, personId, deletedAt: null },
       data: { deletedAt: now },
     }),
+    // Événements de vie de la personne et de ses unions
+    db.lifeEvent.updateMany({
+      where: {
+        treeId,
+        deletedAt: null,
+        OR: [{ personId }, ...(unionIds.length > 0 ? [{ unionId: { in: unionIds } }] : [])],
+      },
+      data: { deletedAt: now },
+    }),
   ])
 
   // Racine de l'arbre supprimée : le graphe repart sans racine plutôt que sur une personne effacée

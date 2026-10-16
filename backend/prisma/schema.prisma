@@ -78,21 +78,21 @@ enum SharedAccessRole {
 }
 
 model User {
-  id                           String                @id @default(cuid())
-  email                        String                @unique
-  passwordHash                 String
-  lastOpenedTreeId             String?
-  lastOpenedAccessMode         String?
-  lastOpenedRole               String?
-  lastOpenedAt                 DateTime?
-  createdAt                    DateTime              @default(now())
-  ownedTrees                   Tree[]                @relation("TreeOwner")
-  memberships                  TreeMembership[]
-  sharedTreeAccesses           UserTreeAccess[]
+  id                            String                @id @default(cuid())
+  email                         String                @unique
+  passwordHash                  String
+  lastOpenedTreeId              String?
+  lastOpenedAccessMode          String?
+  lastOpenedRole                String?
+  lastOpenedAt                  DateTime?
+  createdAt                     DateTime              @default(now())
+  ownedTrees                    Tree[]                @relation("TreeOwner")
+  memberships                   TreeMembership[]
+  sharedTreeAccesses            UserTreeAccess[]
   submittedContributionSessions ContributionSession[] @relation("ContributionSubmittedBy")
-  reviewedContributionSessions ContributionSession[] @relation("ContributionReviewedBy")
-  treeVisits                   TreeVisit[]
-  lastOpenedTree               Tree?                 @relation("UserLastOpenedTree", fields: [lastOpenedTreeId], references: [id], onDelete: SetNull)
+  reviewedContributionSessions  ContributionSession[] @relation("ContributionReviewedBy")
+  treeVisits                    TreeVisit[]
+  lastOpenedTree                Tree?                 @relation("UserLastOpenedTree", fields: [lastOpenedTreeId], references: [id], onDelete: SetNull)
 
   @@index([lastOpenedAt])
   @@map("users")
@@ -123,6 +123,7 @@ model Tree {
   auditLogs            AuditLog[]
   annotations          Annotation[]
   visits               TreeVisit[]
+  lifeEvents           LifeEvent[]
   lastOpenedByUsers    User[]                @relation("UserLastOpenedTree")
 
   @@index([ownerUserId])
@@ -151,14 +152,14 @@ model TreeSharePassword {
 }
 
 model TreeMembership {
-  id                       String             @id @default(cuid())
+  id                       String              @id @default(cuid())
   treeId                   String
   userId                   String
   role                     MembershipRole
   contributionModeOverride ContributionPolicy?
-  createdAt                DateTime           @default(now())
-  tree                     Tree               @relation(fields: [treeId], references: [id], onDelete: Cascade)
-  user                     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt                DateTime            @default(now())
+  tree                     Tree                @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  user                     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([treeId, userId])
   @@index([userId])
@@ -166,14 +167,14 @@ model TreeMembership {
 }
 
 model UserTreeAccess {
-  id           String           @id @default(cuid())
-  treeId        String
-  userId        String
-  role          SharedAccessRole
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @default(now()) @updatedAt
-  tree          Tree            @relation(fields: [treeId], references: [id], onDelete: Cascade)
-  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String           @id @default(cuid())
+  treeId    String
+  userId    String
+  role      SharedAccessRole
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @default(now()) @updatedAt
+  tree      Tree             @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([treeId, userId])
   @@index([userId, updatedAt])
@@ -181,12 +182,12 @@ model UserTreeAccess {
 }
 
 model TreeSettings {
-  treeId                    String             @id
-  memberContributionPolicy  ContributionPolicy @default(pending)
-  visitorPolicy             VisitorPolicy      @default(read_only)
-  contributorPolicy         ContributionPolicy @default(pending)
-  updatedAt                 DateTime           @updatedAt
-  tree                      Tree               @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  treeId                   String             @id
+  memberContributionPolicy ContributionPolicy @default(pending)
+  visitorPolicy            VisitorPolicy      @default(read_only)
+  contributorPolicy        ContributionPolicy @default(pending)
+  updatedAt                DateTime           @updatedAt
+  tree                     Tree               @relation(fields: [treeId], references: [id], onDelete: Cascade)
 
   @@map("tree_settings")
 }
@@ -205,89 +206,98 @@ model TreeImmichConfig {
 }
 
 model Person {
-  id         String    @id @default(cuid())
-  treeId     String
-  firstName  String
-  lastName   String
-  birthName  String?
-  birthDate  DateTime?
-  deathDate  DateTime?
-  birthPlace String?
-  profession String?
-  region     String?
-  nationality String?
-  avatarPath String?
-  avatarMimeType String?
-  sex        String?
-  notes      String?
-  createdBy  String?
-  updatedBy  String?
+  id                 String    @id @default(cuid())
+  treeId             String
+  firstName          String
+  lastName           String
+  birthName          String?
+  birthDate          DateTime?
+  deathDate          DateTime?
+  birthPlace         String?
+  // Précision d'une date importée (« vers », « avant », « entre »…) et sa borne de fin pour « entre … et … »
+  birthDatePrecision String?
+  birthDateEnd       DateTime?
+  deathDatePrecision String?
+  deathDateEnd       DateTime?
+  deathPlace         String?
+  nickname           String?
+  profession         String?
+  region             String?
+  nationality        String?
+  avatarPath         String?
+  avatarMimeType     String?
+  sex                String?
+  notes              String?
+  createdBy          String?
+  updatedBy          String?
   // Personne Immich associée (reconnaissance des visages) : identifiant côté Immich, ou null.
-  immichPersonId String?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  deletedAt  DateTime?
-  tree       Tree      @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  immichPersonId     String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
+  tree               Tree      @relation(fields: [treeId], references: [id], onDelete: Cascade)
 
   @@index([treeId])
   @@map("persons")
 }
 
 model Union {
-  id               String    @id @default(cuid())
-  treeId           String
-  partner1PersonId String
-  partner2PersonId String?
-  unionType        String?
-  startDate        DateTime?
-  endDate          DateTime?
-  displayOrder     Int       @default(1)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  deletedAt        DateTime?
-  tree             Tree      @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  id                 String    @id @default(cuid())
+  treeId             String
+  partner1PersonId   String
+  partner2PersonId   String?
+  unionType          String?
+  startDate          DateTime?
+  endDate            DateTime?
+  displayOrder       Int       @default(1)
+  startPlace         String?
+  startDatePrecision String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
+  tree               Tree      @relation(fields: [treeId], references: [id], onDelete: Cascade)
 
   @@index([treeId])
   @@map("unions")
 }
 
 model ParentChildLink {
-  id            String    @id @default(cuid())
-  treeId        String
+  id             String    @id @default(cuid())
+  treeId         String
   parentPersonId String
-  childPersonId String
-  viaUnionId    String?
-  parentageType String?
-  displayOrder  Int       @default(1)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
-  tree          Tree      @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  childPersonId  String
+  viaUnionId     String?
+  parentageType  String?
+  displayOrder   Int       @default(1)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+  tree           Tree      @relation(fields: [treeId], references: [id], onDelete: Cascade)
 
   @@index([treeId])
   @@map("parent_child_links")
 }
 
 model MediaItem {
-  id          String   @id @default(cuid())
-  treeId      String
-  personId    String
-  type        String
-  mimeType    String
-  filePath    String
-  thumbPath   String?
-  caption     String?
-  source      String?
-  sizeBytes   Int
-  displayOrder Int      @default(1)
-  isFeatured  Boolean  @default(false)
-  uploadedBy  String?
-  status      MediaStatus @default(approved)
+  id                    String      @id @default(cuid())
+  treeId                String
+  personId              String
+  type                  String
+  mimeType              String
+  filePath              String
+  thumbPath             String?
+  caption               String?
+  source                String?
+  sizeBytes             Int
+  displayOrder          Int         @default(1)
+  isFeatured            Boolean     @default(false)
+  uploadedBy            String?
+  status                MediaStatus @default(approved)
   contributionSessionId String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  deletedAt   DateTime?
-  tree        Tree     @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  deletedAt             DateTime?
+  tree                  Tree        @relation(fields: [treeId], references: [id], onDelete: Cascade)
 
   @@index([treeId, personId, displayOrder])
   @@map("media_items")
@@ -316,17 +326,17 @@ model ContributionSession {
 }
 
 model ContributionChange {
-  id           String               @id @default(cuid())
-  sessionId    String
-  entityType   ContributionEntityType
-  entityId     String?
-  action       ContributionAction
-  beforeJson   Json?
-  afterJson    Json?
-  conflictState ConflictState       @default(none)
-  decision     ContributionDecision?
-  createdAt    DateTime             @default(now())
-  session      ContributionSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id            String                 @id @default(cuid())
+  sessionId     String
+  entityType    ContributionEntityType
+  entityId      String?
+  action        ContributionAction
+  beforeJson    Json?
+  afterJson     Json?
+  conflictState ConflictState          @default(none)
+  decision      ContributionDecision?
+  createdAt     DateTime               @default(now())
+  session       ContributionSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
   @@map("contribution_changes")
@@ -352,16 +362,16 @@ model Annotation {
 }
 
 model AuditLog {
-  id         String   @id @default(cuid())
-  treeId     String
-  actorType  String
-  actorId    String?
-  action     String
-  entityType String
-  entityId   String
+  id          String   @id @default(cuid())
+  treeId      String
+  actorType   String
+  actorId     String?
+  action      String
+  entityType  String
+  entityId    String
   payloadJson Json?
-  createdAt  DateTime @default(now())
-  tree       Tree     @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  tree        Tree     @relation(fields: [treeId], references: [id], onDelete: Cascade)
 
   @@index([treeId, createdAt])
   @@map("audit_log")
@@ -394,4 +404,34 @@ model WaitlistEntry {
   createdAt DateTime @default(now())
 
   @@map("waitlist_entries")
+}
+
+// Événements de vie d'une personne (baptême, résidence, métier, études, service militaire, inhumation…) ou
+// d'un couple (divorce…). Naissance, décès et mariage gardent leur date et leur lieu sur la personne ou
+// l'union ; leur ligne ici ne porte que les sources et les notes (type birth, death, marriage).
+model LifeEvent {
+  id            String    @id @default(cuid())
+  treeId        String
+  personId      String?
+  unionId       String?
+  type          String
+  label         String?
+  date          DateTime?
+  dateEnd       DateTime?
+  datePrecision String?
+  dateText      String?
+  place         String?
+  description   String?
+  notes         String?
+  sources       String?
+  displayOrder  Int       @default(1)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+  tree          Tree      @relation(fields: [treeId], references: [id], onDelete: Cascade)
+
+  @@index([treeId])
+  @@index([treeId, personId])
+  @@index([treeId, unionId])
+  @@map("life_events")
 }

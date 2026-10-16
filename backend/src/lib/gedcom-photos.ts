@@ -123,7 +123,7 @@ export function localMediaPath(value: string): string | null {
   return dot > 0 && MEDIA_EXTENSIONS.has(name.slice(dot + 1).toLowerCase()) ? path : null
 }
 
-function joinedText(node: GedcomPhotoNode | undefined): string {
+export function joinedText(node: GedcomPhotoNode | undefined): string {
   if (!node) return ''
   let text = node.rawValue ?? node.value
   for (const c of node.children) {
@@ -148,7 +148,7 @@ export function plainNoteText(raw: string): string {
   return text.replace(/[ \t]+/g, ' ').replace(/\s*\n\s*/g, '\n').trim()
 }
 
-function noteText(node: GedcomPhotoNode | undefined, records: GedcomRecords): string {
+export function noteText(node: GedcomPhotoNode | undefined, records: GedcomRecords): string {
   if (!node) return ''
   const pointer = pointerOf(node.value)
   return plainNoteText(joinedText(pointer ? records.note.get(pointer) : node))
@@ -167,7 +167,7 @@ function baseNameWithoutExtension(path: string): string {
 }
 
 // Titre d'une source citée : son titre (ou son abréviation), puis la page ou le détail de la citation
-function sourceLabel(citation: GedcomPhotoNode, records: GedcomRecords): string | null {
+export function sourceLabel(citation: GedcomPhotoNode, records: GedcomRecords): string | null {
   const pointer = pointerOf(citation.value)
   const record = pointer ? records.sour.get(pointer) : null
   const title = joinedText(child(record ?? undefined, 'TITL')) || joinedText(child(record ?? undefined, 'ABBR')) || (pointer ? '' : citation.value)
