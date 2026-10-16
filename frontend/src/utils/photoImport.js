@@ -57,7 +57,7 @@ export function matchPhotoFiles(photoRefs, files) {
       }
     }
     // Les autres champs de la référence (légende, source d'un souvenir) suivent le fichier retrouvé
-    matches.push({ ...ref, file: best })
+    matches.push({ ...ref, file: best, sourcePath: ref.file })
   }
   return { matches, missing }
 }

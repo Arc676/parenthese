@@ -37,6 +37,8 @@ export default {
   "1 autre fichier": "1 other file",
   "{n} autres fichiers": "{n} other files",
   "Ajouter ce fichier": "Add this file",
+  "1 fichier ajouté.": "1 file added.",
+  "{n} fichiers ajoutés.": "{n} files added.",
   "Tout ajouter ({n})": "Add everything ({n})",
   "1 fichier ajouté aux souvenirs.": "1 file added to the memories.",
   "{n} fichiers ajoutés aux souvenirs.": "{n} files added to the memories.",

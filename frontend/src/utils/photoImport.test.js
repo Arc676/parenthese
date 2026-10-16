@@ -85,3 +85,11 @@ describe('souvenirs cités par le logiciel', () => {
     expect(matches[0].file.name).toBe('Naissance Ragot.jpg')
   })
 })
+
+describe('chemin d’origine', () => {
+  it('chaque correspondance garde le chemin cité, même pour trois fichiers de la même personne', () => {
+    const refs = ['a.jpg', 'b.pdf', 'c.jpg'].map((name) => ({ personId: 'p', file: `Medias/${name}` }))
+    const { matches } = matchPhotoFiles(refs, ['a.jpg', 'b.pdf', 'c.jpg'].map((name) => file(name, `Medias/${name}`)))
+    expect(matches.map((m) => m.sourcePath)).toEqual(['Medias/a.jpg', 'Medias/b.pdf', 'Medias/c.jpg'])
+  })
+})

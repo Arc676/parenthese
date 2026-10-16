@@ -33,7 +33,8 @@ function folderOf(filePath) {
 
 // Après un import GEDCOM (ou depuis les paramètres) : retrouver les photos que le logiciel connaissait,
 // et demander les premiers visages un par un.
-const refKey = (ref) => `${ref.personId}|${ref.file}`
+// Une référence et sa correspondance retrouvée partagent le chemin cité par le logiciel
+const refKey = (ref) => `${ref.personId}|${ref.sourcePath ?? ref.file}`
 
 export default function PhotoStartPanel({
   visible,
@@ -58,6 +59,7 @@ export default function PhotoStartPanel({
   const [faceState, setFaceState] = useState({})
   const [shownFaces, setShownFaces] = useState(faces)
   const [placedTotal, setPlacedTotal] = useState(0)
+  const [memoriesTotal, setMemoriesTotal] = useState(0)
 
   // La liste des visages et les chemins sont figés à l'ouverture : une ligne ne disparaît pas sous le doigt
   useEffect(() => {
@@ -69,6 +71,7 @@ export default function PhotoStartPanel({
     setFaceState({})
     setShownFaces(faces)
     setPlacedTotal(0)
+    setMemoriesTotal(0)
   }, [visible]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -132,7 +135,8 @@ export default function PhotoStartPanel({
     setRemaining(nextRemaining)
     onRefsChange?.(nextRemaining)
     setFound(null)
-    setPlacedTotal((n) => n + placedIds.size + addedKeys.size)
+    setPlacedTotal((n) => n + placedIds.size)
+    setMemoriesTotal((n) => n + addedKeys.size)
     setBulk({ running: false, done: total, total, placed: placedIds.size, added: addedKeys.size, failed: total - placedIds.size - addedKeys.size })
   }
 
@@ -318,7 +322,9 @@ export default function PhotoStartPanel({
 
         <div className="pz-modal-actions pz-modal-actions--split">
           <p className="pz-small">
-            {addedCount > 0 ? plural(addedCount, '1 photo ajoutée.', '{n} photos ajoutées.') : t('Vous pourrez en ajouter plus tard depuis chaque fiche.')}
+            {memoriesTotal > 0
+              ? plural(addedCount + memoriesTotal, '1 fichier ajouté.', '{n} fichiers ajoutés.')
+              : addedCount > 0 ? plural(addedCount, '1 photo ajoutée.', '{n} photos ajoutées.') : t('Vous pourrez en ajouter plus tard depuis chaque fiche.')}
           </p>
           <button type="button" className="pz-btn pz-btn--primary" onClick={onClose} disabled={bulk.running}>
             {t("Voir l'arbre")}
