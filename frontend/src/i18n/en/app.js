@@ -97,4 +97,5 @@ export default {
   'Ressource introuvable.': 'Not found.',
   'Conflit détecté (email ou slug déjà utilisé).': 'Conflict detected (email or slug already in use).',
   "Erreur backend. Vérifiez que l'API et la base sont lancées.": 'Server error. Check that the API and database are running.',
+  "Certaines modifications n'ont pas pu être enregistrées. Vérifiez puis réessayez.": "Some changes couldn't be saved. Check them and try again.",
 }
