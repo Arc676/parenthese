@@ -76,6 +76,8 @@ export class ImmichClient {
       response = await fetch(url, {
         headers: { 'x-api-key': this.apiKey, Accept: 'application/json' },
         signal: AbortSignal.timeout(IMMICH_TIMEOUT_MS),
+        // Aucune redirection suivie : la clé ne doit jamais partir vers une autre adresse.
+        redirect: 'error',
       })
     } catch (error) {
       // L'URL ne contient aucun secret ; la clé voyage dans l'en-tête, jamais dans les journaux.

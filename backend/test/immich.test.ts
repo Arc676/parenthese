@@ -852,3 +852,33 @@ describe('Immich integration: manual avatar replacing an Immich portrait', () =>
     await app.close()
   })
 })
+
+describe('Immich integration: redirections', () => {
+  it('never follows a redirect and never sends the API key to another host', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/people')) {
+        return new Response(null, { status: 302, headers: { location: 'http://evil.test/collect' } })
+      }
+      return jsonResponse({ res: 'pong' })
+    })
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/trees/tree-1/immich/people',
+      headers: { authorization: `Bearer ${token}` },
+    })
+
+    expect(response.statusCode).toBe(503)
+    expect(response.json()).toEqual({ error: 'immich_unreachable' })
+    // Chaque appel part en mode « erreur » sur redirection, et aucun n'atteint l'hôte de la redirection.
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(0)
+    for (const [input, init] of fetchMock.mock.calls) {
+      expect(init?.redirect).toBe('error')
+      expect(String(input)).not.toContain('evil.test')
+    }
+    await app.close()
+  })
+})
