@@ -3,6 +3,7 @@ import { z } from 'zod'
 
 import { UPLOAD_BODY_LIMIT } from '../config/env.js'
 import { parseGedcomDate } from '../lib/gedcom-dates.js'
+import { adoptedFamilies, familyExtras, personExtras } from '../lib/gedcom-events.js'
 import { indexGedcomRecords, mediaRefsForPerson, photoPathForPerson, plainNoteText } from '../lib/gedcom-photos.js'
 import type { GedcomRecords } from '../lib/gedcom-photos.js'
 import type { MembershipRole } from '../types/auth.js'
@@ -528,6 +529,9 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
     let personsReused = 0
     let unionsCreated = 0
     let linksCreated = 0
+    let eventsCreated = 0
+    // Adoptions déclarées sous l'enfant (« 2 PEDI adopted ») : enfant → familles où il est adopté
+    const adoptedByChild = new Map(indiNodes.map((indi) => [indi.xref!, adoptedFamilies(indi)]))
 
     importInProgress = true
     try {
@@ -567,6 +571,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
           continue
         }
 
+        const { events, ...extras } = personExtras(indi, records)
         const person = await tx.person.create({
           data: {
             treeId,
@@ -578,10 +583,15 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
             birthPlace,
             profession,
             notes,
+            ...extras,
             createdBy: actor.userId,
             updatedBy: actor.userId,
           },
         })
+        if (events.length) {
+          await tx.lifeEvent.createMany({ data: events.map((event, index) => ({ ...event, treeId, personId: person.id, displayOrder: index + 1 })) })
+          eventsCreated += events.length
+        }
 
         xrefToPersonId.set(indi.xref!, person.id)
         personsCreated++
@@ -608,17 +618,23 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
         const secondPartner = partner1Id ? (partner2Id ?? null) : null
         let unionId = unionByPair.get(pairKey(firstPartner, secondPartner))
         if (!unionId) {
+          const { events: familyEvents, ...unionExtras } = familyExtras(fam, records)
           const union = await tx.union.create({
             data: {
               treeId,
               partner1PersonId: firstPartner,
               partner2PersonId: secondPartner,
               startDate: isoDateToDbDate(marriageDateIso),
+              ...unionExtras,
             },
           })
           unionId = union.id
           unionByPair.set(pairKey(firstPartner, secondPartner), unionId)
           unionsCreated++
+          if (familyEvents.length) {
+            await tx.lifeEvent.createMany({ data: familyEvents.map((event, index) => ({ ...event, treeId, unionId: union.id, displayOrder: index + 1 })) })
+            eventsCreated += familyEvents.length
+          }
         }
 
         const chilNodes = findAllChildren(fam, 'CHIL')
@@ -643,6 +659,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
                 parentPersonId: parentId,
                 childPersonId: childId,
                 viaUnionId: unionId,
+                ...(adoptedByChild.get(chilXref)?.has(fam.xref!) ? { parentageType: 'adoption' } : {}),
                 displayOrder: await nextSiblingOrder(tx, treeId, parentId),
               },
             })
@@ -660,7 +677,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
           action: 'gedcom_imported',
           entityType: 'tree',
           entityId: treeId,
-          payloadJson: { personsCreated, personsReused, unionsCreated, linksCreated, photoRefs: photoRefs.length, mediaRefs: mediaRefs.length },
+          payloadJson: { personsCreated, personsReused, unionsCreated, linksCreated, eventsCreated, photoRefs: photoRefs.length, mediaRefs: mediaRefs.length },
         },
       })
     }, { timeout: 60000 })
@@ -670,6 +687,6 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
 
     // photoRefs : chemin de la photo que le logiciel d'origine associait à chaque personne ; mediaRefs : les
     // autres fichiers cités, avec leur titre et leur source (rien n'est gardé en base)
-    return reply.send({ personsCreated, personsReused, unionsCreated, linksCreated, photoRefs, mediaRefs })
+    return reply.send({ personsCreated, personsReused, unionsCreated, linksCreated, eventsCreated, photoRefs, mediaRefs })
   })
 }
