@@ -259,6 +259,11 @@ export default {
   'En rédaction': 'In the newsroom',
   'Interview archive radio': 'Archived radio interview',
   'Inconnu': 'Unknown',
+  // Place dans la fratrie (fiche, mode édition)
+  'Place {n} sur {total} parmi les frères et sœurs': 'Place {n} of {total} among siblings',
+  'Déplacer à gauche': 'Move left',
+  'Déplacer à droite': 'Move right',
+  "L'ordre n'a pas pu être enregistré. Réessayez.": 'The order could not be saved. Please try again.',
   // Visages venus d'Immich (PersonCard, ImmichFacePanel, immichApi)
   'Depuis Immich': 'From Immich',
   'Depuis un fichier': 'From a file',

@@ -192,6 +192,17 @@ export async function deleteUnion(treeId, unionId, token) {
   return data
 }
 
+// Ordre d'une fratrie : chaque enfant, dans l'ordre voulu, avec ses liens vers ses parents
+export async function reorderSiblings(treeId, order, token) {
+  return apiRequest(`/trees/${encodeURIComponent(treeId)}/links/order`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ order }),
+  })
+}
+
 export async function deleteParentChildLink(treeId, linkId, token) {
   const data = await apiRequest(`/trees/${encodeURIComponent(treeId)}/links/${encodeURIComponent(linkId)}`, {
     method: 'DELETE',

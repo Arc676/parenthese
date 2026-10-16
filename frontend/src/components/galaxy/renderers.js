@@ -426,7 +426,7 @@ function measureTextCached(ctx, text, fontKey) {
 // ============================================================
 function drawPersonNode(ctx, node, pos, nodeProgress, {
   nodeRandomData, imageCache, hoverScales, selectedGlowScales, searchGlowScales,
-  mediaHoverState, entrance, entranceActive, elapsed, view = null, photoHint = false,
+  mediaHoverState, entrance, entranceActive, elapsed, view = null, photoHint = false, liftScales = null,
 }) {
   const { cx, cy } = pos
   const person = getPersonById(node._data.id) || node._data
@@ -498,8 +498,10 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
   const k = node._compact ? COMPACT_SCALE : 1
   const R = PERSON_R * k
   const hs = hoverScales.get(node.id) || 0
+  // Personne soulevée pour changer sa place dans la fratrie : un peu plus grande, ombre plus portée
+  const lift = liftScales?.get(node.id) || 0
   const entranceScale = 0.3 + nodeProgress * 0.7
-  const personScale = entranceScale * (1 + hs * 0.1) * k
+  const personScale = entranceScale * (1 + Math.max(hs, lift) * 0.1 + lift * 0.05) * k
 
   // --- Glow sélection ---
   const sg = selectedGlowScales.get(node.id) || 0
@@ -553,9 +555,9 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
   ctx.rotate(frameRot)
 
   if (withShadow) {
-    const shadowBlur = 10 + hs * 14
-    const shadowY = 3 + hs * 4
-    const shadowAlpha = 0.15 + hs * 0.1
+    const shadowBlur = 10 + hs * 14 + lift * 16
+    const shadowY = 3 + hs * 4 + lift * 9
+    const shadowAlpha = 0.15 + hs * 0.1 + lift * 0.06
     ctx.shadowColor = `rgba(42, 38, 34, ${shadowAlpha})`
     ctx.shadowBlur = shadowBlur
     ctx.shadowOffsetX = 0

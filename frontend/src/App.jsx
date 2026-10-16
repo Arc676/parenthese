@@ -44,6 +44,7 @@ import {
   uploadPersonAvatar,
   updatePerson,
   uploadAnnotationPhoto,
+  reorderSiblings,
 } from './api/treeApi'
 import { getImmichErrorMessage, unassignImmichPerson } from './api/immichApi.js'
 import { useAuth } from './hooks/useAuth'
@@ -1155,6 +1156,37 @@ function App() {
   const [contribSubmitError, setContribSubmitError] = useState('')
   const [contribSuccess, setContribSuccess] = useState(false)
   const [draftNotice, setDraftNotice] = useState('')
+
+  // Ordre d'une fratrie (glisser dans l'arbre ou flèches de la fiche) : appliqué tout de suite, enregistré ensuite.
+  // L'arbre a déjà glissé à la nouvelle place ; en cas d'échec il revient en arrière et on le dit.
+  const [siblingOrderRevision, setSiblingOrderRevision] = useState(0)
+  const handleReorderSiblings = useCallback(async (order) => {
+    const previous = new Map()
+    order.forEach((entry, index) => {
+      for (const filiation of filiations) {
+        if (!entry.linkIds.includes(String(filiation.id))) continue
+        previous.set(filiation, filiation.displayOrder)
+        filiation.displayOrder = index + 1
+      }
+    })
+    setSiblingOrderRevision((current) => current + 1)
+    if (isDemoMode) return
+    try {
+      await reorderSiblings(tree.treeContext.treeId, order, tree.treeContext.accessToken || auth.userAuth.token)
+    } catch (error) {
+      for (const [filiation, value] of previous) filiation.displayOrder = value
+      setSiblingOrderRevision((current) => current + 1)
+      setDraftNotice(t("L'ordre n'a pas pu être enregistré. Réessayez."))
+      throw error
+    }
+  }, [isDemoMode, tree.treeContext.treeId, tree.treeContext.accessToken, auth.userAuth.token])
+
+  const canReorderSiblings = editMode.isActive && (tree.canEditCurrentTree || isDemoMode)
+  const [siblingPlace, setSiblingPlace] = useState(null)
+  useEffect(() => {
+    const personId = tree.selectedPerson?.id
+    setSiblingPlace(personId != null && canReorderSiblings ? galaxyZoomApiRef.current?.getSiblingPlace?.(personId) ?? null : null)
+  }, [tree.selectedPerson?.id, canReorderSiblings, siblingOrderRevision, tree.graphRevision])
   useEffect(() => {
     if (!draftNotice) return undefined
     const timer = setTimeout(() => setDraftNotice(''), 4500)
@@ -2851,6 +2883,8 @@ function App() {
         focusPersonId={tree.treeContext.rootPersonId}
         assetRevision={tree.assetRevision}
         photoHint={tree.canEditCurrentTree}
+        reorderEnabled={canReorderSiblings}
+        onReorderSiblings={handleReorderSiblings}
       />
       <ZoomControl zoomApiRef={galaxyZoomApiRef} />
       {tree.selectedPerson && (
@@ -2876,6 +2910,8 @@ function App() {
           relationActionLoading={relationFeedback.loading}
           relationActionSuccess={relationFeedback.success}
           relationActionError={relationFeedback.error}
+          siblingPlace={siblingPlace}
+          onMoveSibling={(delta) => galaxyZoomApiRef.current?.moveSibling?.(tree.selectedPerson.id, delta)}
         />
       )}
       {tree.selectedMedia && (

@@ -11,6 +11,7 @@ import { removeStoredFile } from '../lib/media-files.js'
 import { matchSharePassword } from '../lib/password-variants.js'
 import { decryptSharePassword, encryptSharePassword } from '../lib/share-password.js'
 import { purgeTrees } from '../lib/tree-purge.js'
+import { nextSiblingOrder } from '../lib/sibling-order.js'
 import { reserveTreeUnlockAttempt, serializePasswordCheck } from '../lib/unlock-guard.js'
 import type { MembershipRole } from '../types/auth.js'
 import { findParentChildValidationError, findUnionValidationError } from '../utils/relationship-guards.js'
@@ -167,6 +168,19 @@ const unionParamsSchema = z.object({
 const linkParamsSchema = z.object({
   id: z.string().min(1),
   linkId: z.string().min(1),
+})
+
+// Ordre d'une fratrie : pour chaque enfant, dans l'ordre voulu, les liens qui le rattachent à ses parents
+const childrenOrderSchema = z.object({
+  order: z
+    .array(
+      z.object({
+        childId: z.string().min(1),
+        linkIds: z.array(z.string().min(1)).min(1).max(4),
+      }),
+    )
+    .min(2)
+    .max(200),
 })
 
 function requireUser(request: FastifyRequest, reply: FastifyReply): { userId: string; email: string } | null {
@@ -1804,7 +1818,7 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
         childPersonId: payload.data.childPersonId,
         viaUnionId: payload.data.viaUnionId ?? null,
         parentageType: payload.data.parentageType ?? 'biologique',
-        displayOrder: payload.data.displayOrder ?? 1,
+        displayOrder: payload.data.displayOrder ?? await nextSiblingOrder(app.prisma, params.data.id, payload.data.parentPersonId),
       },
     })
 
@@ -1977,6 +1991,93 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
     })
 
     return reply.send({ link })
+  })
+
+  // Réordonner une fratrie : displayOrder des liens parent-enfant réécrit en une transaction
+  app.put('/trees/:id/links/order', async (request, reply) => {
+    const user = requireUser(request, reply)
+    if (!user) {
+      return
+    }
+
+    const params = treeIdParamSchema.safeParse(request.params)
+    if (!params.success) {
+      return reply.code(400).send({ error: 'invalid_params' })
+    }
+
+    const payload = childrenOrderSchema.safeParse(request.body)
+    if (!payload.success) {
+      return reply.code(400).send({ error: 'invalid_payload', details: payload.error.flatten() })
+    }
+
+    const membership = await getAdminMembership(app, user.userId, params.data.id)
+    if (!hasActiveAdminMembership(membership)) {
+      return reply.code(403).send({ error: 'forbidden' })
+    }
+
+    const childIds = payload.data.order.map((entry) => entry.childId)
+    const linkIds = payload.data.order.flatMap((entry) => entry.linkIds)
+    if (new Set(childIds).size !== childIds.length || new Set(linkIds).size !== linkIds.length) {
+      return reply.code(400).send({ error: 'invalid_payload' })
+    }
+
+    const links = await app.prisma.parentChildLink.findMany({
+      where: { id: { in: linkIds }, treeId: params.data.id, deletedAt: null },
+      select: { id: true, parentPersonId: true, childPersonId: true, viaUnionId: true },
+    })
+    const linkById = new Map(links.map((link) => [link.id, link]))
+    if (links.length !== linkIds.length) {
+      return reply.code(404).send({ error: 'link_not_found' })
+    }
+
+    // Chaque lien appartient bien à son enfant, et les enfants partagent au moins un parent
+    const parentSets: Set<string>[] = []
+    for (const entry of payload.data.order) {
+      const parents = new Set<string>()
+      for (const linkId of entry.linkIds) {
+        const link = linkById.get(linkId)
+        if (!link || link.childPersonId !== entry.childId) {
+          return reply.code(400).send({ error: 'invalid_link_reference' })
+        }
+        parents.add(link.parentPersonId)
+      }
+      parentSets.push(parents)
+    }
+    const hasSharedParent = [...parentSets[0]].some((parentId) => parentSets.every((parents) => parents.has(parentId)))
+    if (!hasSharedParent) {
+      return reply.code(400).send({ error: 'not_siblings' })
+    }
+
+    // L'arbre ne montre qu'un lien par enfant et par union : le lien vers l'autre parent de la même union
+    // prend le même ordre, pour que les deux restent d'accord
+    await app.prisma.$transaction(
+      payload.data.order.map((entry, index) => {
+        const unionIds = [...new Set(entry.linkIds.map((id) => linkById.get(id)?.viaUnionId).filter((id): id is string => Boolean(id)))]
+        return app.prisma.parentChildLink.updateMany({
+          where: {
+            treeId: params.data.id,
+            deletedAt: null,
+            childPersonId: entry.childId,
+            OR: [{ id: { in: entry.linkIds } }, ...(unionIds.length ? [{ viaUnionId: { in: unionIds } }] : [])],
+          },
+          data: { displayOrder: index + 1 },
+        })
+      }),
+    )
+
+    await app.prisma.auditLog.create({
+      data: {
+        treeId: params.data.id,
+        actorType: 'user',
+        actorId: user.userId,
+        action: 'children_reordered',
+        entityType: 'parent_child_link',
+        entityId: payload.data.order[0].linkIds[0],
+        payloadJson: { childIds },
+      },
+    })
+
+    return reply.send({ ok: true })
   })
 
   app.delete('/trees/:id/links/:linkId', async (request, reply) => {

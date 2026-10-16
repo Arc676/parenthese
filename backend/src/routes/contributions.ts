@@ -11,6 +11,7 @@ import { syncPersonMediaOrder } from '../lib/media-order.js'
 
 import type { Actor, MembershipRole } from '../types/auth.js'
 import { findParentChildValidationError, findUnionValidationError } from '../utils/relationship-guards.js'
+import { nextSiblingOrder } from '../lib/sibling-order.js'
 
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/
 
@@ -632,7 +633,7 @@ async function applyContributionChange(
         childPersonId: parsed.data.childPersonId,
         viaUnionId: parsed.data.viaUnionId ?? null,
         parentageType: parsed.data.parentageType ?? 'biologique',
-        displayOrder: parsed.data.displayOrder ?? 1,
+        displayOrder: parsed.data.displayOrder ?? await nextSiblingOrder(tx, treeId, parsed.data.parentPersonId),
       },
       select: {
         id: true,

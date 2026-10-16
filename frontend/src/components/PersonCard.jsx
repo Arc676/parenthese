@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useRef, forwardRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Save, Trash2, Plus, X, Search, Check, Play, ImagePlus, Sparkles } from 'lucide-react'
+import { Save, Trash2, Plus, X, Search, Check, Play, ImagePlus, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react'
 import { getParents, getChildren, getPersonUnions, getPersonMedias, filiations, persons, unions } from '../data/mockData'
 import { fetchImmichConfig } from '../api/immichApi.js'
 import GeoMediaThumbnail from './GeoMediaThumbnail'
@@ -51,6 +51,8 @@ const PersonCard = ({
   relationActionLoading = false,
   relationActionSuccess = '',
   relationActionError = '',
+  siblingPlace = null,
+  onMoveSibling,
 }) => {
   // Souvenirs d'abord quand il y en a, ou quand on peut en ajouter : c'est là qu'est le bouton
   const [tab, setTab] = useState(() => (getPersonMedias(person.id).length > 0 || canManageMedia ? 'medias' : 'infos'))
@@ -471,6 +473,17 @@ const PersonCard = ({
           {!editMode && lifeLine && <p className="pc-life">{lifeLine}</p>}
           <div className="pc-chips">
             {editMode && <span className="pz-tag pz-tag--accent pz-tag--dot">{t('Édition')}</span>}
+            {editMode && siblingPlace && (
+              <span className="pz-tag pc-order" role="group" aria-label={t('Place {n} sur {total} parmi les frères et sœurs', { n: siblingPlace.index + 1, total: siblingPlace.count })}>
+                <button type="button" className="pc-order-btn" onClick={() => onMoveSibling?.(-1)} disabled={siblingPlace.index === 0} aria-label={t('Déplacer à gauche')} title={t('Déplacer à gauche')}>
+                  <ChevronLeft size={15} strokeWidth={2} aria-hidden="true" />
+                </button>
+                <span className="pc-order-label" aria-hidden="true">{siblingPlace.index + 1}/{siblingPlace.count}</span>
+                <button type="button" className="pc-order-btn" onClick={() => onMoveSibling?.(1)} disabled={siblingPlace.index === siblingPlace.count - 1} aria-label={t('Déplacer à droite')} title={t('Déplacer à droite')}>
+                  <ChevronRight size={15} strokeWidth={2} aria-hidden="true" />
+                </button>
+              </span>
+            )}
             {!editMode && ageLabel && <span className="pz-tag">{ageLabel}</span>}
             {!editMode && person.profession && <span className="pz-tag">{person.profession}</span>}
           </div>

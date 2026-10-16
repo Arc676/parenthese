@@ -39,3 +39,24 @@ describe('computeBlockLayout, conjoints isolés', () => {
     expect(children.find(n => n.id === 'p-s')._compact).toBeUndefined()
   })
 })
+
+describe('computeBlockLayout, ordre de la fratrie', () => {
+  const kids = ['a', 'b', 'c']
+  const graphWith = (orders) => ({
+    persons: ['pa', 'ma', ...kids].map(person),
+    unions: [union('u1', 'pa', 'ma')],
+    filiations: kids.map((k, i) => ({ ...fil(`f-${k}`, k, 'u1'), displayOrder: orders[i] })),
+  })
+  const order = (graph) => {
+    const { children } = computeBlockLayout(graph)
+    return children.filter(n => kids.includes(n._data?.id)).sort((l, r) => l.x - r.x).map(n => n._data.id)
+  }
+
+  it('place les enfants selon displayOrder', () => {
+    expect(order(graphWith([3, 1, 2]))).toEqual(['b', 'c', 'a'])
+  })
+
+  it("garde l'ordre d'arrivée quand displayOrder est égal partout", () => {
+    expect(order(graphWith([1, 1, 1]))).toEqual(['a', 'b', 'c'])
+  })
+})
