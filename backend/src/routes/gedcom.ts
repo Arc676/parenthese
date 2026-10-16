@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 
 import { UPLOAD_BODY_LIMIT } from '../config/env.js'
-import { indexObjeRecords, photoPathForPerson } from '../lib/gedcom-photos.js'
+import { indexGedcomRecords, mediaRefsForPerson, photoPathForPerson } from '../lib/gedcom-photos.js'
 import type { MembershipRole } from '../types/auth.js'
 import { nextSiblingOrder } from '../lib/sibling-order.js'
 
@@ -23,6 +23,8 @@ const MAX_IMPORTED_FAMILIES = 20000
 // redémarrage pm2 qui suivait effaçait les limites d'essais gardées en mémoire. Au-delà, le fichier est refusé.
 const MAX_GEDCOM_NODES = 300_000
 const MAX_IMPORTED_LINKS = 60_000
+// Fichiers cités renvoyés à l'app pour en faire des souvenirs : au-delà, la réponse deviendrait trop lourde
+const MAX_IMPORTED_MEDIA_REFS = 20_000
 
 class GedcomTooLargeError extends Error {}
 
@@ -480,8 +482,12 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const xrefToPersonId = new Map<string, string>()
-    const objeByXref = indexObjeRecords(roots)
+    const records = indexGedcomRecords(roots)
+    const objeByXref = records.obje
     const photoRefs: Array<{ personId: string; file: string }> = []
+    // Les autres fichiers cités (actes, registres, photos de famille) : des souvenirs pour les personnes
+    // créées par cet import. Une personne déjà dans l'arbre n'en reçoit pas, un second import ne double rien.
+    const mediaRefs: Array<{ personId: string; file: string; caption: string | null; source: string | null }> = []
 
     // Ce que l'arbre contient déjà : un second import du même fichier complète l'arbre sans rien doubler.
     // Chaque personne existante ne sert qu'une fois, deux fiches identiques du fichier restent deux personnes.
@@ -569,6 +575,10 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
         xrefToPersonId.set(indi.xref!, person.id)
         personsCreated++
         if (photoPath) photoRefs.push({ personId: person.id, file: photoPath })
+        for (const ref of mediaRefsForPerson(indi, records, photoPath)) {
+          if (mediaRefs.length >= MAX_IMPORTED_MEDIA_REFS) break
+          mediaRefs.push({ personId: person.id, ...ref })
+        }
       }
 
       for (const fam of famNodes) {
@@ -639,7 +649,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
           action: 'gedcom_imported',
           entityType: 'tree',
           entityId: treeId,
-          payloadJson: { personsCreated, personsReused, unionsCreated, linksCreated, photoRefs: photoRefs.length },
+          payloadJson: { personsCreated, personsReused, unionsCreated, linksCreated, photoRefs: photoRefs.length, mediaRefs: mediaRefs.length },
         },
       })
     }, { timeout: 60000 })
@@ -647,7 +657,8 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
       importInProgress = false
     }
 
-    // photoRefs : chemin de la photo que le logiciel d'origine associait à chaque personne (rien n'est gardé)
-    return reply.send({ personsCreated, personsReused, unionsCreated, linksCreated, photoRefs })
+    // photoRefs : chemin de la photo que le logiciel d'origine associait à chaque personne ; mediaRefs : les
+    // autres fichiers cités, avec leur titre et leur source (rien n'est gardé en base)
+    return reply.send({ personsCreated, personsReused, unionsCreated, linksCreated, photoRefs, mediaRefs })
   })
 }
