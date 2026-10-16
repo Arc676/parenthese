@@ -65,8 +65,10 @@ export class ImmichClient {
     this.apiKey = apiKey
   }
 
+  // Le chemin de l'instance (ex. /immich) reste devant les chemins de l'API : on concatène,
+  // on ne résout pas une URL relative (qui effacerait ce chemin).
   private buildUrl(path: string): string {
-    return new URL(path, `${this.apiUrl}/`).toString()
+    return `${this.apiUrl}${path}`
   }
 
   private async fetch(path: string): Promise<Response> {
@@ -170,6 +172,11 @@ export function normalizeImmichApiUrl(value: string): string | null {
     if (url.protocol !== 'http:' && url.protocol !== 'https:') {
       return null
     }
+    // Ni identifiants, ni requête, ni fragment : une adresse d'instance n'en porte pas, et
+    // « https://instance@autre-hote » ne doit jamais passer pour l'instance.
+    if (url.username || url.password || url.search || url.hash) {
+      return null
+    }
     return `${url.origin}${url.pathname.replace(/\/+$/, '')}`
   } catch {
     return null
@@ -233,5 +240,6 @@ export async function getTreeImmichClient(prisma: PrismaClient, treeId: string):
     return null
   }
 
-  return new ImmichClient(config.apiUrl, apiKey)
+  // Le client reçoit l'adresse autorisée, normalisée : pas celle, brute, de la base.
+  return new ImmichClient(normalizeImmichApiUrl(config.apiUrl)!, apiKey)
 }

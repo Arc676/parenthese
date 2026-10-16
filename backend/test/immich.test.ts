@@ -108,7 +108,7 @@ beforeAll(async () => {
   process.env.IMMICH_API_URL = 'http://env-immich.example.org'
   process.env.IMMICH_API_KEY = 'env-key'
   // L'instance de l'arbre fait partie de la liste autorisée par l'opérateur.
-  process.env.IMMICH_ALLOWED_API_URLS = 'http://immich.test'
+  process.env.IMMICH_ALLOWED_API_URLS = 'http://immich.test,http://immich.test/immich'
 
   storageRoot = await mkdtemp(path.join(os.tmpdir(), 'parenthese-immich-'))
   process.env.MEDIA_STORAGE_PATH = storageRoot
@@ -880,5 +880,41 @@ describe('Immich integration: redirections', () => {
       expect(String(input)).not.toContain('evil.test')
     }
     await app.close()
+  })
+})
+
+describe('Immich integration: adresse de l’instance', () => {
+  it('keeps the sub-path of the instance in front of the API paths', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    prismaMock.treeImmichConfig.findUnique.mockResolvedValueOnce({ apiUrl: 'http://immich.test/immich', apiKeyEnc: treeApiKeyEnc })
+    fetchMock.mockResolvedValue(await jsonResponse({ people: [], total: 0, hasNextPage: false, hidden: 0 }))
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/trees/tree-1/immich/people',
+      headers: { authorization: `Bearer ${token}` },
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/^http:\/\/immich\.test\/immich\/api\/people\?/)
+    await app.close()
+  })
+
+  it('compares origin and path, never a prefix of the host or user information', async () => {
+    const { isImmichApiUrlAllowed, normalizeImmichApiUrl } = await import('../src/lib/immich.js')
+
+    expect(isImmichApiUrlAllowed('http://immich.test/')).toBe(true)
+    expect(isImmichApiUrlAllowed('http://immich.test/immich')).toBe(true)
+    // Domaine préfixe : le nom listé est le début d'un autre hôte.
+    expect(isImmichApiUrlAllowed('http://immich.test.evil.com')).toBe(false)
+    // Chemin différent sur le même hôte.
+    expect(isImmichApiUrlAllowed('http://immich.test/autre')).toBe(false)
+    // Informations d'utilisateur : l'hôte réel est evil.com.
+    expect(isImmichApiUrlAllowed('http://immich.test@evil.com')).toBe(false)
+    expect(isImmichApiUrlAllowed('http://immich.test:x@immich.test')).toBe(false)
+    // Requête et fragment ne sont pas une adresse d'instance.
+    expect(isImmichApiUrlAllowed('http://immich.test/?x=1')).toBe(false)
+    expect(normalizeImmichApiUrl('ftp://immich.test')).toBeNull()
   })
 })
