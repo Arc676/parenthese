@@ -12,6 +12,7 @@ import { syncPersonMediaOrder } from '../lib/media-order.js'
 import type { Actor, MembershipRole } from '../types/auth.js'
 import { findParentChildValidationError, findUnionValidationError } from '../utils/relationship-guards.js'
 import { nextSiblingOrder } from '../lib/sibling-order.js'
+import { personPrecisionResets, unionPrecisionResets } from '../lib/date-precision.js'
 
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/
 
@@ -391,6 +392,17 @@ async function applyContributionChange(
         throw new ContributionRouteError(400, 'invalid_change_after')
       }
 
+      const nextDates = {
+        birthDate: parsed.data.birthDate !== undefined ? toDateOrNull(parsed.data.birthDate) : undefined,
+        deathDate: parsed.data.deathDate !== undefined ? toDateOrNull(parsed.data.deathDate) : undefined,
+      }
+      const currentDates = nextDates.birthDate !== undefined || nextDates.deathDate !== undefined
+        ? await tx.person.findFirst({
+          where: { id: change.entityId, treeId, deletedAt: null },
+          select: { birthDate: true, deathDate: true },
+        })
+        : null
+
       const result = await tx.person.updateMany({
         where: {
           id: change.entityId,
@@ -398,11 +410,12 @@ async function applyContributionChange(
           deletedAt: null,
         },
         data: {
+          ...personPrecisionResets(currentDates, nextDates),
           firstName: parsed.data.firstName !== undefined ? parsed.data.firstName.trim() : undefined,
           lastName: parsed.data.lastName !== undefined ? parsed.data.lastName.trim() : undefined,
           birthName: parsed.data.birthName !== undefined ? toTrimmedStringOrNull(parsed.data.birthName) : undefined,
-          birthDate: parsed.data.birthDate !== undefined ? toDateOrNull(parsed.data.birthDate) : undefined,
-          deathDate: parsed.data.deathDate !== undefined ? toDateOrNull(parsed.data.deathDate) : undefined,
+          birthDate: nextDates.birthDate,
+          deathDate: nextDates.deathDate,
           birthPlace: parsed.data.birthPlace !== undefined ? toTrimmedStringOrNull(parsed.data.birthPlace) : undefined,
           profession: parsed.data.profession !== undefined ? toTrimmedStringOrNull(parsed.data.profession) : undefined,
           region: parsed.data.region !== undefined ? toTrimmedStringOrNull(parsed.data.region) : undefined,
@@ -511,6 +524,7 @@ async function applyContributionChange(
         select: {
           partner1PersonId: true,
           partner2PersonId: true,
+          startDate: true,
         },
       })
       if (!existingUnion) {
@@ -537,6 +551,9 @@ async function applyContributionChange(
           deletedAt: null,
         },
         data: {
+          ...unionPrecisionResets(existingUnion, {
+            startDate: parsed.data.startDate !== undefined ? toDateOrNull(parsed.data.startDate) : undefined,
+          }),
           partner1PersonId: parsed.data.partner1PersonId,
           partner2PersonId: parsed.data.partner2PersonId,
           unionType: parsed.data.unionType,

@@ -15,6 +15,7 @@ import { nextSiblingOrder } from '../lib/sibling-order.js'
 import { reserveTreeUnlockAttempt, serializePasswordCheck } from '../lib/unlock-guard.js'
 import type { MembershipRole } from '../types/auth.js'
 import { findParentChildValidationError, findUnionValidationError } from '../utils/relationship-guards.js'
+import { personPrecisionResets, unionPrecisionResets } from '../lib/date-precision.js'
 
 const MAX_TREES_PER_ACCOUNT = 10
 
@@ -1371,13 +1372,21 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
 
     data.updatedBy = user.userId
 
+    const datesChanged = data.birthDate !== undefined || data.deathDate !== undefined
+    const current = datesChanged
+      ? await app.prisma.person.findFirst({
+        where: { id: params.data.personId, treeId: params.data.id, deletedAt: null },
+        select: { birthDate: true, deathDate: true },
+      })
+      : null
+
     const updated = await app.prisma.person.updateMany({
       where: {
         id: params.data.personId,
         treeId: params.data.id,
         deletedAt: null,
       },
-      data,
+      data: { ...data, ...personPrecisionResets(current, data) },
     })
 
     if (updated.count === 0) {
@@ -1586,6 +1595,7 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
       select: {
         partner1PersonId: true,
         partner2PersonId: true,
+        startDate: true,
       },
     })
 
@@ -1636,6 +1646,7 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: unionValidationError })
     }
 
+    const startDate = payload.data.startDate !== undefined ? toDateOrNull(payload.data.startDate) : undefined
     const updated = await app.prisma.union.updateMany({
       where: {
         id: params.data.unionId,
@@ -1643,10 +1654,11 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
         deletedAt: null,
       },
       data: {
+        ...unionPrecisionResets(existingUnion, { startDate }),
         partner1PersonId: payload.data.partner1PersonId,
         partner2PersonId: payload.data.partner2PersonId,
         unionType: payload.data.unionType,
-        startDate: payload.data.startDate !== undefined ? toDateOrNull(payload.data.startDate) : undefined,
+        startDate,
         endDate: payload.data.endDate !== undefined ? toDateOrNull(payload.data.endDate) : undefined,
         displayOrder: payload.data.displayOrder,
       },
