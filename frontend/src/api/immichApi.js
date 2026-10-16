@@ -59,6 +59,12 @@ export async function listImmichPeople(treeId, token) {
   return Array.isArray(data?.people) ? data.people : []
 }
 
+// Personne Immich déjà associée à cette fiche (administrateurs seulement), ou null.
+export async function fetchImmichLink(treeId, personId, token) {
+  const data = await apiRequest(`/trees/${encodeURIComponent(treeId)}/immich/links/${encodeURIComponent(personId)}`, withAuth({}, token))
+  return data?.immichPersonId || null
+}
+
 export async function fetchImmichThumbnail(treeId, immichPersonId, token) {
   const path = `/trees/${encodeURIComponent(treeId)}/immich/thumbnail/${encodeURIComponent(immichPersonId)}`
   const response = await fetch(`${API_BASE_URL}${path}`, {

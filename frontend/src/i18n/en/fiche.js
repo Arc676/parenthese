@@ -285,7 +285,7 @@ export default {
   'Aucune personne trouvée.': 'No people found.',
   'Personnes Immich': 'Immich people',
   'Sans nom': 'Unnamed',
-  'Aucune sélection': 'No selection',
+  'Associée': 'Linked',
   'Associer et prendre le portrait': 'Link and use as portrait',
   'Un portrait est déjà en place. Associer cette personne Immich remplacera le portrait actuel et supprimera son fichier.':
     'A portrait is already in place. Linking this Immich person will replace the current portrait and delete its file.',

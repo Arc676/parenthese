@@ -50,7 +50,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 10px;
+  padding: 7px 10px;
   border: 1px solid transparent;
   border-radius: calc(var(--pz-r-m) - 3px);
   background: var(--pz-surface);
@@ -61,19 +61,29 @@
   transition: background-color 140ms ease, color 140ms ease;
 }
 .immich-person.is-active { border-color: var(--pz-a500); background: var(--pz-a50); color: var(--pz-a700); }
+.immich-person.is-linked:not(.is-active) { border-color: var(--pz-a300); }
+.immich-person-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.immich-person-tag { margin-left: auto; flex: none; }
 @media (hover: hover) and (pointer: fine) { .immich-person:hover:not(.is-active) { background: var(--pz-a50); } }
 
-.immich-preview {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-  padding: 12px;
-  border: 1px dashed var(--pz-line);
-  border-radius: var(--pz-r-m);
+/* Miniature ronde d'un visage ; en attente ou sans vignette, un rond neutre avec l'icône. */
+.immich-face {
+  width: 34px; height: 34px; flex: none; display: grid; place-items: center; overflow: hidden;
+  border-radius: 50%; border: 1px solid var(--pz-line); background: var(--pz-bg); color: var(--pz-faint);
 }
-.immich-preview img { width: 96px; height: 96px; object-fit: cover; border-radius: 50%; }
-.immich-preview-empty { width: 96px; height: 96px; display: grid; place-items: center; border-radius: 50%; background: var(--pz-surface); color: var(--pz-faint); }
-.immich-preview-name { font: 500 13px var(--pz-sans); color: var(--pz-faint); }
+.immich-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Aperçu du visage choisi : même photo que les fiches (carré arrondi), n'apparaît qu'après un choix. */
+.immich-preview {
+  display: flex; align-items: center; gap: 14px; padding: 12px 14px;
+  border-radius: var(--pz-r-m); background: var(--pz-a50);
+}
+.immich-face--preview {
+  width: 64px; height: 64px; border-radius: 24%; border: 0;
+  background: var(--pz-a100); color: var(--pz-a700);
+  box-shadow: 0 0 0 1px rgba(42, 38, 34, .06), var(--pz-shadow);
+}
+.immich-preview-name { font: 500 14px var(--pz-sans); color: var(--pz-ink-2); }
 
 .immich-empty { font: 500 13px var(--pz-sans); color: var(--pz-faint); text-align: center; padding: 12px 0; }
 .immich-error { margin: 0; }
