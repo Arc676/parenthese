@@ -579,6 +579,50 @@ describe('API security and authz', () => {
     await app.close()
   })
 
+  it('lets the owner put every person back to the automatic layout, with an audit entry', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    prismaMock.person.updateMany.mockResolvedValueOnce({ count: 4 })
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/trees/tree-1/layout/reset',
+      headers: { authorization: `Bearer ${token}` },
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({ personsReset: 4 })
+    expect(prismaMock.person.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ treeId: 'tree-1', deletedAt: null }),
+      data: expect.objectContaining({ layoutX: null, layoutY: null }),
+    }))
+    expect(prismaMock.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ treeId: 'tree-1', action: 'tree_layout_reset', payloadJson: { personsReset: 4 } }),
+    })
+    await app.close()
+  })
+
+  it('forbids a member from resetting the automatic layout', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    prismaMock.treeMembership.findUnique.mockResolvedValue({
+      treeId: 'tree-1',
+      userId: 'user-1',
+      role: 'member',
+      tree: { deletedAt: null, rootPersonId: null },
+    })
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/trees/tree-1/layout/reset',
+      headers: { authorization: `Bearer ${token}` },
+    })
+
+    expect(response.statusCode).toBe(403)
+    expect(prismaMock.person.updateMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+
   it('allows contributor access token to submit a pending contribution session', async () => {
     const app = createApp()
     await app.ready()

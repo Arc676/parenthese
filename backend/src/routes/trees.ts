@@ -1410,6 +1410,55 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
     return reply.send({ person })
   })
 
+  // Rétablit la disposition automatique : efface la place manuelle de toutes les personnes de l'arbre
+  app.post('/trees/:id/layout/reset', async (request, reply) => {
+    const user = requireUser(request, reply)
+    if (!user) {
+      return
+    }
+
+    const params = treeIdParamSchema.safeParse(request.params)
+    if (!params.success) {
+      return reply.code(400).send({ error: 'invalid_tree_id' })
+    }
+
+    const membership = await getAdminMembership(app, user.userId, params.data.id)
+    if (!hasActiveAdminMembership(membership)) {
+      return reply.code(403).send({ error: 'forbidden' })
+    }
+
+    const count = await app.prisma.$transaction(async (tx) => {
+      const result = await tx.person.updateMany({
+        where: {
+          treeId: params.data.id,
+          deletedAt: null,
+          OR: [{ layoutX: { not: null } }, { layoutY: { not: null } }],
+        },
+        data: {
+          layoutX: null,
+          layoutY: null,
+          updatedBy: user.userId,
+        },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          treeId: params.data.id,
+          actorType: 'user',
+          actorId: user.userId,
+          action: 'tree_layout_reset',
+          entityType: 'tree',
+          entityId: params.data.id,
+          payloadJson: { personsReset: result.count },
+        },
+      })
+
+      return result.count
+    })
+
+    return reply.send({ personsReset: count })
+  })
+
   app.delete('/trees/:id/persons/:personId', async (request, reply) => {
     const user = requireUser(request, reply)
     if (!user) {
