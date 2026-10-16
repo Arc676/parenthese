@@ -42,6 +42,8 @@ beforeAll(async () => {
   process.env.IMMICH_ENABLED = 'true'
   process.env.IMMICH_API_URL = 'http://immich.example.org'
   process.env.IMMICH_API_KEY = 'global-key'
+  // Aucune instance autorisée : explicite, pour ne pas hériter de la liste d'un .env local.
+  process.env.IMMICH_ALLOWED_API_URLS = ''
 
   process.env.NODE_ENV = 'test'
   process.env.PORT = '4000'
