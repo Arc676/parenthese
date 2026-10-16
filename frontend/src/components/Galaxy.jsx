@@ -1,5 +1,5 @@
 import { memo, useEffect, useImperativeHandle, useRef, useState, useCallback } from 'react'
-import { getPersonMedias, getParents, getChildren, getPersonUnions } from '../data/mockData'
+import { getPersonMedias, getParents, getChildren, getPersonUnions, persons as graphPersons, unions as graphUnions, filiations as graphFiliations } from '../data/mockData'
 import { PERSON_R, FLOAT_SPEED, FLOAT_AMPLITUDE, REPULSION_RADIUS, REPULSION_STRENGTH, MAX_ORBIT_MEDIAS, ENTRANCE_GEN_DELAY, ENTRANCE_NODE_DURATION, ENTRANCE_NODE_STAGGER, ENTRANCE_MAX_GEN_SPAN, ENTRANCE_MAX_NODE_SPAN, ENTRANCE_LINE_DELAY, ENTRANCE_LINE_DURATION, ENTRANCE_ORBIT_DELAY, ENTRANCE_ORBIT_DURATION, ENTRANCE_ORBIT_STAGGER } from './galaxy/constants'
 import { easeOutCubic } from './galaxy/utils'
 import { computeLayout, generateNodeRandomData, coupleBarMeta } from './galaxy/elkLayout'
@@ -8,7 +8,8 @@ import { computeBlockLayout } from './galaxy/blockLayout'
 // Placement par blocs familiaux par défaut (mesures : tools/layout-bench). ?layout=sugiyama = placement Sugiyama.
 const USE_BLOCK_LAYOUT = typeof window === 'undefined' || new URLSearchParams(window.location.search).get('layout') !== 'sugiyama'
 import { findPathBFS } from './galaxy/pathfinding'
-import { drawBackground, drawCoupleLinks, drawFiliations, drawAnnotations, drawPathHighlight, drawNodes, drawRenvoiPills } from './galaxy/renderers'
+import { drawBackground, drawCoupleLinks, drawFiliations, drawAnnotations, drawPathHighlight, drawNodes, drawRenvoiPills, nodeRadius } from './galaxy/renderers'
+import { buildSiblingGroups, moveInOrder, pickSlot, rubberBand, springStep, isSettled, buildOrderPayload, filiationsWithOrder } from './galaxy/siblingReorder'
 import { annotations as annotationData } from '../data/mockData'
 import { useImageCache } from './galaxy/useImageCache'
 import { useGalaxyInteractions } from './galaxy/useGalaxyInteractions'
@@ -29,7 +30,17 @@ const MAX_SCALE = 3.2
 const FOCUS_MIN_READABLE_SCALE = 0.5
 const FOCUS_SCALE = 0.95
 
-const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, photoHint = false }) => {
+// Réordonner une fratrie : seuil avant de soulever à la souris, appui long au doigt
+const REORDER_MOUSE_THRESHOLD = 4
+const REORDER_TOUCH_SLOP = 8
+const REORDER_LONG_PRESS_MS = 320
+// Les frères et sœurs s'écartent sans rebond ; la personne lâchée se pose avec un léger rebond
+const SHIFT_SPRING = { stiffness: 560, dampingRatio: 0.92 }
+const DROP_SPRING = { stiffness: 480, dampingRatio: 0.72 }
+const centerX = (node) => node.x + node.width / 2
+const prefersReducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
+const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, photoHint = false, reorderEnabled = false, onReorderSiblings = null }) => {
   const canvasRef = useRef(null)
   // Lu au calcul du cadrage seulement : changer de personne de départ ne recadre pas une vue en cours
   const focusPersonIdRef = useRef(focusPersonId)
@@ -71,6 +82,18 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   const [displayLabel, setDisplayLabel] = useState('')
   const displayLabelRef = useRef('')
 
+  // Réordonner une fratrie (mode édition, administrateurs) : décalage animé de chaque nœud vers sa place
+  // dans le placement affiché, état du geste en cours, soulèvement de la personne tenue
+  const offsetsRef = useRef(new Map())
+  const reorderRef = useRef(null)
+  const liftScalesRef = useRef(new Map())
+  const groupsCacheRef = useRef({ layout: null, groups: new Map() })
+  const lastFrameRef = useRef(0)
+  const reorderEnabledRef = useRef(reorderEnabled)
+  const onReorderRef = useRef(onReorderSiblings)
+  useEffect(() => { reorderEnabledRef.current = reorderEnabled }, [reorderEnabled])
+  useEffect(() => { onReorderRef.current = onReorderSiblings }, [onReorderSiblings])
+
   // Rendu à la demande : la boucle rAF tourne mais ne redessine que si quelque chose a changé
   // (transform, états lissés, entrée, souris, annotations, image chargée, rendu React, resize).
   const needsRedrawRef = useRef(true)
@@ -82,7 +105,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
 
   // Position animée d'un nœud
   const getAnimatedPos = useCallback((node, time) => {
-    const baseCx = node.x + node.width / 2
+    const baseCx = node.x + node.width / 2 + (offsetsRef.current.get(node.id)?.x || 0)
     const baseCy = node.y + node.height / 2
     const rd = nodeRandomDataRef.current.get(node.id)
     if (!rd) return { cx: baseCx, cy: baseCy }
@@ -93,7 +116,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     cx += Math.sin(time * rd.floatSpeedX + rd.floatPhaseX) * rd.floatAmpX
     cy += Math.sin(time * rd.floatSpeedY + rd.floatPhaseY) * rd.floatAmpY
 
-    if (node._type === 'person' || node._type === 'unknown') {
+    if ((node._type === 'person' || node._type === 'unknown') && reorderRef.current?.phase !== 'dragging') {
       const mouse = mouseWorldPos.current
       const dx = cx - mouse.x
       const dy = cy - mouse.y
@@ -121,6 +144,209 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     minScale: MIN_SCALE,
     maxScale: MAX_SCALE,
   })
+
+  // ---------- Réordonner une fratrie ----------
+  // Le glisser ne déplace une personne qu'à l'horizontale, parmi ses frères et sœurs. Pour chaque place visée,
+  // le vrai placement est recalculé : l'arbre se réarrange pendant le geste et rien ne saute au lâcher.
+  const getSiblingGroups = useCallback(() => {
+    const layout = layoutDataRef.current
+    if (groupsCacheRef.current.layout !== layout) groupsCacheRef.current = { layout, groups: buildSiblingGroups(layout) }
+    return groupsCacheRef.current.groups
+  }, [])
+
+  const canReorderNow = useCallback(() => (
+    reorderEnabledRef.current && USE_BLOCK_LAYOUT && Boolean(layoutDataRef.current) && Boolean(entranceRef.current?.finished)
+  ), [])
+
+  const worldX = useCallback((clientX) => {
+    const rect = canvasRef.current?.getBoundingClientRect()
+    const t = transformRef.current
+    return rect ? (clientX - rect.left - t.x) / t.scale : 0
+  }, [])
+
+  // Personne réordonnable sous le pointeur
+  const reorderTargetAt = useCallback((clientX, clientY) => {
+    if (!canReorderNow()) return null
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return null
+    const t = transformRef.current
+    const wx = (clientX - rect.left - t.x) / t.scale
+    const wy = (clientY - rect.top - t.y) / t.scale
+    const groups = getSiblingGroups()
+    const now = performance.now()
+    for (const node of layoutDataRef.current.children) {
+      if (node._type !== 'person' || !groups.has(node.id)) continue
+      const pos = getAnimatedPos(node, now)
+      if (Math.hypot(pos.cx - wx, pos.cy - wy) < nodeRadius(node)) return node
+    }
+    return null
+  }, [canReorderNow, getSiblingGroups, getAnimatedPos])
+
+  // Placement complet pour un ordre de la fratrie, recalé sur la source (les parents ne bougent pas)
+  const layoutForOrder = useCallback((group, order, base) => {
+    const graph = {
+      persons: graphPersons,
+      unions: graphUnions,
+      filiations: filiationsWithOrder(graphFiliations, graphUnions, group.source, order),
+    }
+    const result = computeBlockLayout(graph)
+    const baseSource = base.children.find((n) => n.id === group.source)
+    const source = result.children.find((n) => n.id === group.source)
+    const shift = baseSource && source ? baseSource.x - source.x : 0
+    if (shift) result.children.forEach((n) => { n.x += shift })
+    return result
+  }, [])
+
+  // Remplace le placement affiché : chaque nœud garde sa position à l'écran puis glisse vers sa nouvelle place
+  const swapLayout = useCallback((next, frontId = null) => {
+    const prev = layoutDataRef.current
+    if (!prev || !next) return
+    const prevById = new Map(prev.children.map((n) => [n.id, n]))
+    const offsets = offsetsRef.current
+    const reduce = prefersReducedMotion()
+    for (const node of next.children) {
+      const old = prevById.get(node.id)
+      if (!old) continue
+      const current = offsets.get(node.id)
+      const delta = old.x + (current?.x || 0) - node.x
+      if (reduce && node.id !== frontId) { offsets.delete(node.id); continue }
+      if (Math.abs(delta) > 0.01 || current) offsets.set(node.id, { x: delta, v: current?.v || 0, spring: current?.spring || SHIFT_SPRING })
+    }
+    if (frontId) {
+      const i = next.children.findIndex((n) => n.id === frontId)
+      if (i >= 0) next.children.push(...next.children.splice(i, 1))
+    }
+    layoutDataRef.current = next
+    needsRedrawRef.current = true
+  }, [])
+
+  // Envoie l'ordre ; en cas d'échec, l'arbre revient en glissant à l'ordre précédent
+  const commitOrder = useCallback((group, order, base) => {
+    const payload = buildOrderPayload(graphFiliations, graphUnions, group.source, order)
+    const result = onReorderRef.current?.(payload)
+    if (result && typeof result.catch === 'function') {
+      result.catch(() => { if (!reorderRef.current) swapLayout(base) })
+    }
+  }, [swapLayout])
+
+  const reorderWindowListeners = useRef(null)
+
+  const endReorder = useCallback((commit) => {
+    const drag = reorderRef.current
+    if (reorderWindowListeners.current) {
+      window.removeEventListener('mousemove', reorderWindowListeners.current.move)
+      window.removeEventListener('mouseup', reorderWindowListeners.current.up)
+      reorderWindowListeners.current = null
+    }
+    if (!drag) return
+    clearTimeout(drag.timer)
+    reorderRef.current = null
+    if (drag.phase !== 'dragging') return
+    const offset = offsetsRef.current.get(drag.nodeId)
+    if (offset) offsetsRef.current.set(drag.nodeId, { ...offset, v: 0, spring: DROP_SPRING })
+    if (canvasRef.current) canvasRef.current.style.cursor = 'grab'
+    if (!commit) {
+      swapLayout(drag.base, drag.nodeId)
+    } else if (drag.index !== drag.originalIndex) {
+      commitOrder(drag.group, moveInOrder(drag.group.ids, drag.nodeId, drag.index), drag.base)
+    }
+    needsRedrawRef.current = true
+  }, [swapLayout, commitOrder])
+
+  const updateReorder = useCallback((clientX) => {
+    const drag = reorderRef.current
+    if (drag?.phase !== 'dragging') return
+    const slots = drag.slots
+    drag.targetCenter = rubberBand(worldX(clientX) - drag.grab, slots[0], slots[slots.length - 1])
+    const index = pickSlot(slots, drag.targetCenter, drag.index)
+    if (index !== drag.index) {
+      drag.index = index
+      if (!drag.layouts.has(index)) drag.layouts.set(index, layoutForOrder(drag.group, moveInOrder(drag.group.ids, drag.nodeId, index), drag.base))
+      swapLayout(drag.layouts.get(index), drag.nodeId)
+    }
+    needsRedrawRef.current = true
+  }, [worldX, layoutForOrder, swapLayout])
+
+  const startReorder = useCallback((clientX) => {
+    const press = reorderRef.current
+    const base = layoutDataRef.current
+    const group = press && getSiblingGroups().get(press.nodeId)
+    const node = group && base.children.find((n) => n.id === press.nodeId)
+    if (!node) { reorderRef.current = null; return }
+    clearTimeout(press.timer)
+    const byId = new Map(base.children.map((n) => [n.id, n]))
+    const index = group.ids.indexOf(press.nodeId)
+    const visualCenter = centerX(node) + (offsetsRef.current.get(node.id)?.x || 0)
+    reorderRef.current = {
+      phase: 'dragging',
+      nodeId: press.nodeId,
+      group,
+      base,
+      slots: group.ids.map((id) => centerX(byId.get(id))),
+      index,
+      originalIndex: index,
+      layouts: new Map([[index, base]]),
+      grab: worldX(clientX) - visualCenter,
+      targetCenter: visualCenter,
+      pointer: press.pointer,
+    }
+    swapLayout(base, press.nodeId)
+    // Le geste n'est ni un panoramique ni un clic
+    isDragging.current = false
+    hasDragged.current = true
+    hoveredNodeId.current = null
+    if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing'
+    if (press.pointer === 'touch') navigator.vibrate?.(8)
+    if (press.pointer === 'mouse') {
+      const move = (e) => updateReorder(e.clientX)
+      const up = () => endReorder(true)
+      reorderWindowListeners.current = { move, up }
+      window.addEventListener('mousemove', move)
+      window.addEventListener('mouseup', up)
+    }
+  }, [getSiblingGroups, worldX, swapLayout, updateReorder, endReorder, isDragging, hasDragged])
+
+  // Appui sur une personne réordonnable : la souris attend quelques pixels, le doigt un appui long
+  const beginReorderPress = useCallback((clientX, clientY, pointer) => {
+    const node = reorderTargetAt(clientX, clientY)
+    if (!node) return false
+    const press = { phase: 'pressing', nodeId: node.id, pointer, startX: clientX, startY: clientY, lastX: clientX, timer: null }
+    if (pointer === 'touch') press.timer = setTimeout(() => { if (reorderRef.current === press) startReorder(press.lastX) }, REORDER_LONG_PRESS_MS)
+    reorderRef.current = press
+    return true
+  }, [reorderTargetAt, startReorder])
+
+  // Flèches de la fiche : même animation, une place à gauche ou à droite
+  const moveSibling = useCallback((personId, delta) => {
+    if (reorderRef.current || !canReorderNow()) return false
+    const nodeId = `p-${personId}`
+    const group = getSiblingGroups().get(nodeId)
+    if (!group) return false
+    const index = group.ids.indexOf(nodeId)
+    const target = index + delta
+    if (target < 0 || target >= group.ids.length) return false
+    const base = layoutDataRef.current
+    const order = moveInOrder(group.ids, nodeId, target)
+    swapLayout(layoutForOrder(group, order, base), nodeId)
+    commitOrder(group, order, base)
+    return true
+  }, [canReorderNow, getSiblingGroups, swapLayout, layoutForOrder, commitOrder])
+
+  const getSiblingPlace = useCallback((personId) => {
+    if (!USE_BLOCK_LAYOUT || !layoutDataRef.current) return null
+    const group = getSiblingGroups().get(`p-${personId}`)
+    return group ? { index: group.ids.indexOf(`p-${personId}`), count: group.ids.length } : null
+  }, [getSiblingGroups])
+
+  // Échap annule le glisser en cours
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape' && reorderRef.current?.phase === 'dragging') endReorder(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [endReorder])
+
+  // Sortie du mode édition pendant un geste : on annule
+  useEffect(() => { if (!reorderEnabled && reorderRef.current) endReorder(false) }, [reorderEnabled, endReorder])
 
   // Expose zoom API to parent (ZoomControl component), posée au commit et non pendant le rendu
   useImperativeHandle(zoomApiRef, () => ({
@@ -159,9 +385,11 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       targetTransformRef.current = { scale, x: screenX - pos.cx * scale, y: screenY - pos.cy * scale }
     },
     getScale: () => transformRef.current.scale,
+    moveSibling,
+    getSiblingPlace,
     MIN_SCALE,
     MAX_SCALE,
-  }), [getAnimatedPos])
+  }), [getAnimatedPos, moveSibling, getSiblingPlace])
 
   // Zoom util (used by pinch)
   const zoomAt = useCallback((factor, center) => {
@@ -325,6 +553,8 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       finished: false,
     }
 
+    offsetsRef.current = new Map()
+    reorderRef.current = null
     layoutDataRef.current = result
     needsRedrawRef.current = true
     setLayoutReady(true)
@@ -383,6 +613,33 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       }
       if (next.x !== prev.x || next.y !== prev.y || next.scale !== prev.scale) dirty = true
       transformRef.current = next
+
+      // Réordonnancement : la personne tenue suit le pointeur, les autres glissent vers leur place
+      const dt = lastFrameRef.current ? Math.min(0.034, (timestamp - lastFrameRef.current) / 1000) : 1 / 60
+      lastFrameRef.current = timestamp
+      const drag = reorderRef.current?.phase === 'dragging' ? reorderRef.current : null
+      if (offsetsRef.current.size > 0) {
+        for (const [id, state] of offsetsRef.current) {
+          if (drag && id === drag.nodeId) continue
+          const next = springStep(state, dt, state.spring)
+          if (isSettled(next)) offsetsRef.current.delete(id)
+          else offsetsRef.current.set(id, { ...next, spring: state.spring })
+        }
+        dirty = true
+      }
+      if (drag && layoutDataRef.current) {
+        const held = layoutDataRef.current.children.find((n) => n.id === drag.nodeId)
+        if (held) offsetsRef.current.set(drag.nodeId, { x: drag.targetCenter - centerX(held), v: 0, spring: DROP_SPRING })
+        dirty = true
+      }
+      for (const [id, value] of liftScalesRef.current) {
+        const target = drag && id === drag.nodeId ? 1 : 0
+        const next = approach(value, target, 0.28, 0.002)
+        if (next === 0 && target === 0) liftScalesRef.current.delete(id)
+        else liftScalesRef.current.set(id, next)
+        if (next !== value) dirty = true
+      }
+      if (drag && !liftScalesRef.current.has(drag.nodeId)) { liftScalesRef.current.set(drag.nodeId, 0); dirty = true }
 
       const layoutData = layoutDataRef.current
       const canvas = canvasRef.current
@@ -575,6 +832,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
         entrance, entranceActive, elapsed,
         view,
         photoHint: photoHintRef.current,
+        liftScales: liftScalesRef.current,
       })
       drawRenvoiPills(ctx)
       // Annotations dessinées APRES les noeuds pour que stickers/texte soient au-dessus
@@ -669,17 +927,45 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       ref={canvasRef}
       className="galaxy-canvas"
       style={{ touchAction: 'none' }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={(e) => { needsRedrawRef.current = true; handleMouseMove(e) }}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={(e) => { needsRedrawRef.current = true; handleMouseLeave(e) }}
+      onMouseDown={(e) => {
+        if (e.button === 0 && beginReorderPress(e.clientX, e.clientY, 'mouse')) { hasDragged.current = false; return }
+        handleMouseDown(e)
+      }}
+      onMouseMove={(e) => {
+        needsRedrawRef.current = true
+        const press = reorderRef.current
+        if (press?.phase === 'dragging') return
+        if (press?.phase === 'pressing' && press.pointer === 'mouse') {
+          if (Math.abs(e.clientX - press.startX) > REORDER_MOUSE_THRESHOLD || Math.abs(e.clientY - press.startY) > REORDER_MOUSE_THRESHOLD) {
+            startReorder(press.startX)
+            updateReorder(e.clientX)
+          }
+          return
+        }
+        handleMouseMove(e)
+        // En mode édition, une personne réordonnable se saisit
+        if (canvasRef.current && hoveredNodeId.current && reorderEnabledRef.current && getSiblingGroups().has(hoveredNodeId.current)) {
+          canvasRef.current.style.cursor = 'grab'
+        }
+      }}
+      onMouseUp={(e) => {
+        const press = reorderRef.current
+        if (press?.phase === 'pressing') reorderRef.current = null
+        if (press?.phase === 'dragging') return
+        handleMouseUp(e)
+      }}
+      onMouseLeave={(e) => { needsRedrawRef.current = true; if (reorderRef.current?.phase !== 'dragging') handleMouseLeave(e) }}
       onWheel={handleWheel}
       onTouchStart={(e) => {
         if (e.touches.length === 1) {
           const t = e.touches[0]
+          // Appui long sur une personne réordonnable ; d'ici là, le doigt fait défiler l'arbre comme d'habitude
+          beginReorderPress(t.clientX, t.clientY, 'touch')
           handleMouseDown({ clientX: t.clientX, clientY: t.clientY, preventDefault: () => e.preventDefault() })
         } else if (e.touches.length === 2) {
           e.preventDefault()
+          // Un deuxième doigt annule le glisser d'une personne (retour à sa place, rien n'est enregistré)
+          if (reorderRef.current) endReorder(false)
           // Stop any ongoing single-finger pan before starting pinch
           handleMouseUp()
           const [a, b] = e.touches
@@ -694,6 +980,12 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
         needsRedrawRef.current = true
         if (e.touches.length === 1) {
           const t = e.touches[0]
+          const press = reorderRef.current
+          if (press?.phase === 'dragging') { updateReorder(t.clientX); return }
+          if (press?.phase === 'pressing') {
+            press.lastX = t.clientX
+            if (Math.hypot(t.clientX - press.startX, t.clientY - press.startY) > REORDER_TOUCH_SLOP) endReorder(false)
+          }
           handleMouseMove({ clientX: t.clientX, clientY: t.clientY, preventDefault: () => e.preventDefault() })
         } else if (e.touches.length === 2) {
           e.preventDefault()
@@ -712,6 +1004,11 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
         }
       }}
       onTouchEnd={(e) => {
+        if (reorderRef.current && e.touches.length === 0) {
+          const wasDragging = reorderRef.current.phase === 'dragging'
+          endReorder(true)
+          if (wasDragging) { handleMouseUp(); return }
+        }
         pinchRef.current = null
         if (e.touches.length === 1) {
           // One finger remains after pinch: restart single-finger pan with it
@@ -726,6 +1023,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       }}
       onTouchCancel={() => {
         // System interruption (notification, keyboard, etc.) — reset all touch state
+        if (reorderRef.current) endReorder(false)
         pinchRef.current = null
         handleMouseUp()
       }}
