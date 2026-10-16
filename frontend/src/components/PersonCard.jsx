@@ -406,11 +406,11 @@ const PersonCard = ({
           <div className="pc-chips">
             {editMode && <span className="pz-tag pz-tag--accent pz-tag--dot">{t('Édition')}</span>}
             {editMode && siblingPlace && (
-              <span className="pz-tag pc-order" role="group" aria-label={t('Place parmi les frères et sœurs')}>
+              <span className="pz-tag pc-order" role="group" aria-label={t('Place {n} sur {total} parmi les frères et sœurs', { n: siblingPlace.index + 1, total: siblingPlace.count })}>
                 <button type="button" className="pc-order-btn" onClick={() => onMoveSibling?.(-1)} disabled={siblingPlace.index === 0} aria-label={t('Déplacer à gauche')} title={t('Déplacer à gauche')}>
                   <ChevronLeft size={15} strokeWidth={2} aria-hidden="true" />
                 </button>
-                <span className="pc-order-label">{t('{n} sur {total}', { n: siblingPlace.index + 1, total: siblingPlace.count })}</span>
+                <span className="pc-order-label" aria-hidden="true">{siblingPlace.index + 1}/{siblingPlace.count}</span>
                 <button type="button" className="pc-order-btn" onClick={() => onMoveSibling?.(1)} disabled={siblingPlace.index === siblingPlace.count - 1} aria-label={t('Déplacer à droite')} title={t('Déplacer à droite')}>
                   <ChevronRight size={15} strokeWidth={2} aria-hidden="true" />
                 </button>

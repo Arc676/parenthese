@@ -260,9 +260,8 @@ export default {
   'Interview archive radio': 'Archived radio interview',
   'Inconnu': 'Unknown',
   // Place dans la fratrie (fiche, mode édition)
-  'Place parmi les frères et sœurs': 'Place among siblings',
+  'Place {n} sur {total} parmi les frères et sœurs': 'Place {n} of {total} among siblings',
   'Déplacer à gauche': 'Move left',
   'Déplacer à droite': 'Move right',
-  '{n} sur {total}': '{n} of {total}',
   "L'ordre n'a pas pu être enregistré. Réessayez.": 'The order could not be saved. Please try again.',
 }
