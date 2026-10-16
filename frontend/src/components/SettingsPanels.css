@@ -44,6 +44,8 @@
 .ts-row--muted { opacity: .6; }
 .ts-row-text { display: grid; gap: 4px; min-width: 0; }
 .ts-row-text strong { font: 500 14.5px var(--pz-sans); color: var(--pz-ink); }
+/* La grille étire ses enfants : une pastille garde la largeur de son texte. */
+.ts-row-text > .pz-tag { justify-self: start; }
 .ts-row-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; flex: none; }
 .ts-file { justify-self: start; margin-top: 4px; }
 .ts-file-input { display: none; }
