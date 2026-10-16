@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { UPLOAD_BODY_LIMIT } from '../config/env.js'
 import { indexObjeRecords, photoPathForPerson } from '../lib/gedcom-photos.js'
 import type { MembershipRole } from '../types/auth.js'
+import { nextSiblingOrder } from '../lib/sibling-order.js'
 
 const treeIdParamSchema = z.object({
   id: z.string().min(1),
@@ -621,6 +622,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
                 parentPersonId: parentId,
                 childPersonId: childId,
                 viaUnionId: unionId,
+                displayOrder: await nextSiblingOrder(tx, treeId, parentId),
               },
             })
             linkKeys.add(linkKey)

@@ -11,6 +11,7 @@ import { removeStoredFile } from '../lib/media-files.js'
 import { matchSharePassword } from '../lib/password-variants.js'
 import { decryptSharePassword, encryptSharePassword } from '../lib/share-password.js'
 import { purgeTrees } from '../lib/tree-purge.js'
+import { nextSiblingOrder } from '../lib/sibling-order.js'
 import { reserveTreeUnlockAttempt, serializePasswordCheck } from '../lib/unlock-guard.js'
 import type { MembershipRole } from '../types/auth.js'
 import { findParentChildValidationError, findUnionValidationError } from '../utils/relationship-guards.js'
@@ -1817,7 +1818,7 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
         childPersonId: payload.data.childPersonId,
         viaUnionId: payload.data.viaUnionId ?? null,
         parentageType: payload.data.parentageType ?? 'biologique',
-        displayOrder: payload.data.displayOrder ?? 1,
+        displayOrder: payload.data.displayOrder ?? await nextSiblingOrder(app.prisma, params.data.id, payload.data.parentPersonId),
       },
     })
 
