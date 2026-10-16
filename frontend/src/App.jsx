@@ -45,6 +45,7 @@ import {
   updatePerson,
   uploadAnnotationPhoto,
   reorderSiblings,
+  uploadPersonMedia,
 } from './api/treeApi'
 import { getImmichErrorMessage, unassignImmichPerson } from './api/immichApi.js'
 import { useAuth } from './hooks/useAuth'
@@ -58,10 +59,10 @@ import { useAnnotations } from './hooks/useAnnotations'
 import AnnotationToolbar from './components/annotations/AnnotationToolbar'
 import TextInputOverlay from './components/annotations/TextInputOverlay'
 import { filiations, getChildren, getParents, getPersonUnions, medias, persons, unions } from './data/mockData'
-import { loadPhotoRefs, pickFirstFaces, prepareImageForUpload, savePhotoRefs, sizeBucket } from './utils/photoImport'
+import { loadMediaRefs, loadPhotoRefs, pickFirstFaces, prepareImageForUpload, saveMediaRefs, savePhotoRefs, sizeBucket } from './utils/photoImport'
 import { fileToBase64, getAccountErrorMessage } from './utils/errorMessages'
 import { getSiblingParentLinks } from './utils/familyLinks'
-import { getUploadMimeType, validateMediaFile } from './utils/mediaUpload'
+import { getUploadMimeType, inferMediaTypeFromMimeType, validateMediaFile } from './utils/mediaUpload'
 import {
   getSource,
   identifyUser,
@@ -482,7 +483,7 @@ function App() {
 
   const [adminPanelVisible, setAdminPanelVisible] = useState(false)
   // Premiers visages : fenêtre ouverte après un import GEDCOM, ou depuis les paramètres de l'arbre
-  const [photoStart, setPhotoStart] = useState({ visible: false, personsImported: null, refs: [], faces: [] })
+  const [photoStart, setPhotoStart] = useState({ visible: false, personsImported: null, refs: [], mediaRefs: [], faces: [] })
   const photoStartDirtyRef = useRef(false)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [showDraftBanner, setShowDraftBanner] = useState(false)
@@ -575,12 +576,13 @@ function App() {
       .filter(Boolean),
   }), [linkedSelfPersonId, tree.treeContext.rootPersonId])
 
-  const openPhotoStart = useCallback(({ personsImported = null, refs = null, treeId = null } = {}) => {
+  const openPhotoStart = useCallback(({ personsImported = null, refs = null, mediaRefs = null, treeId = null } = {}) => {
     photoStartDirtyRef.current = false
     setPhotoStart({
       visible: true,
       personsImported,
       refs: refs ?? loadPhotoRefs(treeId || tree.treeContext.treeId),
+      mediaRefs: mediaRefs ?? loadMediaRefs(treeId || tree.treeContext.treeId),
       faces: computeFirstFaces(),
     })
   }, [computeFirstFaces, tree.treeContext.treeId])
@@ -2394,13 +2396,16 @@ function App() {
 
         if (imported) {
           const refs = Array.isArray(imported.photoRefs) ? imported.photoRefs : []
+          const mediaRefs = Array.isArray(imported.mediaRefs) ? imported.mediaRefs : []
           savePhotoRefs(createdTree.id, refs)
+          saveMediaRefs(createdTree.id, mediaRefs)
           trackAppEvent('gedcom_imported', {
             persons: sizeBucket(imported.personsCreated || 0),
             photo_refs: sizeBucket(refs.length),
+            media_refs: sizeBucket(mediaRefs.length),
             via: 'wizard',
           })
-          openPhotoStart({ personsImported: (imported.personsCreated || 0) + (imported.personsReused || 0), refs })
+          openPhotoStart({ personsImported: (imported.personsCreated || 0) + (imported.personsReused || 0), refs, mediaRefs })
         } else {
           // L'arbre existe déjà : on l'ouvre vide et on dit où réessayer, plutôt que d'en créer un second
           setTreeImportError(importError)
@@ -2561,13 +2566,16 @@ function App() {
   const handleGedcomImported = useCallback(async (result, treeIdOverride = null) => {
     await refreshTreeAndKeepSelection(null, { relayout: true })
     const refs = Array.isArray(result?.photoRefs) ? result.photoRefs : []
+    const mediaRefs = Array.isArray(result?.mediaRefs) ? result.mediaRefs : []
     savePhotoRefs(treeIdOverride || tree.treeContext.treeId, refs)
+    saveMediaRefs(treeIdOverride || tree.treeContext.treeId, mediaRefs)
     trackAppEvent('gedcom_imported', {
       persons: sizeBucket(result?.personsCreated || 0),
       photo_refs: sizeBucket(refs.length),
+      media_refs: sizeBucket(mediaRefs.length),
     })
     setAdminPanelVisible(false)
-    openPhotoStart({ personsImported: (result?.personsCreated || 0) + (result?.personsReused || 0), refs })
+    openPhotoStart({ personsImported: (result?.personsCreated || 0) + (result?.personsReused || 0), refs, mediaRefs })
   }, [refreshTreeAndKeepSelection, openPhotoStart, tree.treeContext.treeId])
 
   // Un portrait envoyé sans recharger l'arbre (rechargé une fois, à la fermeture de la fenêtre).
@@ -2616,6 +2624,51 @@ function App() {
     trackAppEvent('portraits_bulk_placed', { placed: sizeBucket(placedIds.length), failed: sizeBucket(matches.length - placedIds.length) })
     return { placedIds }
   }, [sendPortrait])
+
+  // Les autres fichiers retrouvés dans le dossier : des souvenirs, avec le titre et la source du logiciel
+  const handlePhotoStartMedia = useCallback(async (matches, onProgress) => {
+    const accessToken = tree.treeContext.accessToken || auth.userAuth.token
+    const added = []
+    for (let i = 0; i < matches.length; i += 1) {
+      const { personId, file, caption, source } = matches[i]
+      try {
+        if (!accessToken || !tree.treeContext.treeId) break
+        const prepared = await prepareImageForUpload(file)
+        const type = inferMediaTypeFromMimeType(prepared.type)
+        if (!validateMediaFile(prepared, type)) {
+          const payload = {
+            type,
+            fileName: prepared.name || file.name,
+            mimeType: getUploadMimeType(prepared, type),
+            sizeBytes: prepared.size,
+            dataBase64: await fileToBase64(prepared),
+            caption: caption ? String(caption).slice(0, 280) : null,
+            source: source ? String(source).slice(0, 500) : null,
+          }
+          // Trop d'envois d'un coup (429) : on attend et on réessaie, deux fois au plus
+          for (let attempt = 0; ; attempt += 1) {
+            try {
+              await uploadPersonMedia(tree.treeContext.treeId, personId, payload, accessToken)
+              added.push(matches[i])
+              photoStartDirtyRef.current = true
+              break
+            } catch (error) {
+              if (error?.status === 429 && attempt < 2) {
+                await new Promise((resolve) => window.setTimeout(resolve, 15000))
+                continue
+              }
+              break
+            }
+          }
+        }
+      } catch {
+        // Fichier illisible : compté comme non envoyé
+      }
+      onProgress?.(i + 1)
+    }
+    trackAppEvent('memories_bulk_added', { added: sizeBucket(added.length), failed: sizeBucket(matches.length - added.length) })
+    return { added }
+  }, [auth.userAuth.token, tree.treeContext.accessToken, tree.treeContext.treeId])
 
   const handlePhotoStartClose = useCallback(async () => {
     setPhotoStart((current) => ({ ...current, visible: false }))
@@ -2978,10 +3031,13 @@ function App() {
         visible={photoStart.visible}
         personsImported={photoStart.personsImported}
         photoRefs={photoStart.refs}
+        mediaRefs={photoStart.mediaRefs}
         faces={photoStart.faces}
         onUploadOne={handlePhotoStartUploadOne}
         onBulkPlace={handlePhotoStartBulk}
+        onBulkMedia={handlePhotoStartMedia}
         onRefsChange={(refs) => savePhotoRefs(tree.treeContext.treeId, refs)}
+        onMediaRefsChange={(refs) => saveMediaRefs(tree.treeContext.treeId, refs)}
         onClose={handlePhotoStartClose}
       />
       {/* Annotation Toolbar (visible uniquement en mode édition) */}

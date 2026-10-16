@@ -75,3 +75,21 @@ describe('sizeBucket', () => {
     expect([0, 3, 12, 80, 450, 2697].map(sizeBucket)).toEqual(['0', '1-9', '10-49', '50-199', '200-999', '1000+'])
   })
 })
+
+describe('souvenirs cités par le logiciel', () => {
+  it('garde la légende et la source avec le fichier retrouvé', () => {
+    const refs = [{ personId: 'a', file: 'C:\\Heredis\\Médias\\Naissance Ragot.jpg', caption: 'Naissance Ragot', source: 'Registre des naissances, Acte n° 12' }]
+    const { matches } = matchPhotoFiles(refs, [file('Naissance Ragot.jpg', 'Médias/Naissance Ragot.jpg')])
+    expect(matches).toHaveLength(1)
+    expect(matches[0]).toMatchObject({ personId: 'a', caption: 'Naissance Ragot', source: 'Registre des naissances, Acte n° 12' })
+    expect(matches[0].file.name).toBe('Naissance Ragot.jpg')
+  })
+})
+
+describe('chemin d’origine', () => {
+  it('chaque correspondance garde le chemin cité, même pour trois fichiers de la même personne', () => {
+    const refs = ['a.jpg', 'b.pdf', 'c.jpg'].map((name) => ({ personId: 'p', file: `Medias/${name}` }))
+    const { matches } = matchPhotoFiles(refs, ['a.jpg', 'b.pdf', 'c.jpg'].map((name) => file(name, `Medias/${name}`)))
+    expect(matches.map((m) => m.sourcePath)).toEqual(['Medias/a.jpg', 'Medias/b.pdf', 'Medias/c.jpg'])
+  })
+})

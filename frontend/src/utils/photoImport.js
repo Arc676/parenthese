@@ -56,7 +56,8 @@ export function matchPhotoFiles(photoRefs, files) {
         bestScore = score
       }
     }
-    matches.push({ personId: ref.personId, file: best })
+    // Les autres champs de la référence (légende, source d'un souvenir) suivent le fichier retrouvé
+    matches.push({ ...ref, file: best, sourcePath: ref.file })
   }
   return { matches, missing }
 }
@@ -155,6 +156,29 @@ export function savePhotoRefs(treeId, refs) {
     else localStorage.removeItem(REFS_KEY(treeId))
   } catch {
     // Stockage plein ou indisponible : l'étape ne se rouvrira pas, l'import reste fait
+  }
+}
+
+// Les autres fichiers cités (actes, photos de famille) : gardés à part, pour rouvrir l'étape plus tard
+const MEDIA_REFS_KEY = (treeId) => `parenthese_media_refs:${treeId}`
+
+export function saveMediaRefs(treeId, refs) {
+  if (!treeId) return
+  try {
+    if (refs?.length) localStorage.setItem(MEDIA_REFS_KEY(treeId), JSON.stringify(refs))
+    else localStorage.removeItem(MEDIA_REFS_KEY(treeId))
+  } catch {
+    // Stockage plein ou indisponible : l'étape ne se rouvrira pas, l'import reste fait
+  }
+}
+
+export function loadMediaRefs(treeId) {
+  if (!treeId) return []
+  try {
+    const parsed = JSON.parse(localStorage.getItem(MEDIA_REFS_KEY(treeId)) || '[]')
+    return Array.isArray(parsed) ? parsed.filter((r) => r && r.personId && r.file) : []
+  } catch {
+    return []
   }
 }
 
