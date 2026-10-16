@@ -524,6 +524,7 @@ export function computeLayout(graphData = null) {
     allEdges.push({
       id: `e-${f.id}`, sources: [sourceId], targets: [targetId],
       _parentageType: f.parentageType,
+      _displayOrder: f.displayOrder,
     })
   })
 

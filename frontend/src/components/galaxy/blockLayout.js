@@ -52,6 +52,11 @@ export function computeBlockLayout(graphData = null) {
     childrenOfUnion.get(u).push(c)
     if (!parentUnionOf.has(c)) parentUnionOf.set(c, u)
   }
+  // Fratrie dans l'ordre choisi par la famille (displayOrder) ; à ordre égal, l'ordre d'arrivée
+  // est gardé (tri stable), donc un arbre jamais réordonné ne bouge pas
+  const toOrder = (v) => (Number.isFinite(v) ? v : Number.MAX_SAFE_INTEGER)
+  const edgeOrder = new Map(result.edges.map(e => [`${e.sources[0]}>${e.targets[0]}`, toOrder(e._displayOrder)]))
+  for (const [u, kids] of childrenOfUnion) kids.sort((a, b) => edgeOrder.get(`${u}>${a}`) - edgeOrder.get(`${u}>${b}`))
   const hasParents = (chain) => chain.some(id => parentUnionOf.has(id))
 
   const descCount = new Map()
