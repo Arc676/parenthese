@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { adoptedFamilies, familyExtras, personExtras } from '../src/lib/gedcom-events'
+import { indexGedcomRecords } from '../src/lib/gedcom-photos'
+import { parseGedcom } from '../src/routes/gedcom'
 
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
@@ -464,6 +467,65 @@ describe('Graph routes', () => {
 
     const anonymous = await app.inject({ method: 'GET', url: '/trees/tree-1/persons/p-1/life' })
     expect(anonymous.statusCode).toBe(401)
+    await app.close()
+  })
+
+  it('export GEDCOM : précisions, événements, sources et adoption relus à l’identique', async () => {
+    const app = createApp()
+    await app.ready()
+    const token = (app as any).jwt.sign({
+      kind: 'tree_access',
+      sub: 'tree:tree-1:visitor',
+      treeId: 'tree-1',
+      role: 'visitor',
+      accessVersion: new Date('2026-02-11T10:00:00.000Z').getTime(),
+    })
+    const base = { birthDateEnd: null, deathDateEnd: null, deathDatePrecision: null, deathPlace: null, nickname: null, notes: null, profession: null, deathDate: null }
+    prismaMock.tree.findFirst.mockResolvedValue({ id: 'tree-1', name: 'Ragot', rootPersonId: null })
+    prismaMock.person.findMany.mockResolvedValue([
+      { ...base, id: 'p-1', firstName: 'Louis', lastName: 'Ragot', sex: 'male', birthDate: new Date('1879-01-01T00:00:00Z'), birthDatePrecision: 'about', birthPlace: 'La Roche-sur-Yon', deathDate: new Date('1950-05-02T00:00:00Z'), deathPlace: 'Nantes', nickname: 'Loulou', profession: 'Instituteur' },
+      { ...base, id: 'p-2', firstName: 'Marie', lastName: 'Bodin', sex: 'female', birthDate: null, birthDatePrecision: null, birthPlace: null },
+      { ...base, id: 'p-3', firstName: 'Jean', lastName: 'Ragot', sex: 'male', birthDate: null, birthDatePrecision: null, birthPlace: null },
+    ])
+    prismaMock.union.findMany.mockResolvedValue([
+      { id: 'u-1', partner1PersonId: 'p-1', partner2PersonId: 'p-2', startDate: new Date('1905-01-01T00:00:00Z'), startDatePrecision: 'estimated', startPlace: 'Limoges', endDate: null },
+    ])
+    prismaMock.parentChildLink.findMany.mockResolvedValue([
+      { id: 'l-1', parentPersonId: 'p-1', childPersonId: 'p-3', viaUnionId: 'u-1', parentageType: 'adoption' },
+      { id: 'l-2', parentPersonId: 'p-2', childPersonId: 'p-3', viaUnionId: 'u-1', parentageType: 'adoption' },
+    ])
+    const event = { label: null, dateEnd: null, datePrecision: null, dateText: null, place: null, description: null, notes: null, sources: null, displayOrder: 1 }
+    prismaMock.lifeEvent.findMany.mockResolvedValue([
+      { ...event, id: 'e-1', personId: 'p-1', unionId: null, type: 'birth', date: null, sources: 'Registre des naissances, Acte n° 12' },
+      { ...event, id: 'e-2', personId: 'p-1', unionId: null, type: 'baptism', date: new Date('1879-03-09T00:00:00Z'), place: 'La Roche-sur-Yon' },
+      { ...event, id: 'e-3', personId: 'p-1', unionId: null, type: 'occupation', date: new Date('1900-01-01T00:00:00Z'), dateEnd: new Date('1935-01-01T00:00:00Z'), datePrecision: 'from', description: 'Instituteur' },
+      { ...event, id: 'e-4', personId: 'p-1', unionId: null, type: 'custom', label: 'Militaire', date: new Date('1914-01-01T00:00:00Z'), dateEnd: new Date('1918-01-01T00:00:00Z'), datePrecision: 'between', notes: 'Blessé à Verdun.\nRentré en 1919.' },
+      { ...event, id: 'e-6', personId: null, unionId: 'u-1', type: 'marriage', date: null, sources: 'Registre des mariages de Limoges' },
+      { ...event, id: 'e-7', personId: null, unionId: 'u-1', type: 'divorce', date: new Date('1920-06-01T00:00:00Z') },
+    ])
+
+    const response = await app.inject({ method: 'GET', url: '/trees/tree-1/export/gedcom', headers: { authorization: `Bearer ${token}` } })
+    expect(response.statusCode).toBe(200)
+    const text = response.body.replace(/\r\n/g, '\n')
+    expect(text).toContain('1 OCCU Instituteur\n2 DATE FROM 1900 TO 1935')
+    expect(text.match(/1 OCCU/g)).toHaveLength(1)
+    expect(text).toContain('2 PEDI adopted')
+
+    const roots = parseGedcom(text)
+    const records = indexGedcomRecords(roots)
+    const louis = roots.find((n) => n.tag === 'INDI' && n.children.some((c) => c.tag === 'NAME' && c.value.startsWith('Louis')))!
+    const extras = personExtras(louis as never, records)
+    expect(extras).toMatchObject({ birthDatePrecision: 'about', deathPlace: 'Nantes', nickname: 'Loulou' })
+    expect(extras.events.map((e) => e.type)).toEqual(['birth', 'baptism', 'occupation', 'custom'])
+    expect(extras.events[0].sources).toBe('Registre des naissances, Acte n° 12')
+    expect(extras.events[3]).toMatchObject({ label: 'Militaire', datePrecision: 'between', notes: 'Blessé à Verdun.\nRentré en 1919.' })
+
+    const fam = roots.find((n) => n.tag === 'FAM')!
+    const family = familyExtras(fam as never, records)
+    expect(family).toMatchObject({ startPlace: 'Limoges', startDatePrecision: 'estimated' })
+    expect(family.events.map((e) => e.type)).toEqual(['marriage', 'divorce'])
+    const jean = roots.find((n) => n.tag === 'INDI' && n.children.some((c) => c.tag === 'NAME' && c.value.startsWith('Jean')))!
+    expect(adoptedFamilies(jean as never).size).toBe(1)
     await app.close()
   })
 
