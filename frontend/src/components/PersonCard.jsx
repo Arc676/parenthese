@@ -8,6 +8,7 @@ import ImmichFacePanel from './ImmichFacePanel.jsx'
 import './PersonCard.css'
 import PzBusy from './PzBusy.jsx'
 import { t, dateLocale } from '../i18n/index.js'
+import { formatPlace } from '../utils/place.js'
 
 const TYPE_LABELS = {
   photo: t('Photo'),
@@ -305,13 +306,13 @@ const PersonCard = ({
   }
 
   // Rendu d'un champ éditable ou lecture seule
-  const renderEditableValue = ({ field, value, placeholder, type = 'text' }) => {
+  const renderEditableValue = ({ field, value, placeholder, type = 'text', format = null }) => {
     if (!editMode) {
       const isEmptyValue = value === null || value === undefined || value === ''
       // Une date complète se lit « 22 octobre 1928 », pas « 1928-10-22 »
       const shown = type === 'date' && /^\d{4}-\d{2}-\d{2}/.test(String(value))
         ? new Date(`${String(value).slice(0, 10)}T00:00:00Z`).toLocaleDateString(dateLocale, { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
-        : value
+        : format ? format(value) : value
       return <span className="value">{isEmptyValue ? '-' : shown}</span>
     }
     return (
@@ -336,7 +337,7 @@ const PersonCard = ({
     const born = person.birthYear || (person.birthDate ? String(person.birthDate).slice(0, 4) : '')
     const died = person.deathYear || (person.deathDate ? String(person.deathDate).slice(0, 4) : '')
     const parts = []
-    if (born) parts.push(`${born}${person.birthPlace ? `, ${person.birthPlace}` : ''}`)
+    if (born) parts.push(`${born}${person.birthPlace ? `, ${formatPlace(person.birthPlace)}` : ''}`)
     if (!person.isAlive && died) parts.push(died)
     return parts.join(' – ')
   })()
@@ -593,7 +594,7 @@ const PersonCard = ({
                 {(person.birthPlace || editMode) && (
                   <div className="pc-row">
                     <span className="pc-label">{t('Lieu')}</span>
-                    {renderEditableValue({ field: 'birthPlace', value: person.birthPlace || '', placeholder: t('Lieu de naissance') })}
+                    {renderEditableValue({ field: 'birthPlace', value: person.birthPlace || '', placeholder: t('Lieu de naissance'), format: formatPlace })}
                   </div>
                 )}
                 {(person.birthName || editMode) && (
