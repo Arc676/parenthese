@@ -541,6 +541,44 @@ describe('API security and authz', () => {
     await app.close()
   })
 
+  it('refuses a manual layout coordinate outside the tree space', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/trees/tree-1/persons/person-1',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { layoutX: 2_000_000, layoutY: 10 },
+    })
+
+    expect(response.statusCode).toBe(400)
+    expect(prismaMock.person.updateMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('forbids a member from moving a person by hand', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    prismaMock.treeMembership.findUnique.mockResolvedValue({
+      treeId: 'tree-1',
+      userId: 'user-1',
+      role: 'member',
+      tree: { deletedAt: null, rootPersonId: null },
+    })
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/trees/tree-1/persons/person-1',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { layoutX: 120, layoutY: 240 },
+    })
+
+    expect(response.statusCode).toBe(403)
+    expect(prismaMock.person.updateMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+
   it('allows contributor access token to submit a pending contribution session', async () => {
     const app = createApp()
     await app.ready()
@@ -927,6 +965,57 @@ describe('API security and authz', () => {
 
     expect(response.statusCode).toBe(400)
     expect(response.json().error).toBe('unresolved_reference')
+    await app.close()
+  })
+
+  it('does not flag a pending person change as a conflict when the owner only moved that person', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+
+    prismaMock.contributionSession.findFirst.mockResolvedValue({
+      id: 'session-1',
+      treeId: 'tree-1',
+      status: 'pending',
+      changes: [
+        {
+          id: 'change-1',
+          entityType: 'person',
+          action: 'update',
+          entityId: 'person-1',
+          beforeJson: { firstName: 'Alice', layoutX: null, layoutY: null },
+          afterJson: { firstName: 'Alicia' },
+          conflictState: 'none',
+        },
+      ],
+    })
+    // Le propriétaire a glissé la personne depuis l'envoi : seule la place a changé
+    prismaMock.person.findFirst.mockResolvedValue({
+      firstName: 'Alice',
+      lastName: 'Martin',
+      birthName: null,
+      birthDate: null,
+      deathDate: null,
+      layoutX: 300,
+      layoutY: 400,
+      birthPlace: null,
+      profession: null,
+      region: null,
+      nationality: null,
+      sex: null,
+      notes: null,
+    })
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/trees/tree-1/contributions/sessions/session-1/review',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { decision: 'approved' },
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(prismaMock.contributionChange.update).not.toHaveBeenCalledWith(expect.objectContaining({
+      data: { conflictState: 'needs_review' },
+    }))
     await app.close()
   })
 

@@ -356,9 +356,13 @@ components:
         layoutX:
           type: number
           nullable: true
+          minimum: -1000000
+          maximum: 1000000
         layoutY:
           type: number
           nullable: true
+          minimum: -1000000
+          maximum: 1000000
         sex:
           type: string
           nullable: true

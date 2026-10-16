@@ -13,7 +13,10 @@ import { decryptSharePassword, encryptSharePassword } from '../lib/share-passwor
 import { purgeTrees } from '../lib/tree-purge.js'
 import { reserveTreeUnlockAttempt, serializePasswordCheck } from '../lib/unlock-guard.js'
 import type { MembershipRole } from '../types/auth.js'
+import { LAYOUT_COORDINATE_LIMIT } from '../utils/graph-payload.js'
 import { findParentChildValidationError, findUnionValidationError } from '../utils/relationship-guards.js'
+
+const layoutCoordinateSchema = z.number().finite().min(-LAYOUT_COORDINATE_LIMIT).max(LAYOUT_COORDINATE_LIMIT)
 
 const MAX_TREES_PER_ACCOUNT = 10
 
@@ -101,8 +104,8 @@ const patchPersonSchema = z
     birthName: z.string().max(120).optional().nullable(),
     birthDate: z.string().regex(isoDateRegex).optional().nullable(),
     deathDate: z.string().regex(isoDateRegex).optional().nullable(),
-    layoutX: z.number().finite().optional().nullable(),
-    layoutY: z.number().finite().optional().nullable(),
+    layoutX: layoutCoordinateSchema.optional().nullable(),
+    layoutY: layoutCoordinateSchema.optional().nullable(),
     birthPlace: z.string().max(200).optional().nullable(),
     profession: z.string().max(200).optional().nullable(),
     region: z.string().max(120).optional().nullable(),

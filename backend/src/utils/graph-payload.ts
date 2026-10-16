@@ -2,6 +2,9 @@ import type { Annotation, MediaItem, ParentChildLink, Person, Union } from '@pri
 
 import { sanitizeAnnotationContentForRead } from '../lib/annotation-content.js'
 
+// Espace des coordonnées de disposition manuelle (unités du graphe). Au-delà, rien de réel dans un arbre.
+export const LAYOUT_COORDINATE_LIMIT = 1_000_000
+
 export type GraphPayload = {
   persons: Array<{
     id: string
