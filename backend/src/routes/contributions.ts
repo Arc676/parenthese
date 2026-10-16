@@ -10,10 +10,7 @@ import { removeStoredFile } from '../lib/media-files.js'
 import { syncPersonMediaOrder } from '../lib/media-order.js'
 
 import type { Actor, MembershipRole } from '../types/auth.js'
-import { LAYOUT_COORDINATE_LIMIT } from '../utils/graph-payload.js'
 import { findParentChildValidationError, findUnionValidationError } from '../utils/relationship-guards.js'
-
-const layoutCoordinateSchema = z.number().finite().min(-LAYOUT_COORDINATE_LIMIT).max(LAYOUT_COORDINATE_LIMIT)
 
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/
 
@@ -89,8 +86,6 @@ const personUpdateSchema = z
     birthName: z.string().max(120).optional().nullable(),
     birthDate: z.string().regex(isoDateRegex).optional().nullable(),
     deathDate: z.string().regex(isoDateRegex).optional().nullable(),
-    layoutX: layoutCoordinateSchema.optional().nullable(),
-    layoutY: layoutCoordinateSchema.optional().nullable(),
     birthPlace: z.string().max(200).optional().nullable(),
     profession: z.string().max(200).optional().nullable(),
     region: z.string().max(120).optional().nullable(),
@@ -407,8 +402,6 @@ async function applyContributionChange(
           birthName: parsed.data.birthName !== undefined ? toTrimmedStringOrNull(parsed.data.birthName) : undefined,
           birthDate: parsed.data.birthDate !== undefined ? toDateOrNull(parsed.data.birthDate) : undefined,
           deathDate: parsed.data.deathDate !== undefined ? toDateOrNull(parsed.data.deathDate) : undefined,
-          layoutX: parsed.data.layoutX,
-          layoutY: parsed.data.layoutY,
           birthPlace: parsed.data.birthPlace !== undefined ? toTrimmedStringOrNull(parsed.data.birthPlace) : undefined,
           profession: parsed.data.profession !== undefined ? toTrimmedStringOrNull(parsed.data.profession) : undefined,
           region: parsed.data.region !== undefined ? toTrimmedStringOrNull(parsed.data.region) : undefined,
@@ -784,8 +777,6 @@ async function applyContributionChange(
 }
 
 const SNAPSHOT_ENTITY_TYPES = new Set(['person', 'union', 'parent_child_link'])
-// Champs qui ne créent jamais de conflit de relecture (positions dans l'arbre, déplacées à la main)
-const NON_CONFLICTING_KEYS = new Set(['layoutX', 'layoutY'])
 
 // État actuel d'une personne, union ou lien, tel qu'on le montre à la relecture. null : introuvable dans l'arbre.
 async function snapshotEntity(
@@ -803,8 +794,6 @@ async function snapshotEntity(
         birthName: true,
         birthDate: true,
         deathDate: true,
-        layoutX: true,
-        layoutY: true,
         birthPlace: true,
         profession: true,
         region: true,
@@ -858,8 +847,6 @@ async function detectConflict(
   const snap = await snapshotEntity(tx, treeId, change.entityType, change.entityId)
   if (!snap) return true
   for (const key of Object.keys(before)) {
-    // La place dans l'arbre bouge à chaque glisser du propriétaire : ce n'est pas une modification concurrente
-    if (NON_CONFLICTING_KEYS.has(key)) continue
     if (key in snap && String(snap[key] ?? '') !== String(before[key] ?? '')) return true
   }
   return false

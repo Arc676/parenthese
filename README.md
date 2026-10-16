@@ -13,7 +13,7 @@ Website: [parenthese.io/en](https://parenthese.io/en/) · Demo, no account neede
 
 ## What it does
 
-- One tree per family: people, couples, parent-child links, laid out automatically and rearrangeable by dragging people in edit mode.
+- One tree per family: people, couples, parent-child links, laid out automatically.
 - Memories on each person: photos, videos (a file or a YouTube link), audio recordings to keep a voice, documents, GPS tracks.
 - Free annotations on the tree: drawings, stickers, text, photos placed anywhere.
 - Sharing by link: each tree has an address `/arbre/<name>` protected by a sharing password. With it, relatives can look around and suggest additions.

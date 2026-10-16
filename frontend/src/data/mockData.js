@@ -100,8 +100,6 @@ function mapRemotePersonToLocal(person, current = null) {
 
   return {
     id: person?.id ?? current?.id,
-    layoutX: Number.isFinite(person?.layoutX) ? person.layoutX : null,
-    layoutY: Number.isFinite(person?.layoutY) ? person.layoutY : null,
     firstName: person?.firstName || current?.firstName || t('Inconnu'),
     lastName: person?.lastName || current?.lastName || '',
     birthName: person?.birthName ?? current?.birthName ?? null,

@@ -13,8 +13,6 @@ describe('loadGraphData avatar mapping', () => {
             lastName: 'Martin',
             birthDate: null,
             deathDate: null,
-            layoutX: 420.5,
-            layoutY: 275.25,
             notes: null,
             avatarUrlPath: '/trees/t-1/persons/p-1/avatar',
           },
@@ -48,7 +46,6 @@ describe('loadGraphData avatar mapping', () => {
     )
 
     expect(getPersonById('p-1')?.photo).toBe('/api/trees/t-1/persons/p-1/avatar?token=abc')
-    expect(getPersonById('p-1')).toMatchObject({ layoutX: 420.5, layoutY: 275.25 })
     expect(getPersonById('p-2')?.photo).toBeNull()
     expect(getPersonMedias('p-2')[0]?.source).toBe('Album familial')
   })

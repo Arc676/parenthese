@@ -2,9 +2,6 @@ import type { Annotation, MediaItem, ParentChildLink, Person, Union } from '@pri
 
 import { sanitizeAnnotationContentForRead } from '../lib/annotation-content.js'
 
-// Espace des coordonnées de disposition manuelle (unités du graphe). Au-delà, rien de réel dans un arbre.
-export const LAYOUT_COORDINATE_LIMIT = 1_000_000
-
 export type GraphPayload = {
   persons: Array<{
     id: string
@@ -13,8 +10,6 @@ export type GraphPayload = {
     birthName: string | null
     birthDate: string | null
     deathDate: string | null
-    layoutX: number | null
-    layoutY: number | null
     birthPlace: string | null
     profession: string | null
     region: string | null
@@ -88,8 +83,6 @@ export function buildGraphPayload(
         birthName: person.birthName,
         birthDate: formatDate(person.birthDate),
         deathDate: formatDate(person.deathDate),
-        layoutX: person.layoutX ?? null,
-        layoutY: person.layoutY ?? null,
         birthPlace: person.birthPlace,
         profession: person.profession,
         region: person.region,

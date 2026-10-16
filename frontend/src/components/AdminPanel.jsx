@@ -7,7 +7,6 @@ import {
   fetchTreeSettings,
   getTree,
   importGedcom,
-  resetTreeLayout,
   updateTree,
   updateTreeSettings,
 } from '../api/treeApi'
@@ -32,8 +31,6 @@ const AdminPanel = ({
   onTreeDeleted,
   onGedcomImported,
   onOpenPhotoStart,
-  hasManualPositions = false,
-  onLayoutReset,
 }) => {
   const [section, setSection] = useState('tree')
   const [loading, setLoading] = useState(false)
@@ -50,7 +47,6 @@ const AdminPanel = ({
 
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleteConfirmName, setDeleteConfirmName] = useState('')
-  const [showLayoutResetModal, setShowLayoutResetModal] = useState(false)
   const [gedcomFile, setGedcomFile] = useState(null)
   const [importingGedcom, setImportingGedcom] = useState(false)
   const gedcomInputRef = useRef(null)
@@ -67,7 +63,6 @@ const AdminPanel = ({
     setSection('tree')
     setShowDeleteModal(false)
     setDeleteConfirmName('')
-    setShowLayoutResetModal(false)
     setGedcomFile(null)
     setImportingGedcom(false)
 
@@ -235,25 +230,6 @@ const AdminPanel = ({
     }
   }
 
-  const handleResetLayout = async () => {
-    if (!treeId || !authToken || saving) return
-
-    setSaving(true)
-    setErrorMessage('')
-    setSuccessMessage('')
-
-    try {
-      await resetTreeLayout(treeId, authToken)
-      await onLayoutReset?.()
-      setShowLayoutResetModal(false)
-      setSuccessMessage(t('La disposition automatique est rétablie.'))
-    } catch {
-      setErrorMessage(t('Impossible de rétablir la disposition.'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
   const handleDeleteTree = async () => {
     if (!treeId || !authToken || saving || !tree) return
     if (deleteConfirmName.trim() !== tree.name) {
@@ -283,7 +259,7 @@ const AdminPanel = ({
     <div
       className="pz-overlay tree-settings-overlay"
       onClick={() => {
-        if (!showDeleteModal && !showLayoutResetModal) onClose?.()
+        if (!showDeleteModal) onClose?.()
       }}
     >
       <div
@@ -452,20 +428,6 @@ const AdminPanel = ({
 
               {section === 'danger' && (
                 <div className="ts-panel">
-                  {hasManualPositions && (
-                    <div className="ts-row">
-                      <div className="ts-row-text">
-                        <strong>{t("Disposition de l'arbre")}</strong>
-                        <p className="pz-small">{t("Les personnes déplacées à la main reprennent la place que leur donne l'arbre.")}</p>
-                      </div>
-                      <div className="ts-row-actions">
-                        <button type="button" className="pz-btn pz-btn--secondary pz-btn--sm" onClick={() => setShowLayoutResetModal(true)} disabled={saving}>
-                          {t('Rétablir la disposition automatique')}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
                   <div className="ts-danger">
                     <div className="ts-row-text">
                       <strong>{t('Supprimer cet arbre')}</strong>
@@ -482,26 +444,6 @@ const AdminPanel = ({
           )}
         </div>
       </div>
-
-      {showLayoutResetModal && (
-        <div className="pz-overlay ts-delete-overlay" onClick={(event) => { event.stopPropagation(); if (!saving) setShowLayoutResetModal(false) }}>
-          <div className="pz-modal settings-delete-modal" role="dialog" aria-modal="true" aria-labelledby="treeLayoutResetTitle" onClick={(event) => event.stopPropagation()}>
-            <div className="pz-modal-head">
-              <p className="pz-eyebrow">{t('Dernière vérification')}</p>
-              <h3 id="treeLayoutResetTitle" className="pz-title">{t('Rétablir la disposition automatique ?')}</h3>
-              <p className="pz-sub">{t('Les déplacements faits à la main seront effacés pour toute la famille.')}</p>
-            </div>
-            <div className="pz-modal-actions">
-              <button type="button" className="pz-btn pz-btn--ghost" onClick={() => setShowLayoutResetModal(false)} disabled={saving}>
-                {t('Annuler')}
-              </button>
-              <button type="button" className="pz-btn pz-btn--danger danger-action" onClick={handleResetLayout} disabled={saving}>
-                <PzBusy busy={saving} busyLabel={t('Rétablissement en cours')}>{t('Rétablir')}</PzBusy>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showDeleteModal && (
         <div className="pz-overlay ts-delete-overlay" onClick={(event) => { event.stopPropagation(); if (!saving) setShowDeleteModal(false) }}>

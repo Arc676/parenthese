@@ -15,8 +15,6 @@ describe('buildGraphPayload', () => {
           birthName: 'Durand',
           birthDate: new Date('1994-06-02T00:00:00.000Z'),
           deathDate: null,
-          layoutX: 432.5,
-          layoutY: -19.25,
           sex: null,
           notes: null,
           avatarPath: 't-1/p-2/avatar.jpg',
@@ -98,8 +96,6 @@ describe('buildGraphPayload', () => {
     expect(graph.persons[0].id).toBe('p-2')
     expect(graph.persons[0].birthDate).toBe('1994-06-02')
     expect(graph.persons[0].birthName).toBe('Durand')
-    expect(graph.persons[0].layoutX).toBe(432.5)
-    expect(graph.persons[0].layoutY).toBe(-19.25)
     expect(graph.persons[0].avatarUrlPath).toBe('/trees/t-1/persons/p-2/avatar')
     expect(graph.persons[1].avatarUrlPath).toBeNull()
     expect(graph.unions[0].id).toBe('u-1')

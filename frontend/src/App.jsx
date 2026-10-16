@@ -19,7 +19,6 @@ import EditConfirmModal from './components/EditConfirmModal'
 import DraftRestoreBanner from './components/DraftRestoreBanner'
 import AddPersonPanel from './components/AddPersonPanel'
 import ContributionSessionModal from './components/ContributionSessionModal'
-import { buildManualPositionOverrides } from './components/galaxy/layoutPositions'
 import { ContextualNavbar } from './components/navbar'
 import ZoomControl from './components/ZoomControl'
 import { ExpandableSearch } from './components/search'
@@ -284,8 +283,6 @@ function buildContributionChangesFromDraft(draft = {}) {
     if (Object.prototype.hasOwnProperty.call(source, 'region')) after.region = (source.region || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(source, 'nationality')) after.nationality = (source.nationality || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(source, 'note')) after.notes = source.note || null
-    if (Object.prototype.hasOwnProperty.call(source, 'layoutX')) after.layoutX = source.layoutX
-    if (Object.prototype.hasOwnProperty.call(source, 'layoutY')) after.layoutY = source.layoutY
     if (Object.prototype.hasOwnProperty.call(source, 'isAlive') && source.isAlive === true) after.deathDate = null
 
     if (Object.keys(after).length > 0) {
@@ -628,23 +625,6 @@ function App() {
     treeId: tree.treeContext.treeId,
     canEdit: canEditInCurrentMode,
   })
-  // draftRevision : la valeur lue par restoreDraft (une ref) ne change pas, il faut un signal qui bouge à chaque écriture
-  const manualPositionOverrides = useMemo(() => {
-    if (!editMode.hasDraft) return {}
-    return buildManualPositionOverrides(editMode.restoreDraft().modifiedPersons)
-  }, [editMode.hasDraft, editMode.draftRevision, editMode.restoreDraft])
-  const handlePersonPositionChange = useCallback((personId, position) => {
-    const draft = editMode.restoreDraft()
-    editMode.updateDraft({
-      modifiedPersons: {
-        ...(draft.modifiedPersons || {}),
-        [String(personId)]: {
-          ...(draft.modifiedPersons?.[String(personId)] || {}),
-          ...position,
-        },
-      },
-    })
-  }, [editMode.restoreDraft, editMode.updateDraft])
 
   const localEntityCounterRef = useRef(0)
   const makeLocalId = useCallback((prefix) => {
@@ -1179,12 +1159,6 @@ function App() {
     const timer = setTimeout(() => setDraftNotice(''), 4500)
     return () => clearTimeout(timer)
   }, [draftNotice])
-  const [editSaveError, setEditSaveError] = useState('')
-  useEffect(() => {
-    if (!editSaveError) return undefined
-    const timer = setTimeout(() => setEditSaveError(''), 6000)
-    return () => clearTimeout(timer)
-  }, [editSaveError])
 
   // Soumission des modifications
   const handleEditSubmit = useCallback(async () => {
@@ -1202,7 +1176,6 @@ function App() {
       const treeId = tree.treeContext.treeId
       const draft = editMode.restoreDraft()
 
-      let failedPersonSaves = 0
       if (token && treeId) {
         // Appliquer les modifications de personnes depuis le draft
         const modifiedPersons = draft.modifiedPersons || {}
@@ -1219,14 +1192,11 @@ function App() {
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'nationality')) payload.nationality = (rawChanges.nationality || '').trim() || null
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'isAlive') && rawChanges.isAlive === true) payload.deathDate = null
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'note')) payload.notes = rawChanges.note || null
-          if (Object.prototype.hasOwnProperty.call(rawChanges, 'layoutX')) payload.layoutX = rawChanges.layoutX
-          if (Object.prototype.hasOwnProperty.call(rawChanges, 'layoutY')) payload.layoutY = rawChanges.layoutY
 
           if (Object.keys(payload).length > 0) {
             try {
               await updatePerson(treeId, personId, payload, token)
             } catch (err) {
-              failedPersonSaves += 1
               console.error('Failed to update person:', personId, err)
             }
           }
@@ -1274,11 +1244,6 @@ function App() {
       }
 
       await tree.refreshCurrentTreeGraph({ relayout: false })
-      if (failedPersonSaves > 0) {
-        // Brouillon gardé : rien n'est perdu, l'admin peut réessayer
-        setEditSaveError(t("Certaines modifications n'ont pas pu être enregistrées. Vérifiez puis réessayez."))
-        return
-      }
       editMode.clearDraft()
       editMode.deactivate()
     } else {
@@ -1320,16 +1285,6 @@ function App() {
       if (!result?.ok) {
         setContribSubmitError(result?.error || t("Erreur lors de l'envoi des contributions"))
         return
-      }
-
-      // Comme un nom modifié, la place envoyée reste à l'écran jusqu'à la relecture
-      for (const [personId, changes] of Object.entries(draft.modifiedPersons || {})) {
-        if (!Number.isFinite(changes?.layoutX) || !Number.isFinite(changes?.layoutY)) continue
-        const localPerson = persons.find((candidate) => String(candidate.id) === String(personId))
-        if (localPerson) {
-          localPerson.layoutX = changes.layoutX
-          localPerson.layoutY = changes.layoutY
-        }
       }
 
       editMode.clearDraft()
@@ -2555,22 +2510,6 @@ function App() {
     }
   }
 
-  // Admin : efface les positions manuelles de l'arbre, y compris celles restées dans son brouillon
-  const handleResetTreeLayout = useCallback(async () => {
-    const draft = editMode.restoreDraft()
-    if (draft.modifiedPersons) {
-      const modifiedPersons = {}
-      for (const [personId, changes] of Object.entries(draft.modifiedPersons)) {
-        const rest = { ...changes }
-        delete rest.layoutX
-        delete rest.layoutY
-        if (Object.keys(rest).length > 0) modifiedPersons[personId] = rest
-      }
-      editMode.updateDraft({ modifiedPersons })
-    }
-    await refreshTreeAndKeepSelection(null, { relayout: true })
-  }, [editMode.restoreDraft, editMode.updateDraft, refreshTreeAndKeepSelection])
-
   const handleGedcomImported = useCallback(async (result, treeIdOverride = null) => {
     await refreshTreeAndKeepSelection(null, { relayout: true })
     const refs = Array.isArray(result?.photoRefs) ? result.photoRefs : []
@@ -2842,9 +2781,6 @@ function App() {
       {draftNotice && !contribSuccess && !showContribModal && (
         <div className="contrib-success-toast" role="status">{draftNotice}</div>
       )}
-      {editSaveError && (
-        <div className="contrib-success-toast" role="alert">{editSaveError}</div>
-      )}
       {contribSuccess && (
         <div className="contrib-success-toast" role="status">
           {t("Merci, c'est envoyé ! Ça apparaîtra dans l'arbre une fois relu.")}
@@ -2890,9 +2826,6 @@ function App() {
       <Galaxy
         onPersonSelect={handlePersonSelect}
         onMediaSelect={handleMediaSelectFresh}
-        onPersonPositionChange={handlePersonPositionChange}
-        editModeActive={editMode.isActive}
-        manualPositionOverrides={manualPositionOverrides}
         selectedPersonId={tree.selectedPerson?.id || null}
         searchHighlightIds={search.matchedPersonIds}
         graphRevision={tree.graphRevision}
@@ -2984,8 +2917,6 @@ function App() {
         onGedcomImported={handleGedcomImported}
         onOpenPhotoStart={() => { setAdminPanelVisible(false); openPhotoStart() }}
         onClose={() => setAdminPanelVisible(false)}
-        hasManualPositions={persons.some((person) => Number.isFinite(person.layoutX) && Number.isFinite(person.layoutY))}
-        onLayoutReset={handleResetTreeLayout}
       />
       <PhotoStartPanel
         visible={photoStart.visible}
@@ -3035,5 +2966,7 @@ function App() {
 }
 
 export default App
+
+
 
 

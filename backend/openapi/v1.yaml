@@ -228,14 +228,6 @@ components:
         deathDate:
           type: string
           nullable: true
-        layoutX:
-          type: number
-          nullable: true
-          description: Manual tree-layout X coordinate for the person.
-        layoutY:
-          type: number
-          nullable: true
-          description: Manual tree-layout Y coordinate for the person.
         sex:
           type: string
           nullable: true
@@ -353,16 +345,6 @@ components:
         deathDate:
           type: string
           nullable: true
-        layoutX:
-          type: number
-          nullable: true
-          minimum: -1000000
-          maximum: 1000000
-        layoutY:
-          type: number
-          nullable: true
-          minimum: -1000000
-          maximum: 1000000
         sex:
           type: string
           nullable: true
@@ -1368,41 +1350,6 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Person not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /trees/{id}/layout/reset:
-    post:
-      tags: [Trees]
-      summary: Reset manual person positions so the tree is laid out automatically again (admin)
-      security:
-        - BearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Positions cleared
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  personsReset:
-                    type: integer
-        '401':
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '403':
-          description: Forbidden (admin only)
           content:
             application/json:
               schema:

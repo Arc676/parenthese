@@ -1,5 +1,5 @@
 import { memo, useEffect, useImperativeHandle, useRef, useState, useCallback } from 'react'
-import { getPersonById, getPersonMedias, getParents, getChildren, getPersonUnions } from '../data/mockData'
+import { getPersonMedias, getParents, getChildren, getPersonUnions } from '../data/mockData'
 import { PERSON_R, FLOAT_SPEED, FLOAT_AMPLITUDE, REPULSION_RADIUS, REPULSION_STRENGTH, MAX_ORBIT_MEDIAS, ENTRANCE_GEN_DELAY, ENTRANCE_NODE_DURATION, ENTRANCE_NODE_STAGGER, ENTRANCE_MAX_GEN_SPAN, ENTRANCE_MAX_NODE_SPAN, ENTRANCE_LINE_DELAY, ENTRANCE_LINE_DURATION, ENTRANCE_ORBIT_DELAY, ENTRANCE_ORBIT_DURATION, ENTRANCE_ORBIT_STAGGER } from './galaxy/constants'
 import { easeOutCubic } from './galaxy/utils'
 import { computeLayout, generateNodeRandomData, coupleBarMeta } from './galaxy/elkLayout'
@@ -12,11 +12,6 @@ import { drawBackground, drawCoupleLinks, drawFiliations, drawAnnotations, drawP
 import { annotations as annotationData } from '../data/mockData'
 import { useImageCache } from './galaxy/useImageCache'
 import { useGalaxyInteractions } from './galaxy/useGalaxyInteractions'
-import {
-  applyManualPersonPositions,
-  captureAutomaticPersonPositions,
-  positionUnionJunctions,
-} from './galaxy/layoutPositions'
 import './Galaxy.css'
 
 // Assez bas pour cadrer un grand arbre entier à l'ouverture
@@ -34,7 +29,7 @@ const MAX_SCALE = 3.2
 const FOCUS_MIN_READABLE_SCALE = 0.5
 const FOCUS_SCALE = 0.95
 
-const Galaxy = ({ onPersonSelect, onMediaSelect, onPersonPositionChange, editModeActive = false, manualPositionOverrides = {}, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, photoHint = false }) => {
+const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, photoHint = false }) => {
   const canvasRef = useRef(null)
   // Lu au calcul du cadrage seulement : changer de personne de départ ne recadre pas une vue en cours
   const focusPersonIdRef = useRef(focusPersonId)
@@ -43,10 +38,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, onPersonPositionChange, editMod
   // Propriétaire : un portrait vide survolé montre « + photo »
   const photoHintRef = useRef(photoHint)
   useEffect(() => { photoHintRef.current = photoHint }, [photoHint])
-  const manualPositionOverridesRef = useRef(manualPositionOverrides)
-  useEffect(() => { manualPositionOverridesRef.current = manualPositionOverrides }, [manualPositionOverrides])
   const layoutDataRef = useRef(null)
-  const automaticPersonPositionsRef = useRef(new Map())
   const [layoutReady, setLayoutReady] = useState(false)
   const transformRef = useRef({ x: 0, y: 0, scale: 1 })
 
@@ -92,7 +84,6 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, onPersonPositionChange, editMod
   const getAnimatedPos = useCallback((node, time) => {
     const baseCx = node.x + node.width / 2
     const baseCy = node.y + node.height / 2
-    if (node._manualPosition) return { cx: baseCx, cy: baseCy }
     const rd = nodeRandomDataRef.current.get(node.id)
     if (!rd) return { cx: baseCx, cy: baseCy }
 
@@ -119,14 +110,13 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, onPersonPositionChange, editMod
 
   const {
     isDragging, isZooming, zoomTimeoutRef, hasDragged,
-    handleMouseDown, handleMouseMove, handleMouseUp, cancelPersonDrag,
+    handleMouseDown, handleMouseMove, handleMouseUp,
     handleMouseLeave, handleWheel, handleClick,
   } = useGalaxyInteractions({
     canvasRef, transformRef, targetTransformRef,
     layoutDataRef, nodeRandomDataRef, entranceRef,
     hoveredNodeIdRef: hoveredNodeId, hoveredMediaKeyRef: hoveredMediaKey, mouseWorldPosRef: mouseWorldPos,
     getAnimatedPos, onPersonSelect, onMediaSelect,
-    onPersonPositionChange, editModeActive,
     annotationHandlers,
     minScale: MIN_SCALE,
     maxScale: MAX_SCALE,
@@ -211,12 +201,6 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, onPersonPositionChange, editMod
   // Layout
   useEffect(() => {
     const result = USE_BLOCK_LAYOUT ? computeBlockLayout() : computeLayout()
-    automaticPersonPositionsRef.current = captureAutomaticPersonPositions(result)
-    applyManualPersonPositions(result, {
-      draftPositions: manualPositionOverridesRef.current,
-      getPersonById,
-      automaticPositions: automaticPersonPositionsRef.current,
-    })
 
     const canvas = canvasRef.current
     if (!canvas) return
@@ -346,15 +330,6 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, onPersonPositionChange, editMod
     setLayoutReady(true)
   }, [graphRevision])
 
-  useEffect(() => {
-    applyManualPersonPositions(layoutDataRef.current, {
-      draftPositions: manualPositionOverrides,
-      getPersonById,
-      automaticPositions: automaticPersonPositionsRef.current,
-    })
-    needsRedrawRef.current = true
-  }, [graphRevision, manualPositionOverrides])
-
   // Sync selectedPersonId
   useEffect(() => {
     selectedPersonIdRef.current = selectedPersonId
@@ -419,7 +394,6 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, onPersonPositionChange, editMod
       layoutData.children.forEach(node => {
         posMap.set(node.id, getAnimatedPos(node, timestamp))
       })
-      positionUnionJunctions(coupleBarMeta, posMap)
 
       const nodeMap = new Map()
       layoutData.children.forEach(n => nodeMap.set(n.id, n))
@@ -706,8 +680,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, onPersonPositionChange, editMod
           handleMouseDown({ clientX: t.clientX, clientY: t.clientY, preventDefault: () => e.preventDefault() })
         } else if (e.touches.length === 2) {
           e.preventDefault()
-          // Un second doigt annule le glisser d'une personne (rien n'est enregistré) puis arrête le pan
-          cancelPersonDrag()
+          // Stop any ongoing single-finger pan before starting pinch
           handleMouseUp()
           const [a, b] = e.touches
           const dx = a.clientX - b.clientX
@@ -745,16 +718,15 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, onPersonPositionChange, editMod
           // and mark hasDragged=true so the lift doesn't fire an accidental click
           const t = e.touches[0]
           handleMouseUp()
-          handleMouseDown({ clientX: t.clientX, clientY: t.clientY, preventDefault: () => e.preventDefault() }, { panOnly: true })
+          handleMouseDown({ clientX: t.clientX, clientY: t.clientY, preventDefault: () => e.preventDefault() })
           hasDragged.current = true
         } else {
           handleMouseUp()
         }
       }}
       onTouchCancel={() => {
-        // System interruption (notification, keyboard, etc.) — reset all touch state, sans enregistrer de position
+        // System interruption (notification, keyboard, etc.) — reset all touch state
         pinchRef.current = null
-        cancelPersonDrag()
         handleMouseUp()
       }}
       onClick={handleClick}

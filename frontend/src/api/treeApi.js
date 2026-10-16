@@ -122,16 +122,6 @@ export async function deleteTree(treeId, token) {
   return data
 }
 
-// Efface les positions manuelles de toutes les personnes (admin) : la disposition redevient automatique
-export async function resetTreeLayout(treeId, token) {
-  return apiRequest(`/trees/${encodeURIComponent(treeId)}/layout/reset`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
-}
-
 export async function createPerson(treeId, payload, token) {
   const data = await apiRequest(`/trees/${encodeURIComponent(treeId)}/persons`, {
     method: 'POST',

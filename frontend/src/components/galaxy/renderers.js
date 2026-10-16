@@ -7,7 +7,6 @@ import {
   PERSON_R, UNKNOWN_R, UNION_W, UNION_H, COMPACT_R, COMPACT_SCALE,
   MAX_ORBIT_MEDIAS, ORBIT_MEDIA_SIZE,
   COLORS,
-  RENVOI_MIN_DX,
   LOD_SHADOW_MIN_SCALE, LOD_DETAIL_MIN_SCALE, LOD_LABEL_FADE_IN, LOD_LABEL_FADE_OUT, CULL_MARGIN,
 } from './constants'
 import { getEntranceProgress, drawPartialBezier } from './utils'
@@ -101,11 +100,6 @@ const BUS_DY = 100
 const BUS_TURN = 56
 // En dessous de cet écart union → enfant, pas de virage
 const BUS_STRAIGHT_DX = 30
-
-export function shouldRenderRenvoi(edge, sourcePos, targetPos) {
-  if (!edge._renvoiEligible) return Boolean(edge._renvoi)
-  return Math.abs(sourcePos.cx - targetPos.cx) > RENVOI_MIN_DX
-}
 
 function busY(sourceId, sy) {
   let h = 0
@@ -257,7 +251,6 @@ export function drawFiliations(ctx, edges, posMap, nodeMap, nodeRandomData, entr
   renvoiHitAreas.length = 0
   renvoiPills.length = 0
   if (!edges) return
-  const renvoiIndexBySource = new Map()
 
   edges.forEach(edge => {
     const sourceId = edge.sources[0]
@@ -294,13 +287,8 @@ export function drawFiliations(ctx, edges, posMap, nodeMap, nodeRandomData, entr
     ctx.globalAlpha = Math.min(1, edgeProgress * 1.5)
 
     const childR = nodeRadius(targetNode)
-    const isRenvoi = shouldRenderRenvoi(edge, sourcePos, targetPos)
-    if (isRenvoi) {
-      const index = edge._renvoiEligible
-        ? (renvoiIndexBySource.get(sourceId) || 0)
-        : (edge._renvoiIndex || 0)
-      if (edge._renvoiEligible) renvoiIndexBySource.set(sourceId, index + 1)
-      drawRenvoi(ctx, { ...edge, _renvoiIndex: index }, sourcePos, targetPos, targetNode, childR, view)
+    if (edge._renvoi) {
+      drawRenvoi(ctx, edge, sourcePos, targetPos, targetNode, childR, view)
       ctx.globalAlpha = 1
       ctx.setLineDash([])
       return

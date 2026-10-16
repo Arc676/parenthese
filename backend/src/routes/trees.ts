@@ -13,10 +13,7 @@ import { decryptSharePassword, encryptSharePassword } from '../lib/share-passwor
 import { purgeTrees } from '../lib/tree-purge.js'
 import { reserveTreeUnlockAttempt, serializePasswordCheck } from '../lib/unlock-guard.js'
 import type { MembershipRole } from '../types/auth.js'
-import { LAYOUT_COORDINATE_LIMIT } from '../utils/graph-payload.js'
 import { findParentChildValidationError, findUnionValidationError } from '../utils/relationship-guards.js'
-
-const layoutCoordinateSchema = z.number().finite().min(-LAYOUT_COORDINATE_LIMIT).max(LAYOUT_COORDINATE_LIMIT)
 
 const MAX_TREES_PER_ACCOUNT = 10
 
@@ -104,8 +101,6 @@ const patchPersonSchema = z
     birthName: z.string().max(120).optional().nullable(),
     birthDate: z.string().regex(isoDateRegex).optional().nullable(),
     deathDate: z.string().regex(isoDateRegex).optional().nullable(),
-    layoutX: layoutCoordinateSchema.optional().nullable(),
-    layoutY: layoutCoordinateSchema.optional().nullable(),
     birthPlace: z.string().max(200).optional().nullable(),
     profession: z.string().max(200).optional().nullable(),
     region: z.string().max(120).optional().nullable(),
@@ -1307,8 +1302,6 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
       birthName?: string | null
       birthDate?: Date | null
       deathDate?: Date | null
-      layoutX?: number | null
-      layoutY?: number | null
       birthPlace?: string | null
       profession?: string | null
       region?: string | null
@@ -1336,14 +1329,6 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
 
     if (payload.data.deathDate !== undefined) {
       data.deathDate = toDateOrNull(payload.data.deathDate)
-    }
-
-    if (payload.data.layoutX !== undefined) {
-      data.layoutX = payload.data.layoutX
-    }
-
-    if (payload.data.layoutY !== undefined) {
-      data.layoutY = payload.data.layoutY
     }
 
     if (payload.data.birthPlace !== undefined) {
@@ -1408,55 +1393,6 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
     })
 
     return reply.send({ person })
-  })
-
-  // Rétablit la disposition automatique : efface la place manuelle de toutes les personnes de l'arbre
-  app.post('/trees/:id/layout/reset', async (request, reply) => {
-    const user = requireUser(request, reply)
-    if (!user) {
-      return
-    }
-
-    const params = treeIdParamSchema.safeParse(request.params)
-    if (!params.success) {
-      return reply.code(400).send({ error: 'invalid_tree_id' })
-    }
-
-    const membership = await getAdminMembership(app, user.userId, params.data.id)
-    if (!hasActiveAdminMembership(membership)) {
-      return reply.code(403).send({ error: 'forbidden' })
-    }
-
-    const count = await app.prisma.$transaction(async (tx) => {
-      const result = await tx.person.updateMany({
-        where: {
-          treeId: params.data.id,
-          deletedAt: null,
-          OR: [{ layoutX: { not: null } }, { layoutY: { not: null } }],
-        },
-        data: {
-          layoutX: null,
-          layoutY: null,
-          updatedBy: user.userId,
-        },
-      })
-
-      await tx.auditLog.create({
-        data: {
-          treeId: params.data.id,
-          actorType: 'user',
-          actorId: user.userId,
-          action: 'tree_layout_reset',
-          entityType: 'tree',
-          entityId: params.data.id,
-          payloadJson: { personsReset: result.count },
-        },
-      })
-
-      return result.count
-    })
-
-    return reply.send({ personsReset: count })
   })
 
   app.delete('/trees/:id/persons/:personId', async (request, reply) => {
