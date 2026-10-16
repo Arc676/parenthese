@@ -19,6 +19,7 @@ import EditConfirmModal from './components/EditConfirmModal'
 import DraftRestoreBanner from './components/DraftRestoreBanner'
 import AddPersonPanel from './components/AddPersonPanel'
 import ContributionSessionModal from './components/ContributionSessionModal'
+import { buildManualPositionOverrides } from './components/galaxy/layoutPositions'
 import { ContextualNavbar } from './components/navbar'
 import ZoomControl from './components/ZoomControl'
 import { ExpandableSearch } from './components/search'
@@ -627,16 +628,11 @@ function App() {
     treeId: tree.treeContext.treeId,
     canEdit: canEditInCurrentMode,
   })
+  // draftRevision : la valeur lue par restoreDraft (une ref) ne change pas, il faut un signal qui bouge à chaque écriture
   const manualPositionOverrides = useMemo(() => {
     if (!editMode.hasDraft) return {}
-    const positions = {}
-    for (const [personId, changes] of Object.entries(editMode.restoreDraft().modifiedPersons || {})) {
-      if (Number.isFinite(changes?.layoutX) && Number.isFinite(changes?.layoutY)) {
-        positions[String(personId)] = { layoutX: changes.layoutX, layoutY: changes.layoutY }
-      }
-    }
-    return positions
-  }, [editMode.hasDraft, editMode.restoreDraft])
+    return buildManualPositionOverrides(editMode.restoreDraft().modifiedPersons)
+  }, [editMode.hasDraft, editMode.draftRevision, editMode.restoreDraft])
   const handlePersonPositionChange = useCallback((personId, position) => {
     const draft = editMode.restoreDraft()
     editMode.updateDraft({

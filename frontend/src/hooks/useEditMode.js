@@ -21,6 +21,8 @@ export function useEditMode({ treeId, canEdit }) {
   const [isActive, setIsActive] = useState(false)
   const [hasDraft, setHasDraft] = useState(false)
   const [draftTimestamp, setDraftTimestamp] = useState(null)
+  // Change à chaque écriture du brouillon : les valeurs dérivées (positions manuelles) s'y recalculent
+  const [draftRevision, setDraftRevision] = useState(0)
   const autoSaveTimerRef = useRef(null)
   const draftDataRef = useRef({})
 
@@ -151,6 +153,7 @@ export function useEditMode({ treeId, canEdit }) {
     }
     // Considérer qu'il y a désormais un draft actif (permet le bouton "Mettre à jour l'arbre")
     setHasDraft(true)
+    setDraftRevision((current) => current + 1)
   }, [])
 
   /**
@@ -164,6 +167,7 @@ export function useEditMode({ treeId, canEdit }) {
       draftDataRef.current = {}
       setHasDraft(false)
       setDraftTimestamp(null)
+      setDraftRevision((current) => current + 1)
     } catch (err) {
       console.error('Failed to clear draft:', err)
     }
@@ -181,6 +185,7 @@ export function useEditMode({ treeId, canEdit }) {
     isActive,
     hasDraft,
     draftTimestamp,
+    draftRevision,
 
     // Actions
     activate,

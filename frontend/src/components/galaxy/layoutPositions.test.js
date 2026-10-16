@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyManualPersonPositions,
+  buildManualPositionOverrides,
   captureAutomaticPersonPositions,
+  describePositionChange,
   positionUnionJunctions,
 } from './layoutPositions'
 
@@ -83,5 +85,53 @@ describe('dynamic union junction positions', () => {
     )
 
     expect(positions.get('u-1')).toBe(originalJunction)
+  })
+})
+
+describe('positions manuelles du brouillon', () => {
+  it('reprend toutes les personnes déplacées dans le brouillon, pas seulement la dernière', () => {
+    const draft = {
+      '1': { layoutX: 10, layoutY: 20 },
+      '2': { layoutX: 30, layoutY: 40, firstName: 'Hugo' },
+    }
+    expect(buildManualPositionOverrides(draft)).toEqual({
+      '1': { layoutX: 10, layoutY: 20 },
+      '2': { layoutX: 30, layoutY: 40 },
+    })
+  })
+
+  it('ignore les personnes sans position complète', () => {
+    expect(buildManualPositionOverrides({ 3: { layoutX: 5 }, 4: { firstName: 'Anne' } })).toEqual({})
+    expect(buildManualPositionOverrides(undefined)).toEqual({})
+  })
+})
+
+describe("ligne « Position dans l'arbre » en relecture", () => {
+  it('dit déplacée ou replacée automatiquement, sans coordonnée brute', () => {
+    expect(describePositionChange(null, { layoutX: 320.5, layoutY: 110 })).toEqual({
+      key: 'layout',
+      label: "Position dans l'arbre",
+      oldVal: undefined,
+      newVal: 'Déplacée',
+    })
+    expect(describePositionChange({ layoutX: 320, layoutY: 110 }, { layoutX: null, layoutY: null })).toMatchObject({
+      oldVal: 'Déplacée',
+      newVal: 'Replacée automatiquement',
+    })
+  })
+
+  it('montre le passage automatique vers déplacée, et rien si la ligne ne bouge pas de libellé', () => {
+    expect(describePositionChange({ layoutX: null, layoutY: null }, { layoutX: 1, layoutY: 2 })).toMatchObject({
+      oldVal: 'Automatique',
+      newVal: 'Déplacée',
+    })
+    expect(describePositionChange({ layoutX: 1, layoutY: 2 }, { layoutX: 3, layoutY: 4 })).toMatchObject({
+      oldVal: undefined,
+      newVal: 'Déplacée',
+    })
+  })
+
+  it('ne concerne pas une contribution qui ne touche pas la position', () => {
+    expect(describePositionChange({ firstName: 'Anne' }, { firstName: 'Ana' })).toBeNull()
   })
 })
