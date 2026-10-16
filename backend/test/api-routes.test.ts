@@ -67,6 +67,11 @@ const { prismaMock } = vi.hoisted(() => ({
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    lifeEvent: {
+      findMany: vi.fn().mockResolvedValue([]),
+      createMany: vi.fn().mockResolvedValue({ count: 0 }),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
     annotation: {
       findMany: vi.fn(),
     },
@@ -416,6 +421,49 @@ describe('Graph routes', () => {
     })
 
     expect(response.statusCode).toBe(403)
+    await app.close()
+  })
+
+  it('frise de vie : lisible avec un accès à l’arbre, refusée pour un autre arbre, 404 pour une personne inconnue', async () => {
+    const app = createApp()
+    await app.ready()
+    const sign = (treeId: string) => (app as any).jwt.sign({
+      kind: 'tree_access',
+      sub: `tree:${treeId}:visitor`,
+      treeId,
+      role: 'visitor',
+      accessVersion: new Date('2026-02-11T10:00:00.000Z').getTime(),
+    })
+
+    prismaMock.tree.findFirst.mockResolvedValue({ id: 'tree-1', rootPersonId: null })
+    prismaMock.person.findFirst.mockResolvedValue({
+      id: 'p-1', birthDatePrecision: 'about', birthDateEnd: null, deathDatePrecision: null, deathDateEnd: null,
+      deathPlace: 'Nantes, France', nickname: 'Loulou',
+    })
+    prismaMock.union.findMany.mockResolvedValue([
+      { id: 'u-1', partner1PersonId: 'p-1', partner2PersonId: 'p-2', startDate: new Date('1905-01-01T00:00:00Z'), startPlace: 'Limoges', startDatePrecision: 'estimated', endDate: null },
+    ])
+    prismaMock.lifeEvent.findMany.mockResolvedValue([
+      { id: 'e-1', personId: 'p-1', unionId: null, type: 'baptism', label: null, date: new Date('1879-03-09T00:00:00Z'), dateEnd: null, datePrecision: null, dateText: null, place: 'La Roche-sur-Yon', description: null, notes: null, sources: 'Registre', displayOrder: 1 },
+    ])
+
+    const ok = await app.inject({ method: 'GET', url: '/trees/tree-1/persons/p-1/life', headers: { authorization: `Bearer ${sign('tree-1')}` } })
+    expect(ok.statusCode).toBe(200)
+    expect(ok.json()).toMatchObject({
+      person: { birthDatePrecision: 'about', deathPlace: 'Nantes, France', nickname: 'Loulou' },
+      unions: [{ id: 'u-1', partnerId: 'p-2', startDate: '1905-01-01', startPlace: 'Limoges', startDatePrecision: 'estimated' }],
+      events: [{ id: 'e-1', type: 'baptism', date: '1879-03-09', place: 'La Roche-sur-Yon', sources: 'Registre' }],
+    })
+
+    const other = await app.inject({ method: 'GET', url: '/trees/tree-1/persons/p-1/life', headers: { authorization: `Bearer ${sign('tree-2')}` } })
+    expect(other.statusCode).toBe(403)
+
+    prismaMock.person.findFirst.mockResolvedValue(null)
+    const missing = await app.inject({ method: 'GET', url: '/trees/tree-1/persons/p-404/life', headers: { authorization: `Bearer ${sign('tree-1')}` } })
+    expect(missing.statusCode).toBe(404)
+
+    const anonymous = await app.inject({ method: 'GET', url: '/trees/tree-1/persons/p-1/life' })
+    expect(anonymous.statusCode).toBe(401)
     await app.close()
   })
 

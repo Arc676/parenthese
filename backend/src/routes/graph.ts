@@ -1,4 +1,4 @@
-import type { FastifyPluginAsync } from 'fastify'
+import type { FastifyInstance, FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 
 import { signMediaToken } from '../lib/tree-access.js'
@@ -9,47 +9,65 @@ const treeIdParamSchema = z.object({
   id: z.string().min(1),
 })
 
-export const graphRoutes: FastifyPluginAsync = async (app) => {
-  app.get('/trees/:id/graph', async (request, reply) => {
-    const params = treeIdParamSchema.safeParse(request.params)
-    if (!params.success) {
-      return reply.code(400).send({ error: 'invalid_tree_id' })
+type ReadAccess =
+  | { ok: true; rootPersonId: string | null; visitKind: VisitAccessKind }
+  | { ok: false; status: number; error: string }
+
+// Qui peut lire un arbre : un accès par mot de passe de cet arbre, un membre, ou un compte avec qui il est
+// partagé. Utilisé par le graphe et par la frise de vie d'une personne.
+async function resolveReadAccess(app: FastifyInstance, actor: FastifyRequest['actor'], treeId: string): Promise<ReadAccess> {
+  let rootPersonId: string | null = null
+  let visitKind: VisitAccessKind = 'share'
+  if (!actor) {
+    return { ok: false, status: 401, error: 'authentication_required' }
+  }
+
+  if (actor.kind === 'tree_access') {
+    if (actor.treeId !== treeId) {
+      return { ok: false, status: 403, error: 'forbidden' }
     }
 
-    const treeId = params.data.id
-    const actor = request.actor
-    let rootPersonId: string | null = null
-    let visitKind: VisitAccessKind = 'share'
+    const tree = await app.prisma.tree.findFirst({
+      where: {
+        id: treeId,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        rootPersonId: true,
+      },
+    })
 
-    if (!actor) {
-      return reply.code(401).send({ error: 'authentication_required' })
+    if (!tree) {
+      return { ok: false, status: 404, error: 'tree_not_found' }
     }
 
-    if (actor.kind === 'tree_access') {
-      if (actor.treeId !== treeId) {
-        return reply.code(403).send({ error: 'forbidden' })
-      }
+    rootPersonId = tree.rootPersonId
+  }
 
-      const tree = await app.prisma.tree.findFirst({
-        where: {
-          id: treeId,
-          deletedAt: null,
+  if (actor.kind === 'user') {
+    const membership = await app.prisma.treeMembership.findUnique({
+      where: {
+        treeId_userId: {
+          treeId,
+          userId: actor.userId,
         },
-        select: {
-          id: true,
-          rootPersonId: true,
+      },
+      include: {
+        tree: {
+          select: {
+            deletedAt: true,
+            rootPersonId: true,
+          },
         },
-      })
+      },
+    })
 
-      if (!tree) {
-        return reply.code(404).send({ error: 'tree_not_found' })
-      }
-
-      rootPersonId = tree.rootPersonId
-    }
-
-    if (actor.kind === 'user') {
-      const membership = await app.prisma.treeMembership.findUnique({
+    if (membership && !membership.tree.deletedAt) {
+      rootPersonId = membership.tree.rootPersonId
+      visitKind = 'member'
+    } else {
+      const shared = await app.prisma.userTreeAccess.findUnique({
         where: {
           treeId_userId: {
             treeId,
@@ -66,35 +84,37 @@ export const graphRoutes: FastifyPluginAsync = async (app) => {
         },
       })
 
-      if (membership && !membership.tree.deletedAt) {
-        rootPersonId = membership.tree.rootPersonId
-        visitKind = 'member'
-      } else {
-        const shared = await app.prisma.userTreeAccess.findUnique({
-          where: {
-            treeId_userId: {
-              treeId,
-              userId: actor.userId,
-            },
-          },
-          include: {
-            tree: {
-              select: {
-                deletedAt: true,
-                rootPersonId: true,
-              },
-            },
-          },
-        })
-
-        if (!shared || shared.tree.deletedAt) {
-          return reply.code(403).send({ error: 'forbidden' })
-        }
-
-        rootPersonId = shared.tree.rootPersonId
-        visitKind = 'shared_account'
+      if (!shared || shared.tree.deletedAt) {
+        return { ok: false, status: 403, error: 'forbidden' }
       }
+
+      rootPersonId = shared.tree.rootPersonId
+      visitKind = 'shared_account'
     }
+  }
+
+  return { ok: true, rootPersonId, visitKind }
+}
+
+export const graphRoutes: FastifyPluginAsync = async (app) => {
+  app.get('/trees/:id/graph', async (request, reply) => {
+    const params = treeIdParamSchema.safeParse(request.params)
+    if (!params.success) {
+      return reply.code(400).send({ error: 'invalid_tree_id' })
+    }
+
+    const treeId = params.data.id
+    const actor = request.actor
+    let rootPersonId: string | null = null
+    let visitKind: VisitAccessKind = 'share'
+
+    const access = await resolveReadAccess(app, actor, treeId)
+    if (!access.ok || !actor) {
+      if (access.ok) return reply.code(401).send({ error: 'authentication_required' })
+      return reply.code(access.status).send({ error: access.error })
+    }
+    rootPersonId = access.rootPersonId
+    visitKind = access.visitKind
 
     // Journal des visites (onglet Visites des administrateurs), sans attendre
     void recordTreeVisit(app, request, treeId, visitKind, actor.kind === 'user' ? actor.userId : null)
@@ -146,6 +166,67 @@ export const graphRoutes: FastifyPluginAsync = async (app) => {
       graph,
       // Pour l'adresse des images (<img src> n'envoie pas la session) : lecture des médias de cet arbre seulement
       mediaToken: signMediaToken(app, treeId, actor),
+    })
+  })
+
+  // Frise de vie d'une personne : chargée à l'ouverture de la fiche plutôt que dans le graphe, qui resterait
+  // lourd sur un grand arbre. Mêmes droits de lecture que le graphe.
+  app.get('/trees/:id/persons/:personId/life', async (request, reply) => {
+    const params = z.object({ id: z.string().min(1), personId: z.string().min(1) }).safeParse(request.params)
+    if (!params.success) {
+      return reply.code(400).send({ error: 'invalid_params' })
+    }
+    const { id: treeId, personId } = params.data
+    const access = await resolveReadAccess(app, request.actor, treeId)
+    if (!access.ok) {
+      return reply.code(access.status).send({ error: access.error })
+    }
+
+    const person = await app.prisma.person.findFirst({
+      where: { id: personId, treeId, deletedAt: null },
+      select: {
+        id: true, birthDatePrecision: true, birthDateEnd: true, deathDatePrecision: true, deathDateEnd: true,
+        deathPlace: true, nickname: true,
+      },
+    })
+    if (!person) {
+      return reply.code(404).send({ error: 'person_not_found' })
+    }
+
+    const unions = await app.prisma.union.findMany({
+      where: { treeId, deletedAt: null, OR: [{ partner1PersonId: personId }, { partner2PersonId: personId }] },
+      select: { id: true, partner1PersonId: true, partner2PersonId: true, startDate: true, startPlace: true, startDatePrecision: true, endDate: true },
+      orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
+    })
+    const unionIds = unions.map((union) => union.id)
+    const events = await app.prisma.lifeEvent.findMany({
+      where: { treeId, deletedAt: null, OR: [{ personId }, ...(unionIds.length ? [{ unionId: { in: unionIds } }] : [])] },
+      select: {
+        id: true, personId: true, unionId: true, type: true, label: true, date: true, dateEnd: true, datePrecision: true,
+        dateText: true, place: true, description: true, notes: true, sources: true, displayOrder: true,
+      },
+      orderBy: [{ date: 'asc' }, { displayOrder: 'asc' }, { createdAt: 'asc' }],
+    })
+
+    const day = (value: Date | null) => (value ? value.toISOString().slice(0, 10) : null)
+    return reply.send({
+      person: {
+        birthDatePrecision: person.birthDatePrecision,
+        birthDateEnd: day(person.birthDateEnd),
+        deathDatePrecision: person.deathDatePrecision,
+        deathDateEnd: day(person.deathDateEnd),
+        deathPlace: person.deathPlace,
+        nickname: person.nickname,
+      },
+      unions: unions.map((union) => ({
+        id: union.id,
+        partnerId: union.partner1PersonId === personId ? union.partner2PersonId : union.partner1PersonId,
+        startDate: day(union.startDate),
+        startPlace: union.startPlace,
+        startDatePrecision: union.startDatePrecision,
+        endDate: day(union.endDate),
+      })),
+      events: events.map((event) => ({ ...event, date: day(event.date), dateEnd: day(event.dateEnd) })),
     })
   })
 }
