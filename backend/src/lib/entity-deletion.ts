@@ -32,7 +32,7 @@ export async function softDeletePersonCascade(
 
   await db.person.updateMany({
     where: { id: personId, treeId, deletedAt: null },
-    data: { deletedAt: now, updatedBy: actorUserId, avatarPath: null, avatarMimeType: null },
+    data: { deletedAt: now, updatedBy: actorUserId, avatarPath: null, avatarMimeType: null, immichPersonId: null },
   })
 
   const unions = await db.union.findMany({

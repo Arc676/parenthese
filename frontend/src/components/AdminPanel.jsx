@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Download, ImagePlus, Trash2, X } from 'lucide-react'
+import { Download, ImagePlus, Trash2, Unplug, X } from 'lucide-react'
 import './SettingsPanels.css'
 import {
   deleteTree,
@@ -10,6 +10,13 @@ import {
   updateTree,
   updateTreeSettings,
 } from '../api/treeApi'
+import {
+  checkImmichStatus,
+  fetchImmichConfig,
+  getImmichErrorMessage,
+  removeImmichConfig,
+  saveImmichConfig,
+} from '../api/immichApi.js'
 import PzBusy from './PzBusy.jsx'
 import TreeVisitsSection from './TreeVisitsSection.jsx'
 import { t } from '../i18n/index.js'
@@ -27,6 +34,7 @@ const AdminPanel = ({
   visible,
   treeId,
   authToken,
+  isAdmin = false,
   onClose,
   onTreeDeleted,
   onGedcomImported,
@@ -51,6 +59,15 @@ const AdminPanel = ({
   const [importingGedcom, setImportingGedcom] = useState(false)
   const gedcomInputRef = useRef(null)
 
+  // Connexion Immich propre à cet arbre : l'adresse se choisit parmi celles autorisées par
+  // l'opérateur du serveur, la clé n'est jamais relue et le champ vide la conserve.
+  const [immichConfig, setImmichConfig] = useState(null)
+  const [immichInstances, setImmichInstances] = useState([])
+  const [immichInstanceId, setImmichInstanceId] = useState('')
+  const [immichApiKey, setImmichApiKey] = useState('')
+  const [immichStatus, setImmichStatus] = useState(null) // null : inconnu, 'ok', sinon le motif
+  const [immichBusy, setImmichBusy] = useState(false)
+
   useEffect(() => {
     if (!visible || !treeId || !authToken) {
       return
@@ -66,6 +83,26 @@ const AdminPanel = ({
     setGedcomFile(null)
     setImportingGedcom(false)
 
+    setImmichConfig(null)
+    setImmichInstances([])
+    setImmichInstanceId('')
+    setImmichApiKey('')
+    setImmichStatus(null)
+    // Réservé aux administrateurs de l'arbre. Le panneau attend cette réponse avant de s'afficher :
+    // la section Immich n'apparaît pas après coup et la zone de suppression ne bouge pas.
+    const immichLoad = isAdmin
+      ? fetchImmichConfig(treeId, authToken)
+        .then(({ config, instances }) => {
+          if (!active) return
+          setImmichConfig(config)
+          setImmichInstances(instances)
+          setImmichInstanceId(instances.some((instance) => instance.id === config?.instanceId) ? config.instanceId : '')
+        })
+        .catch(() => {
+          // Configuration non chargée : la section Immich reste masquée
+        })
+      : Promise.resolve()
+
     fetchTreeSettings(treeId, authToken)
       .then((settings) => {
         if (!active || !settings) return
@@ -75,7 +112,7 @@ const AdminPanel = ({
         // Réglage non chargé : on laisse la valeur par défaut affichée
       })
 
-    getTree(treeId, authToken)
+    const treeLoad = getTree(treeId, authToken)
       .then((result) => {
         if (!active) return
         const loadedTree = result?.tree || null
@@ -87,14 +124,15 @@ const AdminPanel = ({
         if (!active) return
         setErrorMessage(t('Impossible de charger les paramètres de cet arbre.'))
       })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
+
+    Promise.all([treeLoad, immichLoad]).finally(() => {
+      if (active) setLoading(false)
+    })
 
     return () => {
       active = false
     }
-  }, [visible, treeId, authToken])
+  }, [visible, treeId, authToken, isAdmin])
 
   const handlePolicyChange = async (nextPolicy) => {
     if (!treeId || !authToken || savingPolicy || nextPolicy === contributionPolicy) return
@@ -250,6 +288,81 @@ const AdminPanel = ({
       setErrorMessage(t('Impossible de supprimer cet arbre.'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  // ── Connexion Immich de l'arbre ──────────────────────────────────────────────
+
+  const testImmichConnection = async () => {
+    if (!treeId || !authToken) return
+    setImmichStatus('testing')
+    try {
+      const status = await checkImmichStatus(treeId, authToken)
+      setImmichStatus(status?.available ? 'ok' : (status?.reason || 'unreachable'))
+    } catch (err) {
+      setImmichStatus('error')
+      setErrorMessage(getImmichErrorMessage(err, t))
+    }
+  }
+
+  const handleSaveImmichConfig = async (event) => {
+    event.preventDefault()
+    if (!treeId || !authToken || immichBusy) return
+
+    const instanceId = immichInstanceId
+    if (!instanceId) {
+      setErrorMessage(t('Choisissez l’instance Immich.'))
+      return
+    }
+    const apiKey = immichApiKey.trim()
+    // Changer d'instance réclame une nouvelle clé : l'ancienne n'est ni conservée ni envoyée
+    // au nouveau serveur.
+    const changingInstance = Boolean(immichConfig?.configured && immichConfig.instanceId && immichConfig.instanceId !== instanceId)
+    if (changingInstance && !apiKey) {
+      setErrorMessage(t('L’instance Immich change : indiquez la clé d’accès de la nouvelle instance, l’ancienne n’est pas conservée.'))
+      return
+    }
+    if (!immichConfig?.configured && !apiKey) {
+      setErrorMessage(t('Indiquez la clé d’accès à Immich pour la première configuration.'))
+      return
+    }
+
+    setImmichBusy(true)
+    setErrorMessage('')
+    setSuccessMessage('')
+    try {
+      const config = await saveImmichConfig(treeId, { instanceId, apiKey }, authToken)
+      setImmichConfig(config || { configured: true, instanceId, label: null, updatedAt: null })
+      setImmichApiKey('')
+      setSuccessMessage(t('Connexion Immich enregistrée.'))
+      await testImmichConnection()
+    } catch (err) {
+      setErrorMessage(getImmichErrorMessage(err, t))
+    } finally {
+      setImmichBusy(false)
+    }
+  }
+
+  const handleRemoveImmichConfig = async () => {
+    if (!treeId || !authToken || immichBusy || !(immichConfig?.configured || immichConfig?.keyNeedsReentry)) return
+    if (!window.confirm(t('Supprimer la connexion Immich de cet arbre ? La reconnaissance des visages sera désactivée.'))) {
+      return
+    }
+
+    setImmichBusy(true)
+    setErrorMessage('')
+    setSuccessMessage('')
+    try {
+      await removeImmichConfig(treeId, authToken)
+      setImmichConfig({ configured: false, instanceId: null, label: null, updatedAt: null })
+      setImmichInstanceId('')
+      setImmichApiKey('')
+      setImmichStatus(null)
+      setSuccessMessage(t('Connexion Immich supprimée.'))
+    } catch (err) {
+      setErrorMessage(getImmichErrorMessage(err, t))
+    } finally {
+      setImmichBusy(false)
     }
   }
 
@@ -423,6 +536,92 @@ const AdminPanel = ({
                       </button>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {section === 'danger' && immichInstances.length > 0 && (
+                <div className="ts-panel">
+                  <div className="ts-row">
+                    <div className="ts-row-text">
+                      <strong>{t('Reconnaissance des visages')}</strong>
+                      <p className="pz-small">{t('La connexion Immich est propre à cet arbre : ses administrateurs choisissent une instance autorisée par l’opérateur du serveur et fournissent leur propre clé d’accès.')}</p>
+                      <span className={`pz-tag ${immichConfig?.configured ? 'pz-tag--accent' : ''}`}>
+                        {immichConfig.configured
+                          ? t('Configurée')
+                          : immichConfig.keyNeedsReentry
+                            ? t('Clé à ressaisir')
+                            : t('Non configurée')}
+                      </span>
+                      {immichConfig?.keyNeedsReentry && (
+                        <span className="pz-small">
+                          {t('La clé enregistrée ne peut plus être lue (le secret du serveur a changé). Ressaisissez-la pour réactiver la connexion.')}
+                        </span>
+                      )}
+                      {immichConfig?.configured && (
+                        <span className="pz-small">
+                          {immichStatus === 'ok' && t('Instance joignable.')}
+                          {immichStatus === 'testing' && t('Test en cours…')}
+                          {immichStatus === 'not_configured' && t('Immich n’est pas configuré pour cet arbre.')}
+                          {immichStatus === 'unreachable' && t('Immich est injoignable.')}
+                          {immichStatus === 'error' && t('Test impossible.')}
+                          {(immichStatus === null || immichStatus === undefined) && t('Connexion non testée depuis l’ouverture.')}
+                        </span>
+                      )}
+                    </div>
+                    {immichConfig?.configured && (
+                      <div className="ts-row-actions">
+                        <button type="button" className="pz-btn pz-btn--secondary pz-btn--sm" onClick={testImmichConnection} disabled={immichBusy}>
+                          {t('Tester la connexion')}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <form className="ts-panel" onSubmit={handleSaveImmichConfig}>
+                    <div className="pz-field">
+                      <label htmlFor="immichInstance">{t('Instance Immich')}</label>
+                      <select
+                        id="immichInstance"
+                        value={immichInstanceId}
+                        onChange={(event) => setImmichInstanceId(event.target.value)}
+                        required
+                      >
+                        <option value="">{t('Choisir une instance…')}</option>
+                        {immichInstances.map((instance) => (
+                          <option key={instance.id} value={instance.id}>{instance.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="pz-field">
+                      <label htmlFor="immichApiKey">{t('Clé d’accès Immich')}</label>
+                      <input
+                        id="immichApiKey"
+                        type="password"
+                        value={immichApiKey}
+                        maxLength={512}
+                        autoComplete="new-password"
+                        onChange={(event) => setImmichApiKey(event.target.value)}
+                        placeholder={immichConfig?.configured
+                          ? (immichConfig.instanceId && immichInstanceId !== immichConfig.instanceId
+                              ? t('Clé d’accès de la nouvelle instance requise')
+                              : t('Laisser vide pour conserver la clé actuelle'))
+                          : t('Clé créée dans Immich (Paramètres > Clés d’API)')}
+                      />
+                    </div>
+
+                    <div className="ts-actions ts-row-actions">
+                      <button type="submit" className="pz-btn pz-btn--primary pz-btn--sm" disabled={immichBusy}>
+                        <PzBusy busy={immichBusy} busyLabel={t('Enregistrement en cours')}>{t('Enregistrer')}</PzBusy>
+                      </button>
+                      {(immichConfig?.configured || immichConfig?.keyNeedsReentry) && (
+                        <button type="button" className="pz-btn pz-btn--danger-ghost pz-btn--sm" onClick={handleRemoveImmichConfig} disabled={immichBusy}>
+                          <Unplug size={15} aria-hidden="true" />
+                          {t('Supprimer la connexion')}
+                        </button>
+                      )}
+                    </div>
+                  </form>
                 </div>
               )}
 

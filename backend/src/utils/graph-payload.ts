@@ -1,6 +1,7 @@
 import type { Annotation, MediaItem, ParentChildLink, Person, Union } from '@prisma/client'
 
 import { sanitizeAnnotationContentForRead } from '../lib/annotation-content.js'
+import { isImmichAvatarPath } from '../lib/media-files.js'
 
 export type GraphPayload = {
   persons: Array<{
@@ -17,6 +18,7 @@ export type GraphPayload = {
     avatarUrlPath: string | null
     sex: string | null
     notes: string | null
+    avatarFromImmich: boolean
   }>
   unions: Array<{
     id: string
@@ -90,6 +92,7 @@ export function buildGraphPayload(
         avatarUrlPath: person.avatarPath ? `/trees/${treeId}/persons/${person.id}/avatar` : null,
         sex: person.sex,
         notes: person.notes,
+        avatarFromImmich: isImmichAvatarPath(person.avatarPath),
       })),
     unions: unions.map((union) => ({
         id: union.id,

@@ -50,6 +50,10 @@ const envSchema = z.object({
   // Place disque par arbre, et part réservée aux envois de la famille en attente de relecture
   MEDIA_QUOTA_PER_TREE_MB: z.coerce.number().int().positive().default(5120),
   MEDIA_PENDING_QUOTA_PER_TREE_MB: z.coerce.number().int().positive().default(500),
+  // Instances Immich autorisées sur ce serveur, séparées par des virgules. Les administrateurs
+  // d'un arbre choisissent leur connexion parmi cette liste : sans elle, la reconnaissance
+  // des visages reste éteinte et le serveur ne peut pas servir de proxy vers un service interne.
+  IMMICH_ALLOWED_API_URLS: z.string().default(''),
 })
 
 export const env = envSchema.parse(process.env)
