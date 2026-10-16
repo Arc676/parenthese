@@ -1031,3 +1031,31 @@ describe('Immich integration: lien d’une fiche', () => {
     await app.close()
   })
 })
+
+describe('Immich integration: suppression logique d’une personne', () => {
+  it('clears the Immich link together with the portrait', async () => {
+    const { softDeletePersonCascade } = await import('../src/lib/entity-deletion.js')
+    const calls: Array<{ model: string; method: string; args: unknown }> = []
+    const model = (name: string) => ({
+      findFirst: async (args: unknown) => {
+        calls.push({ model: name, method: 'findFirst', args })
+        return { avatarPath: 'tree-1/person-1/immich-a.jpg' }
+      },
+      findMany: async () => [],
+      updateMany: async (args: unknown) => {
+        calls.push({ model: name, method: 'updateMany', args })
+        return { count: 0 }
+      },
+    })
+    const db = new Proxy({} as Record<string, unknown>, {
+      get: (_target, name: string) => model(name),
+    }) as never
+
+    await softDeletePersonCascade(db, 'tree-1', 'person-1', 'user-1', new Date('2026-10-16T00:00:00Z'))
+
+    const personUpdate = calls.find((call) => call.model === 'person' && call.method === 'updateMany')
+    expect(personUpdate?.args).toMatchObject({
+      data: { deletedAt: new Date('2026-10-16T00:00:00Z'), avatarPath: null, immichPersonId: null },
+    })
+  })
+})
