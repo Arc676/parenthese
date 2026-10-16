@@ -110,6 +110,7 @@ beforeEach(async () => {
     update?: { apiUrl: string }
   }) => ({
     apiUrl: args.create?.apiUrl ?? args.update?.apiUrl,
+    apiKeyEnc: args.create?.apiKeyEnc ?? args.update?.apiKeyEnc,
     updatedAt: new Date(),
   }))
   prismaMock.treeImmichConfig.deleteMany.mockResolvedValue({ count: 1 })
@@ -142,6 +143,63 @@ describe('Immich configuration: read', () => {
     await app.close()
   })
 
+  it('asks for the key again when it no longer decrypts, instead of reporting it configured', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    // Clé chiffrée avec un autre secret (JWT_SECRET changé) : illisible.
+    prismaMock.treeImmichConfig.findUnique.mockResolvedValue({
+      apiUrl: 'http://immich-tree-1.test',
+      // Octets aléatoires au bon format : le déchiffrement échoue (authentification GCM).
+      apiKeyEnc: `v1:${Buffer.alloc(64, 7).toString('base64')}`,
+      updatedAt: new Date('2026-10-01T00:00:00Z'),
+    })
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/trees/tree-1/immich/config',
+      headers: { authorization: `Bearer ${token}` },
+    })
+
+    expect(response.json().config).toEqual({
+      configured: false,
+      keyNeedsReentry: true,
+      instanceId: 'c2ec51abd0edebf3',
+      label: 'immich-tree-1.test',
+      updatedAt: '2026-10-01T00:00:00.000Z',
+    })
+
+    // La connexion ne sert à rien tant que la clé n'est pas ressaisie.
+    const status = await app.inject({
+      method: 'GET',
+      url: '/trees/tree-1/immich/status',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(status.json()).toEqual({ available: false, reason: 'not_configured' })
+    await app.close()
+  })
+
+  it('refuses to keep an unreadable key when the address is saved again', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    prismaMock.treeImmichConfig.findUnique.mockResolvedValueOnce({
+      apiUrl: 'http://immich-tree-1.test',
+      apiKeyEnc: 'v1:ce-texte-ne-se-dechiffre-pas',
+      updatedAt: new Date('2026-10-01T00:00:00Z'),
+    })
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/trees/tree-1/immich/config',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { instanceId: 'c2ec51abd0edebf3' },
+    })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toEqual({ error: 'api_key_required' })
+    expect(prismaMock.treeImmichConfig.upsert).not.toHaveBeenCalled()
+    await app.close()
+  })
+
   it('reports a tree without a configuration row as not configured', async () => {
     const app = createApp()
     const token = await createUserToken(app)
@@ -155,7 +213,7 @@ describe('Immich configuration: read', () => {
 
     // Un arbre fraîchement créé n'a pas de ligne : rien de configuré, rien d'hérité.
     expect(response.statusCode).toBe(200)
-    expect(response.json().config).toEqual({ configured: false, instanceId: null, label: null, updatedAt: null })
+    expect(response.json().config).toEqual({ configured: false, keyNeedsReentry: false, instanceId: null, label: null, updatedAt: null })
     expect(response.json().instances).toEqual([
       { id: 'c2ec51abd0edebf3', label: 'immich-tree-1.test' },
       { id: '0715d0c35f2b0405', label: 'immich-tree-2.test' },
@@ -334,7 +392,7 @@ describe('Immich configuration: removal', () => {
     })
 
     expect(response.statusCode).toBe(200)
-    expect(response.json().config).toEqual({ configured: false, instanceId: null, label: null, updatedAt: null })
+    expect(response.json().config).toEqual({ configured: false, keyNeedsReentry: false, instanceId: null, label: null, updatedAt: null })
     expect(prismaMock.treeImmichConfig.deleteMany).toHaveBeenCalledWith({ where: { treeId: 'tree-1' } })
     expect(prismaMock.auditLog.create).toHaveBeenCalledWith({
       data: {
@@ -480,7 +538,7 @@ describe('Immich configuration: operator allowlist', () => {
       headers: { authorization: `Bearer ${token}` },
     })
     expect(config.statusCode).toBe(200)
-    expect(config.json().config).toEqual({ configured: false, instanceId: null, label: null, updatedAt: null })
+    expect(config.json().config).toEqual({ configured: false, keyNeedsReentry: false, instanceId: null, label: null, updatedAt: null })
 
     const status = await app.inject({
       method: 'GET',

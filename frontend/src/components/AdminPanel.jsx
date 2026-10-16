@@ -338,7 +338,7 @@ const AdminPanel = ({
   }
 
   const handleRemoveImmichConfig = async () => {
-    if (!treeId || !authToken || immichBusy || !immichConfig?.configured) return
+    if (!treeId || !authToken || immichBusy || !(immichConfig?.configured || immichConfig?.keyNeedsReentry)) return
     if (!window.confirm(t('Supprimer la connexion Immich de cet arbre ? La reconnaissance des visages sera désactivée.'))) {
       return
     }
@@ -545,8 +545,15 @@ const AdminPanel = ({
                           ? t('État inconnu')
                           : immichConfig.configured
                             ? t('Configurée')
-                            : t('Non configurée')}
+                            : immichConfig.keyNeedsReentry
+                              ? t('Clé à ressaisir')
+                              : t('Non configurée')}
                       </span>
+                      {immichConfig?.keyNeedsReentry && (
+                        <span className="pz-small">
+                          {t('La clé enregistrée ne peut plus être lue (le secret du serveur a changé). Ressaisissez-la pour réactiver la connexion.')}
+                        </span>
+                      )}
                       {immichConfig?.configured && (
                         <span className="pz-small">
                           {immichStatus === 'ok' && t('Instance joignable.')}
@@ -611,7 +618,7 @@ const AdminPanel = ({
                       <button type="submit" className="pz-btn pz-btn--primary pz-btn--sm" disabled={immichBusy}>
                         <PzBusy busy={immichBusy} busyLabel={t('Enregistrement en cours')}>{t('Enregistrer')}</PzBusy>
                       </button>
-                      {immichConfig?.configured && (
+                      {(immichConfig?.configured || immichConfig?.keyNeedsReentry) && (
                         <button type="button" className="pz-btn pz-btn--danger-ghost pz-btn--sm" onClick={handleRemoveImmichConfig} disabled={immichBusy}>
                           <Unplug size={15} aria-hidden="true" />
                           {t('Supprimer la connexion')}

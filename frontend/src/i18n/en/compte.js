@@ -129,6 +129,8 @@ export default {
   'État inconnu': 'Unknown state',
   'Configurée': 'Configured',
   'Non configurée': 'Not configured',
+  'Clé à ressaisir': 'Key to re-enter',
+  'La clé enregistrée ne peut plus être lue (le secret du serveur a changé). Ressaisissez-la pour réactiver la connexion.': 'The saved key can no longer be read (the server secret changed). Enter it again to reactivate the connection.',
   'Instance joignable.': 'Instance reachable.',
   'Test en cours…': 'Testing…',
   'Test impossible.': 'Test failed.',

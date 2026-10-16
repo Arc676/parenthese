@@ -15,7 +15,7 @@ import {
   ImmichUnavailableError,
   type ImmichPersonSummary,
 } from '../lib/immich.js'
-import { encryptImmichApiKey } from '../lib/immich-secret.js'
+import { decryptImmichApiKey, encryptImmichApiKey } from '../lib/immich-secret.js'
 import { InvalidMediaError, isImmichAvatarPath, removeStoredFile, sniffMimeType } from '../lib/media-files.js'
 import { exceedsStorageQuota, getStorageRoot, prepareUploadedFile, requireAdminMembership } from './media.js'
 
@@ -71,13 +71,21 @@ function replyImmichError(request: FastifyRequest, reply: FastifyReply, error: u
 
 // Métadonnées sûres d'une connexion Immich d'arbre : jamais la clé, jamais son chiffré, jamais
 // l'adresse (l'instance se nomme par son libellé). Une adresse sortie de la liste de l'opérateur
-// vaut « non configuré » : la connexion est inerte.
-function immichConfigSummary(config: { apiUrl: string; updatedAt: Date } | null) {
+// vaut « non configuré » : la connexion est inerte. Une clé qui ne se déchiffre plus (JWT_SECRET
+// changé) vaut aussi « non configuré », avec keyNeedsReentry : l'administrateur doit la ressaisir.
+function immichConfigSummary(config: { apiUrl: string; apiKeyEnc: string; updatedAt: Date } | null) {
   const instance = config ? getImmichInstanceByApiUrl(config.apiUrl) : undefined
   if (!config || !instance) {
-    return { configured: false, instanceId: null, label: null, updatedAt: null }
+    return { configured: false, keyNeedsReentry: false, instanceId: null, label: null, updatedAt: null }
   }
-  return { configured: true, instanceId: instance.id, label: instance.label, updatedAt: config.updatedAt }
+  const keyReadable = decryptImmichApiKey(config.apiKeyEnc) !== null
+  return {
+    configured: keyReadable,
+    keyNeedsReentry: !keyReadable,
+    instanceId: instance.id,
+    label: instance.label,
+    updatedAt: config.updatedAt,
+  }
 }
 
 // Portraits venus d'Immich : même nommage que les envois manuels (« avatar-<uuid> »), avec le
@@ -107,7 +115,7 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
 
     const config = await app.prisma.treeImmichConfig.findUnique({
       where: { treeId: params.data.id },
-      select: { apiUrl: true, updatedAt: true },
+      select: { apiUrl: true, apiKeyEnc: true, updatedAt: true },
     })
 
     return reply.send({
@@ -150,8 +158,9 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
     })
 
     // Sans nouvelle clé, la clé en place est conservée — mais il en faut une pour une
-    // première configuration : on ne devine jamais d'identifiants ailleurs.
-    if (!payload.data.apiKey && !existing) {
+    // première configuration, et quand celle en place ne se déchiffre plus : on ne devine
+    // jamais d'identifiants ailleurs.
+    if (!payload.data.apiKey && (!existing || !decryptImmichApiKey(existing.apiKeyEnc))) {
       return reply.code(400).send({ error: 'api_key_required' })
     }
 
@@ -170,7 +179,7 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
       where: { treeId },
       create: { treeId, apiUrl: instance.apiUrl, apiKeyEnc },
       update: { apiUrl: instance.apiUrl, apiKeyEnc },
-      select: { apiUrl: true, updatedAt: true },
+      select: { apiUrl: true, apiKeyEnc: true, updatedAt: true },
     })
 
     // Journal d'audit : jamais la clé, seulement le fait qu'elle a changé.
@@ -220,7 +229,7 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
       })
     }
 
-    return reply.send({ config: { configured: false, instanceId: null, label: null, updatedAt: null } })
+    return reply.send({ config: { configured: false, keyNeedsReentry: false, instanceId: null, label: null, updatedAt: null } })
   })
 
   app.get('/trees/:id/immich/status', async (request, reply) => {

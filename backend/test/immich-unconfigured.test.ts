@@ -92,7 +92,7 @@ describe('Immich integration: tree without configuration', () => {
       headers: { authorization: `Bearer ${token}` },
     })
     expect(config.statusCode).toBe(200)
-    expect(config.json().config).toEqual({ configured: false, instanceId: null, label: null, updatedAt: null })
+    expect(config.json().config).toEqual({ configured: false, keyNeedsReentry: false, instanceId: null, label: null, updatedAt: null })
     // Aucune instance autorisée par l'opérateur : le menu des adresses est vide.
     expect(config.json().instances).toEqual([])
 
