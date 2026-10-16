@@ -34,6 +34,7 @@ const AdminPanel = ({
   visible,
   treeId,
   authToken,
+  isAdmin = false,
   onClose,
   onTreeDeleted,
   onGedcomImported,
@@ -87,16 +88,20 @@ const AdminPanel = ({
     setImmichInstanceId('')
     setImmichApiKey('')
     setImmichStatus(null)
-    fetchImmichConfig(treeId, authToken)
-      .then(({ config, instances }) => {
-        if (!active) return
-        setImmichConfig(config)
-        setImmichInstances(instances)
-        setImmichInstanceId(instances.some((instance) => instance.id === config?.instanceId) ? config.instanceId : '')
-      })
-      .catch(() => {
-        // Configuration non chargée : l'onglet Immich affichera l'état inconnu
-      })
+    // Réservé aux administrateurs de l'arbre. Le panneau attend cette réponse avant de s'afficher :
+    // la section Immich n'apparaît pas après coup et la zone de suppression ne bouge pas.
+    const immichLoad = isAdmin
+      ? fetchImmichConfig(treeId, authToken)
+        .then(({ config, instances }) => {
+          if (!active) return
+          setImmichConfig(config)
+          setImmichInstances(instances)
+          setImmichInstanceId(instances.some((instance) => instance.id === config?.instanceId) ? config.instanceId : '')
+        })
+        .catch(() => {
+          // Configuration non chargée : la section Immich reste masquée
+        })
+      : Promise.resolve()
 
     fetchTreeSettings(treeId, authToken)
       .then((settings) => {
@@ -107,7 +112,7 @@ const AdminPanel = ({
         // Réglage non chargé : on laisse la valeur par défaut affichée
       })
 
-    getTree(treeId, authToken)
+    const treeLoad = getTree(treeId, authToken)
       .then((result) => {
         if (!active) return
         const loadedTree = result?.tree || null
@@ -119,14 +124,15 @@ const AdminPanel = ({
         if (!active) return
         setErrorMessage(t('Impossible de charger les paramètres de cet arbre.'))
       })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
+
+    Promise.all([treeLoad, immichLoad]).finally(() => {
+      if (active) setLoading(false)
+    })
 
     return () => {
       active = false
     }
-  }, [visible, treeId, authToken])
+  }, [visible, treeId, authToken, isAdmin])
 
   const handlePolicyChange = async (nextPolicy) => {
     if (!treeId || !authToken || savingPolicy || nextPolicy === contributionPolicy) return
@@ -388,7 +394,6 @@ const AdminPanel = ({
           <button type="button" role="tab" aria-selected={section === 'tree'} className="pz-tab" onClick={() => setSection('tree')}>{t('Votre arbre')}</button>
           <button type="button" role="tab" aria-selected={section === 'visits'} className="pz-tab" onClick={() => setSection('visits')}>{t('Visites')}</button>
           <button type="button" role="tab" aria-selected={section === 'data'} className="pz-tab" onClick={() => setSection('data')}>{t('Données')}</button>
-          <button type="button" role="tab" aria-selected={section === 'immich'} className="pz-tab" onClick={() => setSection('immich')}>{t('Immich')}</button>
           <button type="button" role="tab" aria-selected={section === 'danger'} className="pz-tab" onClick={() => setSection('danger')}>{t('Avancé')}</button>
         </div>
 
@@ -534,20 +539,18 @@ const AdminPanel = ({
                 </div>
               )}
 
-              {section === 'immich' && (
+              {section === 'danger' && immichInstances.length > 0 && (
                 <div className="ts-panel">
                   <div className="ts-row">
                     <div className="ts-row-text">
                       <strong>{t('Reconnaissance des visages')}</strong>
                       <p className="pz-small">{t('La connexion Immich est propre à cet arbre : ses administrateurs choisissent une instance autorisée par l’opérateur du serveur et fournissent leur propre clé d’accès.')}</p>
                       <span className={`pz-tag ${immichConfig?.configured ? 'pz-tag--accent' : ''}`}>
-                        {immichConfig === null
-                          ? t('État inconnu')
-                          : immichConfig.configured
-                            ? t('Configurée')
-                            : immichConfig.keyNeedsReentry
-                              ? t('Clé à ressaisir')
-                              : t('Non configurée')}
+                        {immichConfig.configured
+                          ? t('Configurée')
+                          : immichConfig.keyNeedsReentry
+                            ? t('Clé à ressaisir')
+                            : t('Non configurée')}
                       </span>
                       {immichConfig?.keyNeedsReentry && (
                         <span className="pz-small">
@@ -574,13 +577,6 @@ const AdminPanel = ({
                     )}
                   </div>
 
-                  {immichInstances.length === 0 ? (
-                    <p className="pz-small">
-                      {immichConfig === null
-                        ? t('État inconnu')
-                        : t('Aucune instance Immich n’est autorisée par l’opérateur de ce serveur. La reconnaissance des visages reste désactivée.')}
-                    </p>
-                  ) : (
                   <form className="ts-panel" onSubmit={handleSaveImmichConfig}>
                     <div className="pz-field">
                       <label htmlFor="immichInstance">{t('Instance Immich')}</label>
@@ -626,7 +622,6 @@ const AdminPanel = ({
                       )}
                     </div>
                   </form>
-                  )}
                 </div>
               )}
 

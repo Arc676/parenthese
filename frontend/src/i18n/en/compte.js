@@ -123,10 +123,8 @@ export default {
   "Dernière vérification": "Final check",
   "Supprimer « {name} »": "Delete “{name}”",
   "Tapez le nom exact de l'arbre pour confirmer.": "Type the exact name of the tree to confirm.",
-  // Onglet Immich (AdminPanel, connexion Immich propre à l'arbre)
-  'Immich': 'Immich',
+  // Section Immich dans l'onglet Avancé (AdminPanel)
   'La connexion Immich est propre à cet arbre : ses administrateurs choisissent une instance autorisée par l’opérateur du serveur et fournissent leur propre clé d’accès.': 'The Immich connection belongs to this tree: its administrators pick an instance authorized by the server operator and provide their own access key.',
-  'État inconnu': 'Unknown state',
   'Configurée': 'Configured',
   'Non configurée': 'Not configured',
   'Clé à ressaisir': 'Key to re-enter',
@@ -139,7 +137,6 @@ export default {
   'Instance Immich': 'Immich instance',
   'Choisir une instance…': 'Choose an instance…',
   'Choisissez l’instance Immich.': 'Choose the Immich instance.',
-  'Aucune instance Immich n’est autorisée par l’opérateur de ce serveur. La reconnaissance des visages reste désactivée.': 'No Immich instance has been authorized by this server’s operator. Face recognition stays disabled.',
   'Clé d’accès Immich': 'Immich access key',
   'Laisser vide pour conserver la clé actuelle': 'Leave empty to keep the current key',
   'Clé d’accès de la nouvelle instance requise': 'New instance access key required',

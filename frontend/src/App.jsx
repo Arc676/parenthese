@@ -2932,6 +2932,7 @@ function App() {
         visible={adminPanelVisible}
         treeId={tree.treeContext.treeId}
         authToken={tree.treeContext.accessToken}
+        isAdmin={userRole.isAdmin}
         onTreeDeleted={handleTreeDeleted}
         onGedcomImported={handleGedcomImported}
         onOpenPhotoStart={() => { setAdminPanelVisible(false); openPhotoStart() }}
