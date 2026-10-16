@@ -5,6 +5,7 @@ import { persons as treePersons } from '../data/mockData'
 import { Check, ChevronDown, Copy, RefreshCw, X } from 'lucide-react'
 import './SettingsPanels.css'
 import PzBusy from './PzBusy.jsx'
+import { describePositionChange } from './galaxy/layoutPositions.js'
 import { HELP_URL } from '../utils/siteLinks.js'
 import { t, dateLocale } from '../i18n/index.js'
 
@@ -130,7 +131,7 @@ function getFieldRows(change) {
   if (!after || typeof after !== 'object') return []
   const before = (change.beforeJson && typeof change.beforeJson === 'object') ? change.beforeJson : null
 
-  return Object.entries(after)
+  const rows = Object.entries(after)
     .filter(([key]) => PERSON_FIELD_LABELS[key])
     .map(([key, newVal]) => ({
       key,
@@ -142,6 +143,8 @@ function getFieldRows(change) {
       if (oldVal !== undefined) return true
       return newVal !== null && newVal !== undefined && newVal !== ''
     })
+  const layoutRow = describePositionChange(before, after)
+  return layoutRow ? [...rows, layoutRow] : rows
 }
 
 function getAnnotationPreview(change, treeId) {
