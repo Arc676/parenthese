@@ -75,3 +75,13 @@ describe('sizeBucket', () => {
     expect([0, 3, 12, 80, 450, 2697].map(sizeBucket)).toEqual(['0', '1-9', '10-49', '50-199', '200-999', '1000+'])
   })
 })
+
+describe('souvenirs cités par le logiciel', () => {
+  it('garde la légende et la source avec le fichier retrouvé', () => {
+    const refs = [{ personId: 'a', file: 'C:\\Heredis\\Médias\\Naissance Ragot.jpg', caption: 'Naissance Ragot', source: 'Registre des naissances, Acte n° 12' }]
+    const { matches } = matchPhotoFiles(refs, [file('Naissance Ragot.jpg', 'Médias/Naissance Ragot.jpg')])
+    expect(matches).toHaveLength(1)
+    expect(matches[0]).toMatchObject({ personId: 'a', caption: 'Naissance Ragot', source: 'Registre des naissances, Acte n° 12' })
+    expect(matches[0].file.name).toBe('Naissance Ragot.jpg')
+  })
+})
