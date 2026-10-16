@@ -514,6 +514,124 @@ describe('API security and authz', () => {
     await app.close()
   })
 
+  describe('PUT /trees/:id/links/order', () => {
+    const siblingLinks = [
+      { id: 'link-a1', parentPersonId: 'father', childPersonId: 'anne' },
+      { id: 'link-a2', parentPersonId: 'mother', childPersonId: 'anne' },
+      { id: 'link-h1', parentPersonId: 'father', childPersonId: 'hugo' },
+      { id: 'link-h2', parentPersonId: 'mother', childPersonId: 'hugo' },
+    ]
+    const order = [
+      { childId: 'hugo', linkIds: ['link-h1', 'link-h2'] },
+      { childId: 'anne', linkIds: ['link-a1', 'link-a2'] },
+    ]
+
+    it('rewrites the order of a sibling group in one transaction', async () => {
+      const app = createApp()
+      const token = await createUserToken(app)
+      prismaMock.parentChildLink.findMany.mockResolvedValue(siblingLinks)
+      prismaMock.$transaction.mockResolvedValue([])
+
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/trees/tree-1/links/order',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { order },
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
+      expect(prismaMock.parentChildLink.updateMany).toHaveBeenNthCalledWith(1, {
+        where: { id: { in: ['link-h1', 'link-h2'] }, treeId: 'tree-1', deletedAt: null },
+        data: { displayOrder: 1 },
+      })
+      expect(prismaMock.parentChildLink.updateMany).toHaveBeenNthCalledWith(2, {
+        where: { id: { in: ['link-a1', 'link-a2'] }, treeId: 'tree-1', deletedAt: null },
+        data: { displayOrder: 2 },
+      })
+      expect(prismaMock.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ action: 'children_reordered', payloadJson: { childIds: ['hugo', 'anne'] } }),
+      }))
+      await app.close()
+    })
+
+    it('forbids a member who is not admin', async () => {
+      const app = createApp()
+      const token = await createUserToken(app)
+      prismaMock.treeMembership.findUnique.mockResolvedValue({
+        treeId: 'tree-1',
+        userId: 'user-1',
+        role: 'member',
+        tree: { deletedAt: null, rootPersonId: null },
+      })
+
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/trees/tree-1/links/order',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { order },
+      })
+
+      expect(response.statusCode).toBe(403)
+      expect(prismaMock.$transaction).not.toHaveBeenCalled()
+      await app.close()
+    })
+
+    it('refuses links that do not belong to the tree', async () => {
+      const app = createApp()
+      const token = await createUserToken(app)
+      prismaMock.parentChildLink.findMany.mockResolvedValue(siblingLinks.slice(0, 3))
+
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/trees/tree-1/links/order',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { order },
+      })
+
+      expect(response.statusCode).toBe(404)
+      expect(prismaMock.$transaction).not.toHaveBeenCalled()
+      await app.close()
+    })
+
+    it('refuses a link sent for the wrong child', async () => {
+      const app = createApp()
+      const token = await createUserToken(app)
+      prismaMock.parentChildLink.findMany.mockResolvedValue([siblingLinks[0], siblingLinks[2]])
+
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/trees/tree-1/links/order',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { order: [{ childId: 'hugo', linkIds: ['link-a1'] }, { childId: 'anne', linkIds: ['link-h1'] }] },
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(response.json()).toEqual({ error: 'invalid_link_reference' })
+      await app.close()
+    })
+
+    it('refuses children who share no parent', async () => {
+      const app = createApp()
+      const token = await createUserToken(app)
+      prismaMock.parentChildLink.findMany.mockResolvedValue([
+        { id: 'link-x', parentPersonId: 'father', childPersonId: 'anne' },
+        { id: 'link-y', parentPersonId: 'stranger', childPersonId: 'hugo' },
+      ])
+
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/trees/tree-1/links/order',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { order: [{ childId: 'anne', linkIds: ['link-x'] }, { childId: 'hugo', linkIds: ['link-y'] }] },
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(response.json()).toEqual({ error: 'not_siblings' })
+      await app.close()
+    })
+  })
+
   it('forbids member from patching person records', async () => {
     const app = createApp()
     const token = await createUserToken(app)

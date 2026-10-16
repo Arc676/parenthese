@@ -289,6 +289,27 @@ components:
         displayOrder:
           type: integer
       required: [parentPersonId, childPersonId]
+    ChildrenOrderRequest:
+      type: object
+      required: [order]
+      properties:
+        order:
+          type: array
+          minItems: 2
+          maxItems: 200
+          description: Children in the wanted order, each with the links that attach it to its parents
+          items:
+            type: object
+            required: [childId, linkIds]
+            properties:
+              childId:
+                type: string
+              linkIds:
+                type: array
+                minItems: 1
+                maxItems: 4
+                items:
+                  type: string
     PatchParentChildLinkRequest:
       type: object
       properties:
@@ -1541,6 +1562,51 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /trees/{id}/links/order:
+    put:
+      tags: [Trees]
+      summary: Reorder siblings (rewrites displayOrder of their parent-child links)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChildrenOrderRequest'
+      responses:
+        '200':
+          description: Order saved
+        '400':
+          description: Invalid payload, links that do not belong to their child, or children without a shared parent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Link not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /trees/{id}/links/{linkId}:
     patch:
       tags: [Trees]
