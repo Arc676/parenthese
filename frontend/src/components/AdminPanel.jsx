@@ -20,6 +20,7 @@ import {
 import PzBusy from './PzBusy.jsx'
 import TreeVisitsSection from './TreeVisitsSection.jsx'
 import { t } from '../i18n/index.js'
+import { readGedcomFile } from '../utils/gedcomText.js'
 
 function normalizeSlug(value) {
   return String(value || '')
@@ -219,12 +220,8 @@ const AdminPanel = ({
     }
   }
 
-  const readFileAsText = (file) => new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result || ''))
-    reader.onerror = () => reject(new Error('read_failed'))
-    reader.readAsText(file)
-  })
+  // Lu avec le bon encodage (ANSI de Heredis, ANSEL, Mac…), sinon les accents arrivent cassés
+  const readFileAsText = async (file) => (await readGedcomFile(file)).text
 
   const handleImportGedcom = async () => {
     if (!treeId || !authToken || saving || !gedcomFile) {

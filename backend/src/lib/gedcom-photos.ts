@@ -7,6 +7,7 @@ export type GedcomPhotoNode = {
   xref?: string
   tag: string
   value: string
+  rawValue?: string
   children: GedcomPhotoNode[]
 }
 
@@ -124,10 +125,10 @@ export function localMediaPath(value: string): string | null {
 
 function joinedText(node: GedcomPhotoNode | undefined): string {
   if (!node) return ''
-  let text = node.value
+  let text = node.rawValue ?? node.value
   for (const c of node.children) {
-    if (c.tag === 'CONT') text += `\n${c.value}`
-    else if (c.tag === 'CONC') text += c.value
+    if (c.tag === 'CONT') text += `\n${c.rawValue ?? c.value}`
+    else if (c.tag === 'CONC') text += c.rawValue ?? c.value
   }
   return text
 }
