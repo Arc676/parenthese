@@ -46,6 +46,7 @@ import {
   uploadAnnotationPhoto,
   reorderSiblings,
 } from './api/treeApi'
+import { getImmichErrorMessage, unassignImmichPerson } from './api/immichApi.js'
 import { useAuth } from './hooks/useAuth'
 import { useTreeAccess, getTreeTokenStorageKey, getSlugFromPathname, readTreeAccessRole, TREE_ID_FROM_ENV } from './hooks/useTreeAccess'
 import { useMediaManager } from './hooks/useMediaManager'
@@ -1567,18 +1568,33 @@ function App() {
     }
   }, [auth.userAuth.token, tree.treeContext.accessToken, tree.treeContext.treeId, refreshTreeAndKeepSelection])
 
-  const handlePersonAvatarDelete = useCallback(async (personId) => {
+  // Visage venu d'Immich : recharger l'arbre pour montrer le nouveau portrait (ou le portrait restant)
+  const handleImmichChange = useCallback(async (personId) => {
+    await refreshTreeAndKeepSelection(personId, { relayout: false, avatarCacheBust: Date.now() })
+  }, [refreshTreeAndKeepSelection])
+
+  const handlePersonAvatarDelete = useCallback(async (personId, avatarFromImmich = false) => {
     const accessToken = tree.treeContext.accessToken || auth.userAuth.token
     if (!accessToken || !tree.treeContext.treeId) return
 
     setAvatarActionState({ loading: true, error: '' })
 
     try {
-      await deletePersonAvatar(tree.treeContext.treeId, personId, accessToken)
-      await refreshTreeAndKeepSelection(personId, { relayout: true })
+      // Portrait venu d'Immich : le désassignement retire le portrait et l'association d'un
+      // coup ; la suppression seule laisserait une association pendante en base.
+      if (avatarFromImmich) {
+        await unassignImmichPerson(tree.treeContext.treeId, personId, accessToken)
+        await refreshTreeAndKeepSelection(personId, { relayout: false, avatarCacheBust: Date.now() })
+      } else {
+        await deletePersonAvatar(tree.treeContext.treeId, personId, accessToken)
+        await refreshTreeAndKeepSelection(personId, { relayout: true })
+      }
       setAvatarActionState({ loading: false, error: '' })
     } catch (error) {
-      setAvatarActionState({ loading: false, error: getAccountErrorMessage(error) })
+      setAvatarActionState({
+        loading: false,
+        error: avatarFromImmich ? getImmichErrorMessage(error, t) : getAccountErrorMessage(error),
+      })
     }
   }, [auth.userAuth.token, tree.treeContext.accessToken, tree.treeContext.treeId, refreshTreeAndKeepSelection])
 
@@ -2881,6 +2897,9 @@ function App() {
           onManageMedia={media.handleOpenMediaManager}
           onAvatarUpload={tree.canEditCurrentTree ? handlePersonAvatarUpload : undefined}
           onAvatarDelete={tree.canEditCurrentTree ? handlePersonAvatarDelete : undefined}
+          treeId={tree.treeContext.treeId || null}
+          immichToken={tree.treeContext.accessToken || auth.userAuth.token}
+          onImmichChange={tree.canEditCurrentTree ? handleImmichChange : undefined}
           avatarActionLoading={avatarActionState.loading}
           avatarActionError={avatarActionState.error}
           isAdmin={userRole.isAdmin}
@@ -2949,6 +2968,7 @@ function App() {
         visible={adminPanelVisible}
         treeId={tree.treeContext.treeId}
         authToken={tree.treeContext.accessToken}
+        isAdmin={userRole.isAdmin}
         onTreeDeleted={handleTreeDeleted}
         onGedcomImported={handleGedcomImported}
         onOpenPhotoStart={() => { setAdminPanelVisible(false); openPhotoStart() }}
