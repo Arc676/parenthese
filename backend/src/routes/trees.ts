@@ -2023,7 +2023,7 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
 
     const links = await app.prisma.parentChildLink.findMany({
       where: { id: { in: linkIds }, treeId: params.data.id, deletedAt: null },
-      select: { id: true, parentPersonId: true, childPersonId: true },
+      select: { id: true, parentPersonId: true, childPersonId: true, viaUnionId: true },
     })
     const linkById = new Map(links.map((link) => [link.id, link]))
     if (links.length !== linkIds.length) {
@@ -2048,13 +2048,21 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: 'not_siblings' })
     }
 
+    // L'arbre ne montre qu'un lien par enfant et par union : le lien vers l'autre parent de la même union
+    // prend le même ordre, pour que les deux restent d'accord
     await app.prisma.$transaction(
-      payload.data.order.map((entry, index) =>
-        app.prisma.parentChildLink.updateMany({
-          where: { id: { in: entry.linkIds }, treeId: params.data.id, deletedAt: null },
+      payload.data.order.map((entry, index) => {
+        const unionIds = [...new Set(entry.linkIds.map((id) => linkById.get(id)?.viaUnionId).filter((id): id is string => Boolean(id)))]
+        return app.prisma.parentChildLink.updateMany({
+          where: {
+            treeId: params.data.id,
+            deletedAt: null,
+            childPersonId: entry.childId,
+            OR: [{ id: { in: entry.linkIds } }, ...(unionIds.length ? [{ viaUnionId: { in: unionIds } }] : [])],
+          },
           data: { displayOrder: index + 1 },
-        }),
-      ),
+        })
+      }),
     )
 
     await app.prisma.auditLog.create({

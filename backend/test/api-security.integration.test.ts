@@ -516,10 +516,10 @@ describe('API security and authz', () => {
 
   describe('PUT /trees/:id/links/order', () => {
     const siblingLinks = [
-      { id: 'link-a1', parentPersonId: 'father', childPersonId: 'anne' },
-      { id: 'link-a2', parentPersonId: 'mother', childPersonId: 'anne' },
-      { id: 'link-h1', parentPersonId: 'father', childPersonId: 'hugo' },
-      { id: 'link-h2', parentPersonId: 'mother', childPersonId: 'hugo' },
+      { id: 'link-a1', parentPersonId: 'father', childPersonId: 'anne', viaUnionId: 'union-1' },
+      { id: 'link-a2', parentPersonId: 'mother', childPersonId: 'anne', viaUnionId: 'union-1' },
+      { id: 'link-h1', parentPersonId: 'father', childPersonId: 'hugo', viaUnionId: 'union-1' },
+      { id: 'link-h2', parentPersonId: 'mother', childPersonId: 'hugo', viaUnionId: 'union-1' },
     ]
     const order = [
       { childId: 'hugo', linkIds: ['link-h1', 'link-h2'] },
@@ -542,11 +542,17 @@ describe('API security and authz', () => {
       expect(response.statusCode).toBe(200)
       expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
       expect(prismaMock.parentChildLink.updateMany).toHaveBeenNthCalledWith(1, {
-        where: { id: { in: ['link-h1', 'link-h2'] }, treeId: 'tree-1', deletedAt: null },
+        where: {
+          treeId: 'tree-1', deletedAt: null, childPersonId: 'hugo',
+          OR: [{ id: { in: ['link-h1', 'link-h2'] } }, { viaUnionId: { in: ['union-1'] } }],
+        },
         data: { displayOrder: 1 },
       })
       expect(prismaMock.parentChildLink.updateMany).toHaveBeenNthCalledWith(2, {
-        where: { id: { in: ['link-a1', 'link-a2'] }, treeId: 'tree-1', deletedAt: null },
+        where: {
+          treeId: 'tree-1', deletedAt: null, childPersonId: 'anne',
+          OR: [{ id: { in: ['link-a1', 'link-a2'] } }, { viaUnionId: { in: ['union-1'] } }],
+        },
         data: { displayOrder: 2 },
       })
       expect(prismaMock.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({
