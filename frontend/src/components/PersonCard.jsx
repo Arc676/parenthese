@@ -1,7 +1,10 @@
 ﻿import { useState, useEffect, useRef, forwardRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Save, Trash2, Plus, X, Search, Check, Play, ImagePlus, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react'
-import { getParents, getChildren, getPersonUnions, getPersonMedias, filiations, persons, unions } from '../data/mockData'
+import { getParents, getChildren, getPersonUnions, getPersonMedias, getDemoLife, filiations, persons, unions } from '../data/mockData'
+import { fetchPersonLife } from '../api/treeApi.js'
+import LifeTimeline from './LifeTimeline.jsx'
+import MomentSheet from './MomentSheet.jsx'
 import { fetchImmichConfig } from '../api/immichApi.js'
 import GeoMediaThumbnail from './GeoMediaThumbnail'
 import ImmichFacePanel from './ImmichFacePanel.jsx'
@@ -54,9 +57,35 @@ const PersonCard = ({
   relationActionError = '',
   siblingPlace = null,
   onMoveSibling,
+  onUploadMomentPhoto,
 }) => {
   // Souvenirs d'abord quand il y en a, ou quand on peut en ajouter : c'est là qu'est le bouton
   const [tab, setTab] = useState(() => (getPersonMedias(person.id).length > 0 || canManageMedia ? 'medias' : 'infos'))
+  const [lifeState, setLifeState] = useState({ personId: null, data: null, loading: false, failed: false })
+
+  const lifeRequestedFor = useRef(null)
+  // Fiche « Ajouter un moment » : null fermée, {} pour ajouter, { event } pour modifier
+  const [momentSheet, setMomentSheet] = useState(null)
+  const [lifeRevision, setLifeRevision] = useState(0)
+
+  useEffect(() => {
+    if (tab !== 'vie' || lifeRequestedFor.current === person.id) return undefined
+    lifeRequestedFor.current = person.id
+    if (!treeId || !immichToken) {
+      setLifeState({ personId: person.id, data: getDemoLife(person.id), loading: false, failed: false })
+      return undefined
+    }
+    let cancelled = false
+    // Retour sur l'onglet : on garde la frise affichée pendant qu'elle se rafraîchit
+    setLifeState((prev) => (prev.personId === person.id && prev.data ? prev : { personId: person.id, data: null, loading: true, failed: false }))
+    fetchPersonLife(treeId, person.id, immichToken)
+      .then((data) => { if (!cancelled) setLifeState({ personId: person.id, data, loading: false, failed: false }) })
+      .catch(() => { if (!cancelled) setLifeState({ personId: person.id, data: null, loading: false, failed: true }) })
+    return () => {
+      cancelled = true
+      lifeRequestedFor.current = null
+    }
+  }, [tab, person.id, treeId, immichToken, lifeRevision])
 
   // État local pour les modifications en mode édition
   const [edits, setEdits] = useState({})
@@ -88,6 +117,7 @@ const PersonCard = ({
     setRelationSearchQuery('')
     setSaveSuccess(false)
     setShowSourceMenu(false)
+    setMomentSheet(null)
   }, [person.id])
 
   // Connexion Immich de l'arbre : métadonnées sans clé. Une erreur (rôle périmé, réseau) se
@@ -238,6 +268,27 @@ const PersonCard = ({
     return childFiliations[0]
   })()
   const personMedias = getPersonMedias(person.id)
+
+  // Frise de vie : la famille vient de l'arbre déjà chargé, les événements de la route /life,
+  // demandée seulement à l'ouverture de l'onglet (la démo a ses propres données)
+  const siblingsList = (() => {
+    const seen = new Map()
+    for (const parent of parentsList) {
+      for (const child of getChildren(parent.id)) if (child.id !== person.id) seen.set(child.id, child)
+    }
+    return [...seen.values()]
+  })()
+  // Ajouter un moment : administrateurs, sur un arbre en ligne (la démo reste en lecture)
+  const canEditLife = Boolean(isAdmin && onUploadMomentPhoto && treeId && immichToken)
+  const lifeFamily = {
+    parents: parentsList,
+    children: childrenList,
+    siblings: siblingsList,
+    unions: personUnions.map((union) => ({
+      ...union,
+      partner: persons.find((p) => p.id === (union.partner1Id === person.id ? union.partner2Id : union.partner1Id)) || null,
+    })),
+  }
 
   // Filter persons for relation search (exclude current person + already linked)
   const getFilteredPersonsForRelation = (relationType) => {
@@ -498,6 +549,9 @@ const PersonCard = ({
         <button type="button" role="tab" aria-selected={tab === 'medias'} className="pz-tab" onClick={() => setTab('medias')}>
           {t('Souvenirs')}{personMedias.length > 0 ? ` · ${personMedias.length}` : ''}
         </button>
+        <button type="button" role="tab" aria-selected={tab === 'vie'} className="pz-tab" onClick={() => setTab('vie')}>
+          {t('Vie')}
+        </button>
         <button type="button" role="tab" aria-selected={tab === 'infos'} className="pz-tab" onClick={() => setTab('infos')}>
           {t('Infos')}
         </button>
@@ -579,6 +633,21 @@ const PersonCard = ({
               </button>
             )}
           </div>
+        )}
+
+        {/* ── Vie ── */}
+        {tab === 'vie' && (
+          <LifeTimeline
+            person={person}
+            family={lifeFamily}
+            life={lifeState.personId === person.id ? lifeState.data : null}
+            loading={lifeState.personId !== person.id || lifeState.loading}
+            failed={lifeState.personId === person.id && lifeState.failed}
+            medias={personMedias}
+            canEdit={canEditLife}
+            onAdd={() => setMomentSheet({})}
+            onEdit={(event) => setMomentSheet({ event })}
+          />
         )}
 
         {/* ── Infos ── */}
@@ -799,6 +868,20 @@ const PersonCard = ({
           token={immichToken}
           onClose={() => setShowImmichPanel(false)}
           onImmichChange={onImmichChange}
+        />
+      )}
+
+      {/* ── Ajouter ou modifier un moment de l'onglet Vie (modale) ── */}
+      {momentSheet && canEditLife && (
+        <MomentSheet
+          person={person}
+          event={momentSheet.event || null}
+          treeId={treeId}
+          token={immichToken}
+          medias={personMedias}
+          onUploadPhoto={onUploadMomentPhoto}
+          onClose={() => setMomentSheet(null)}
+          onSaved={() => { setMomentSheet(null); setLifeRevision((r) => r + 1) }}
         />
       )}
     </div>

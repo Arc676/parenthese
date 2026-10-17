@@ -1,0 +1,58 @@
+import { describe, expect, it } from 'vitest'
+import { buildLifeTimeline, describeDate } from './lifeTimeline.js'
+
+const robert = { id: 3, firstName: 'Robert', birthYear: 1920, deathYear: 1995, birthDate: '1920-03-12', deathDate: '1995-05-01', birthPlace: 'Limoges,87085,Haute-Vienne,,France,' }
+const simone = { id: 5, firstName: 'Simone', lastName: 'Petit', birthYear: 1925, deathYear: 2010 }
+const family = {
+  parents: [{ id: 1, firstName: 'Jean', sex: 'male', deathYear: 1965 }, { id: 2, firstName: 'Marie', sex: 'female', deathYear: 2001 }],
+  children: [{ id: 6, firstName: 'Jacques', birthYear: 1945, deathYear: 2015 }],
+  siblings: [{ id: 4, firstName: 'André', sex: 'male', birthYear: 1923 }, { id: 9, firstName: 'Paul', sex: 'male', birthYear: 1915 }],
+  unions: [{ id: 'u2', partner: simone, startYear: 1943, endYear: 1958, unionType: 'mariage' }],
+}
+const life = {
+  person: { deathPlace: 'Brive-la-Gaillarde', birthDatePrecision: null },
+  unions: [{ id: 'u2', startDate: '1943-06-12', startPlace: 'Limoges' }],
+  events: [
+    { id: 'e1', type: 'birth', sources: 'Registre A\nRegistre B' },
+    { id: 'e2', type: 'occupation', date: '1946-01-01', dateEnd: '1981-01-01', datePrecision: 'from', description: 'Instituteur' },
+    { id: 'e3', type: 'custom', label: 'Militaire', date: '1940-01-01', dateEnd: '1942-01-01', datePrecision: 'between', notes: 'Verdun' },
+    { id: 'e4', type: 'residence', place: 'Rue des Écoles' },
+  ],
+}
+
+describe('frise de vie', () => {
+  const entries = buildLifeTimeline(robert, family, life)
+  const titles = entries.map((e) => e.title)
+
+  it('range tout par date, les entrées sans date en bas', () => {
+    expect(titles).toEqual([
+      'Naissance à Limoges', 'Naissance de son frère André', 'Militaire', 'Épouse Simone Petit', 'Naissance de Jacques',
+      'Instituteur', 'Fin de l’union avec Simone', 'Décès de son père Jean', 'Décès à Brive-la-Gaillarde', 'Résidence',
+    ])
+  })
+
+  it('grands repères, précisions, âge et sources', () => {
+    const birth = entries[0]
+    expect(birth).toMatchObject({ kind: 'mile', year: 1920, sources: 'Registre A\nRegistre B' })
+    expect(entries.find((e) => e.title === 'Instituteur').meta).toBe('jusqu’en 1981 · 26 ans')
+    expect(entries.find((e) => e.title === 'Militaire')).toMatchObject({ kind: 'minor', meta: 'entre 1940 et 1942 · 20 ans', note: 'Verdun' })
+    expect(entries.find((e) => e.title === 'Épouse Simone Petit')).toMatchObject({ kind: 'mile', meta: 'Limoges · 23 ans' })
+  })
+
+  it('famille limitée à sa vie : frère aîné, mère morte après lui, enfant mort après lui écartés', () => {
+    expect(titles.join()).not.toMatch(/Paul|Marie|Décès de Jacques/)
+  })
+
+  it('sans données de la route, la famille et les repères suffisent', () => {
+    const bare = buildLifeTimeline({ id: 1, firstName: 'X', birthYear: 1900 }, { children: [{ id: 2, firstName: 'Y', birthYear: 1930 }] }, null)
+    expect(bare.map((e) => e.title)).toEqual(['Naissance', 'Naissance de Y'])
+    expect(buildLifeTimeline({ id: 1, firstName: 'X' }, {}, null)).toEqual([])
+  })
+
+  it('dit les dates comme on les dit', () => {
+    expect(describeDate('1879-01-01', null, 'about')).toBe('vers 1879')
+    expect(describeDate('1879-01-01', null, 'before')).toBe('avant 1879')
+    expect(describeDate('1920-03-12', null, null)).toBe('12 mars')
+    expect(describeDate('1920-01-01', null, null)).toBe('')
+  })
+})

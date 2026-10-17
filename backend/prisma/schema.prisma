@@ -424,6 +424,7 @@ model LifeEvent {
   description   String?
   notes         String?
   sources       String?
+  mediaId       String?
   displayOrder  Int       @default(1)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

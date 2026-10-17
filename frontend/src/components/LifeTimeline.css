@@ -1,0 +1,64 @@
+/* Onglet Vie de la fiche (direction A2 retenue le 16/10). Variables --pz-* : src/styles/pz.css */
+
+.lt { padding: 2px 0 4px; }
+.lt-rail { position: relative; list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+/* Le fil : un segment par entrée, du premier point au dernier (il s'arrête au décès) */
+
+.lt-ev { --dot-y: 17.5px; position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 0 30px; padding: 8px 0; }
+.lt-ev::before { content: ""; position: absolute; left: 54px; top: 0; bottom: -2px; width: 1px; background: var(--pz-line); }
+.lt-ev:first-child::before { top: var(--dot-y); }
+.lt-ev:last-child::before { bottom: auto; height: var(--dot-y); }
+.lt-ev:only-child::before { display: none; }
+.lt-ev::after {
+  content: ""; position: absolute; left: 51px; top: 14px; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--pz-surface); box-shadow: inset 0 0 0 1.5px var(--pz-a500);
+}
+.lt-year { font: 400 13.5px/1.35 var(--pz-sans); color: var(--pz-ink-2); font-variant-numeric: tabular-nums; text-align: right; padding-top: 1px; }
+.lt-title { font: 400 14px/1.35 var(--pz-sans); color: var(--pz-ink); overflow-wrap: anywhere; }
+.lt-meta { font: 400 13px/1.45 var(--pz-sans); color: var(--pz-muted); margin-top: 2px; }
+.lt-note { font: 400 13px/1.5 var(--pz-sans); color: var(--pz-ink-2); margin: 4px 0 0; white-space: pre-line; }
+
+/* Grands repères : naissance, unions, décès */
+.lt-ev--mile { --dot-y: 23.5px; padding: 12px 0 10px; }
+.lt-ev--mile::after { top: 19px; left: 50px; width: 9px; height: 9px; background: var(--pz-a500); }
+.lt-ev--mile .lt-title { font: 400 21px/1.2 var(--pz-serif); letter-spacing: -.005em; }
+.lt-ev--mile .lt-year { font-size: 14px; color: var(--pz-ink); padding-top: 6px; }
+
+/* Famille proche, en retrait */
+.lt-ev--fam::after { box-shadow: inset 0 0 0 1.5px var(--pz-line); }
+.lt-ev--fam .lt-title { color: var(--pz-muted); }
+
+.lt-sources { margin-top: 3px; }
+.lt-src {
+  appearance: none; border: 0; background: none; padding: 2px 0; cursor: pointer;
+  font: 500 12.5px var(--pz-sans); color: var(--pz-a700); text-underline-offset: 3px;
+}
+@media (hover: hover) and (pointer: fine) { .lt-src:hover { text-decoration: underline; } }
+.lt-src:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 2px; border-radius: 4px; }
+.lt-src-list {
+  list-style: none; margin: 6px 0 0; padding: 8px 10px; display: grid; gap: 4px;
+  background: var(--pz-bg); border-radius: var(--pz-r-s);
+  font: 400 12.5px/1.5 var(--pz-sans); color: var(--pz-ink-2);
+  animation: lt-open 180ms var(--pz-ease) both;
+}
+@keyframes lt-open { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+
+.lt-failed { margin-top: 10px; }
+
+@media (prefers-reduced-motion: reduce) { .lt-src-list { animation: none; } }
+
+/* Moment modifiable (administrateurs) : le titre s'ouvre en fiche */
+.lt-title--edit {
+  appearance: none; border: 0; background: none; padding: 0; margin: 0; text-align: left; cursor: pointer;
+  font: inherit; color: inherit; border-radius: 4px; text-decoration: underline; text-decoration-color: transparent;
+  text-underline-offset: 3px; transition: text-decoration-color 160ms ease;
+}
+@media (hover: hover) and (pointer: fine) { .lt-title--edit:hover { text-decoration-color: var(--pz-a300); } }
+.lt-title--edit:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 2px; }
+
+.lt-photo {
+  display: block; width: 112px; height: 84px; object-fit: cover; margin-top: 8px;
+  border-radius: var(--pz-r-s); box-shadow: 0 0 0 1px rgba(42, 38, 34, .06);
+}
+.lt-add { margin-top: 14px; }
+.pc-empty .lt-add { margin-top: 12px; }

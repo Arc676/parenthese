@@ -8,17 +8,17 @@ import { buildMediaUrl } from '../utils/mediaToken.js'
 
 // Démo : noms et lieux restent français, les textes descriptifs sont traduits.
 export let persons = [
-  { id: 1, firstName: 'Jean', lastName: 'Dupont', birthYear: 1890, deathYear: 1965, isAlive: false, photo: '/demo/jean.webp', frameType: 'polaroid', birthPlace: 'Limoges', region: 'Haute-Vienne', profession: t('Menuisier'), nationality: t('Française'), note: t('Patriarche de la famille') },
-  { id: 2, firstName: 'Marie', lastName: 'Martin', birthYear: 1895, deathYear: 1970, isAlive: false, photo: '/demo/marie.webp', frameType: 'round', birthPlace: 'Brive-la-Gaillarde', region: 'Corrèze', profession: t('Couturière'), note: t('Atelier de couture rue du Commerce') },
-  { id: 3, firstName: 'Robert', lastName: 'Dupont', birthYear: 1920, deathYear: 1995, isAlive: false, photo: '/demo/robert.webp', frameType: 'rect', birthPlace: 'Limoges', region: 'Haute-Vienne', profession: t('Instituteur'), note: t("A enseigné 35 ans à l'école communale") },
-  { id: 4, firstName: 'André', lastName: 'Dupont', birthYear: 1923, deathYear: 2000, isAlive: false, photo: '/demo/andre.webp', frameType: 'polaroid', birthPlace: 'Limoges', region: 'Haute-Vienne', profession: t('Charpentier') },
-  { id: 5, firstName: 'Simone', lastName: 'Petit', birthYear: 1925, deathYear: 2010, isAlive: false, photo: '/demo/simone.webp', frameType: 'round', birthPlace: 'Guéret', region: 'Creuse', profession: t('Infirmière') },
-  { id: 9, firstName: 'Isabelle', lastName: 'Bernard', birthYear: 1928, isAlive: true, photo: '/demo/isabelle.webp', frameType: 'rect', birthPlace: 'Fort-de-France', region: 'Martinique', profession: t('Sage-femme'), note: t('Doyenne de la famille, vit à Brive') },
-  { id: 6, firstName: 'Jacques', lastName: 'Dupont', birthYear: 1945, deathYear: 2015, isAlive: false, photo: '/demo/jacques.webp', frameType: 'polaroid', birthPlace: 'Limoges', region: 'Haute-Vienne', profession: t('Journaliste'), note: t('Reporter au Populaire du Centre') },
-  { id: 7, firstName: 'Philippe', lastName: 'Dupont', birthYear: 1948, isAlive: true, photo: '/demo/philippe.webp', frameType: 'round', birthPlace: 'Limoges', region: 'Haute-Vienne', profession: t('Pharmacien') },
-  { id: 8, firstName: 'Sophie', lastName: 'Dupont', birthYear: 1960, isAlive: true, photo: '/demo/sophie.webp', frameType: 'rect', birthPlace: 'Brive-la-Gaillarde', region: 'Corrèze', profession: t('Architecte'), note: t('Cabinet d’architecture à Bordeaux') },
-  { id: 10, firstName: 'Thomas', lastName: 'Dupont', birthYear: 1962, isAlive: true, photo: '/demo/thomas.webp', frameType: 'polaroid', birthPlace: 'Brive-la-Gaillarde', region: 'Corrèze', profession: t('Vétérinaire') },
-  { id: 11, firstName: 'Claire', lastName: 'Dupont', birthYear: 1955, isAlive: true, photo: '/demo/claire.webp', birthPlace: 'Paris', region: 'Ile-de-France', profession: t('Enseignante') },
+  { id: 1, firstName: 'Jean', sex: 'male', lastName: 'Dupont', birthYear: 1890, deathYear: 1965, isAlive: false, photo: '/demo/jean.webp', frameType: 'polaroid', birthPlace: 'Limoges', region: 'Haute-Vienne', profession: t('Menuisier'), nationality: t('Française'), note: t('Patriarche de la famille') },
+  { id: 2, firstName: 'Marie', sex: 'female', lastName: 'Martin', birthYear: 1895, deathYear: 1970, isAlive: false, photo: '/demo/marie.webp', frameType: 'round', birthPlace: 'Brive-la-Gaillarde', region: 'Corrèze', profession: t('Couturière'), note: t('Atelier de couture rue du Commerce') },
+  { id: 3, firstName: 'Robert', sex: 'male', lastName: 'Dupont', birthYear: 1920, deathYear: 1995, isAlive: false, photo: '/demo/robert.webp', frameType: 'rect', birthPlace: 'Limoges', region: 'Haute-Vienne', profession: t('Instituteur'), note: t("A enseigné 35 ans à l'école communale") },
+  { id: 4, firstName: 'André', sex: 'male', lastName: 'Dupont', birthYear: 1923, deathYear: 2000, isAlive: false, photo: '/demo/andre.webp', frameType: 'polaroid', birthPlace: 'Limoges', region: 'Haute-Vienne', profession: t('Charpentier') },
+  { id: 5, firstName: 'Simone', sex: 'female', lastName: 'Petit', birthYear: 1925, deathYear: 2010, isAlive: false, photo: '/demo/simone.webp', frameType: 'round', birthPlace: 'Guéret', region: 'Creuse', profession: t('Infirmière') },
+  { id: 9, firstName: 'Isabelle', sex: 'female', lastName: 'Bernard', birthYear: 1928, isAlive: true, photo: '/demo/isabelle.webp', frameType: 'rect', birthPlace: 'Fort-de-France', region: 'Martinique', profession: t('Sage-femme'), note: t('Doyenne de la famille, vit à Brive') },
+  { id: 6, firstName: 'Jacques', sex: 'male', lastName: 'Dupont', birthYear: 1945, deathYear: 2015, isAlive: false, photo: '/demo/jacques.webp', frameType: 'polaroid', birthPlace: 'Limoges', region: 'Haute-Vienne', profession: t('Journaliste'), note: t('Reporter au Populaire du Centre') },
+  { id: 7, firstName: 'Philippe', sex: 'male', lastName: 'Dupont', birthYear: 1948, isAlive: true, photo: '/demo/philippe.webp', frameType: 'round', birthPlace: 'Limoges', region: 'Haute-Vienne', profession: t('Pharmacien') },
+  { id: 8, firstName: 'Sophie', sex: 'female', lastName: 'Dupont', birthYear: 1960, isAlive: true, photo: '/demo/sophie.webp', frameType: 'rect', birthPlace: 'Brive-la-Gaillarde', region: 'Corrèze', profession: t('Architecte'), note: t('Cabinet d’architecture à Bordeaux') },
+  { id: 10, firstName: 'Thomas', sex: 'male', lastName: 'Dupont', birthYear: 1962, isAlive: true, photo: '/demo/thomas.webp', frameType: 'polaroid', birthPlace: 'Brive-la-Gaillarde', region: 'Corrèze', profession: t('Vétérinaire') },
+  { id: 11, firstName: 'Claire', sex: 'female', lastName: 'Dupont', birthYear: 1955, isAlive: true, photo: '/demo/claire.webp', birthPlace: 'Paris', region: 'Ile-de-France', profession: t('Enseignante') },
 ]
 
 export let medias = [
@@ -114,9 +114,34 @@ function mapRemotePersonToLocal(person, current = null) {
     region: person?.region || null,
     profession: person?.profession || null,
     nationality: person?.nationality || null,
+    sex: person?.sex ?? current?.sex ?? null,
     photo: current?.photo || null,
     avatarFromImmich: person?.avatarFromImmich ?? false,
   }
+}
+
+// Frise de vie de la démo (onglet Vie), au format de GET /trees/:id/persons/:personId/life. Personnes fictives.
+const DEMO_LIFE = {
+  3: {
+    person: { birthDatePrecision: null, deathPlace: 'Brive-la-Gaillarde', nickname: null },
+    unions: [
+      { id: 'u2', startDate: '1943-06-12', startPlace: 'Limoges', startDatePrecision: null },
+      { id: 'u3', startDate: '1959-01-01', startPlace: 'Brive-la-Gaillarde', startDatePrecision: null },
+    ],
+    events: [
+      { id: 'd1', type: 'birth', sources: t('Registre des naissances de Limoges, acte n° 412') },
+      { id: 'd2', type: 'baptism', date: '1920-03-21', place: 'Saint-Michel-des-Lions, Limoges' },
+      { id: 'd3', type: 'education', date: '1938-01-01', dateEnd: '1940-01-01', datePrecision: 'from', description: t('École normale d’instituteurs'), place: 'Limoges' },
+      { id: 'd4', type: 'military', date: '1940-01-01', dateEnd: '1942-01-01', datePrecision: 'between', notes: t('Affecté au 63e régiment d’infanterie.') },
+      { id: 'd5', type: 'marriage', unionId: 'u2', sources: t('Registre des mariages de Limoges') },
+      { id: 'd6', type: 'occupation', date: '1946-01-01', dateEnd: '1981-01-01', datePrecision: 'from', description: t('Instituteur à l’école communale'), place: 'Limoges' },
+      { id: 'd7', type: 'retirement', date: '1981-01-01' },
+    ],
+  },
+}
+
+export function getDemoLife(personId) {
+  return DEMO_LIFE[personId] || null
 }
 
 export function resetToDemoData() {
