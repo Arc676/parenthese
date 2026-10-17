@@ -48,6 +48,8 @@ const downloadQuerySchema = z.object({
 
 const uploadBinaryMediaSchema = z.object({
   submittedByLabel: z.string().trim().min(1).max(120).optional(),
+  // Moment de l'onglet Vie auquel rattacher ce souvenir
+  lifeEventId: z.string().min(1).max(64).optional(),
   type: z.enum(['photo', 'video', 'audio', 'document', 'geojson', 'gpx']),
   fileName: z.string().min(1).max(255),
   mimeType: z.string().min(1).max(120),
@@ -59,6 +61,8 @@ const uploadBinaryMediaSchema = z.object({
 
 const uploadCitationMediaSchema = z.object({
   submittedByLabel: z.string().trim().min(1).max(120).optional(),
+  // Moment de l'onglet Vie auquel rattacher ce souvenir
+  lifeEventId: z.string().min(1).max(64).optional(),
   type: z.literal('citation'),
   caption: z.string().trim().min(1).max(2000),
   source: mediaSourceSchema,
@@ -68,6 +72,8 @@ const YOUTUBE_URL_RE = /^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//
 
 const uploadYoutubeVideoSchema = z.object({
   submittedByLabel: z.string().trim().min(1).max(120).optional(),
+  // Moment de l'onglet Vie auquel rattacher ce souvenir
+  lifeEventId: z.string().min(1).max(64).optional(),
   type: z.literal('video'),
   mimeType: z.literal('video/youtube'),
   youtubeUrl: z.string().max(500).regex(YOUTUBE_URL_RE),
@@ -274,6 +280,33 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: 'person_not_found' })
     }
 
+    // Rattachement à un moment : un moment de cette personne (ou de son union). La famille ne rattache qu'à
+    // un moment qu'elle vient de proposer, encore en attente ; l'administrateur, à un moment visible.
+    const lifeEventId = payload.data.lifeEventId ?? null
+    let momentSessionId: string | null = null
+    if (lifeEventId) {
+      const event = await app.prisma.lifeEvent.findFirst({
+        where: { id: lifeEventId, treeId: params.data.id, deletedAt: null },
+        select: { personId: true, unionId: true, status: true, contributionSessionId: true },
+      })
+      let ownsEvent = event?.personId === person.id
+      if (event && !ownsEvent && event.unionId) {
+        const union = await app.prisma.union.findFirst({ where: { id: event.unionId, treeId: params.data.id }, select: { partner1PersonId: true, partner2PersonId: true } })
+        ownsEvent = union?.partner1PersonId === person.id || union?.partner2PersonId === person.id
+      }
+      const statusOk = contribution ? event?.status === 'pending' : event?.status === 'approved'
+      if (!event || !ownsEvent || !statusOk) {
+        return reply.code(400).send({ error: 'invalid_life_event_reference' })
+      }
+      if (contribution && event.contributionSessionId) {
+        const session = await app.prisma.contributionSession.findFirst({
+          where: { id: event.contributionSessionId, treeId: params.data.id, status: 'pending' },
+          select: { id: true },
+        })
+        momentSessionId = session?.id ?? null
+      }
+    }
+
     // Fichier reconnu, nettoyé et compté AVANT toute écriture : un envoi refusé ne laisse ni contribution
     // vide en attente ni fichier sur le disque
     let prepared: { buffer: Buffer; mimeType: string; extension: string } | null = null
@@ -318,7 +351,10 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
 
     // Une contribution d'une ligne, créée avant le média pour qu'il la référence
     const now = new Date()
-    const contributionSession = contribution
+    // Fichier d'un moment proposé : il rejoint la relecture du moment au lieu d'en ouvrir une autre
+    const contributionSession = contribution && momentSessionId
+      ? { id: momentSessionId }
+      : contribution
       ? await app.prisma.contributionSession.create({
           data: {
             treeId: params.data.id,
@@ -376,6 +412,7 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
           uploadedBy: uploaderUserId,
           status: isPending ? 'pending' : 'approved',
           contributionSessionId: contributionSession?.id ?? null,
+          lifeEventId,
         },
       })
       if (!isPending) {
@@ -437,6 +474,7 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
         uploadedBy: uploaderUserId,
         status: isPending ? 'pending' : 'approved',
         contributionSessionId: contributionSession?.id ?? null,
+        lifeEventId,
       },
     })
 

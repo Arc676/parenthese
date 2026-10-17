@@ -24,6 +24,7 @@ function formatEntityType(entityType) {
   if (entityType === 'parent_child_link') return t('lien parent-enfant')
   if (entityType === 'annotation') return t('annotation')
   if (entityType === 'media') return t('souvenir')
+  if (entityType === 'life_event') return t('moment')
   return t('élément')
 }
 
@@ -47,6 +48,17 @@ function getMediaPreview(change, treeId) {
     ? buildMediaUrl(`/trees/${encodeURIComponent(treeId)}/media/${encodeURIComponent(change.entityId)}`, API_BASE_URL)
     : null
   return { type: data.type, label, caption, url, isYoutube }
+}
+
+// Moment proposé par la famille : quand, où, et ce qu'elle en dit. Ses fichiers sont dans « Souvenirs »
+function getMomentPreview(change) {
+  const data = (change.afterJson && typeof change.afterJson === 'object') ? change.afterJson : {}
+  const year = String(data.date || '').slice(0, 4)
+  const end = String(data.dateEnd || '').slice(0, 4)
+  let when = year
+  if (year && end) when = data.datePrecision === 'between' ? t('entre {year} et {end}', { year, end }) : t('de {year} à {end}', { year, end })
+  else if (year && data.datePrecision === 'about') when = t('vers {year}', { year })
+  return { when, place: data.place || '', notes: data.notes || '', sources: data.sources || '' }
 }
 
 function formatAnnotationType(type) {
@@ -115,6 +127,10 @@ function getPersonDisplayName(change, sessionChanges = []) {
   if (change.entityType === 'media') {
     const data = change.afterJson || {}
     return MEDIA_TYPE_LABELS[data.type] || t('Souvenir')
+  }
+  if (change.entityType === 'life_event') {
+    const data = change.afterJson || {}
+    return data.title || t('Moment')
   }
   const data = (change.afterJson && typeof change.afterJson === 'object')
     ? change.afterJson
@@ -479,8 +495,8 @@ const ContributionPanel = ({
                       {/* ── Cartes de changement (collapsibles) ── */}
                       {!isCollapsed && (() => {
                         // Grouper les changements par entityType
-                        const groupOrder = ['media', 'person', 'union', 'parent_child_link', 'annotation']
-                        const groupLabels = { media: t('Souvenirs'), person: t('Personnes'), union: t('Unions'), parent_child_link: t('Liens'), annotation: t('Annotations') }
+                        const groupOrder = ['life_event', 'media', 'person', 'union', 'parent_child_link', 'annotation']
+                        const groupLabels = { life_event: t('Moments'), media: t('Souvenirs'), person: t('Personnes'), union: t('Unions'), parent_child_link: t('Liens'), annotation: t('Annotations') }
                         const groupMap = {}
                         for (const ch of (session.changes || [])) {
                           const key = ch.entityType || 'other'
@@ -501,6 +517,7 @@ const ContributionPanel = ({
                           const fields = getFieldRows(change)
                           const annPreview = change.entityType === 'annotation' ? getAnnotationPreview(change, treeId) : null
                           const mediaPreview = change.entityType === 'media' ? getMediaPreview(change, treeId) : null
+                          const momentPreview = change.entityType === 'life_event' ? getMomentPreview(change) : null
 
                           return (
                             <div
@@ -568,6 +585,15 @@ const ContributionPanel = ({
                                   {mediaPreview.caption && (
                                     <p className="contrib-media-caption">{mediaPreview.type === 'citation' ? t('« {text} »', { text: mediaPreview.caption }) : mediaPreview.caption}</p>
                                   )}
+                                </div>
+                              )}
+
+                              {momentPreview && (
+                                <div className="contrib-moment-preview">
+                                  {momentPreview.when && <span>{momentPreview.when}</span>}
+                                  {momentPreview.place && <span>{momentPreview.place}</span>}
+                                  {momentPreview.notes && <p>{momentPreview.notes}</p>}
+                                  {momentPreview.sources && <p className="contrib-moment-source"><span>{t('Source')}</span> {momentPreview.sources}</p>}
                                 </div>
                               )}
 

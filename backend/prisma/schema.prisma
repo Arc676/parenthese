@@ -39,6 +39,7 @@ enum ContributionEntityType {
   parent_child_link
   annotation
   media
+  life_event
 }
 
 // Souvenir envoyé par la famille : en attente jusqu'à la relecture du propriétaire
@@ -294,12 +295,15 @@ model MediaItem {
   uploadedBy            String?
   status                MediaStatus @default(approved)
   contributionSessionId String?
+  // Moment de l'onglet Vie auquel ce souvenir est rattaché (photo, vidéo, acte en PDF…)
+  lifeEventId           String?
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
   deletedAt             DateTime?
   tree                  Tree        @relation(fields: [treeId], references: [id], onDelete: Cascade)
 
   @@index([treeId, personId, displayOrder])
+  @@index([lifeEventId])
   @@map("media_items")
 }
 
@@ -410,26 +414,30 @@ model WaitlistEntry {
 // d'un couple (divorce…). Naissance, décès et mariage gardent leur date et leur lieu sur la personne ou
 // l'union ; leur ligne ici ne porte que les sources et les notes (type birth, death, marriage).
 model LifeEvent {
-  id            String    @id @default(cuid())
-  treeId        String
-  personId      String?
-  unionId       String?
-  type          String
-  label         String?
-  date          DateTime?
-  dateEnd       DateTime?
-  datePrecision String?
-  dateText      String?
-  place         String?
-  description   String?
-  notes         String?
-  sources       String?
-  mediaId       String?
-  displayOrder  Int       @default(1)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
-  tree          Tree      @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  id                    String    @id @default(cuid())
+  treeId                String
+  personId              String?
+  unionId               String?
+  type                  String
+  label                 String?
+  date                  DateTime?
+  dateEnd               DateTime?
+  datePrecision         String?
+  dateText              String?
+  place                 String?
+  description           String?
+  notes                 String?
+  sources               String?
+  // Ancien rattachement d'une seule photo (17/10), remplacé par media_items.lifeEventId
+  mediaId               String?
+  // Moment proposé par la famille : « pending » jusqu'à la relecture de l'administrateur
+  status                String    @default("approved")
+  contributionSessionId String?
+  displayOrder          Int       @default(1)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  deletedAt             DateTime?
+  tree                  Tree      @relation(fields: [treeId], references: [id], onDelete: Cascade)
 
   @@index([treeId])
   @@index([treeId, personId])

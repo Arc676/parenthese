@@ -57,7 +57,8 @@ const PersonCard = ({
   relationActionError = '',
   siblingPlace = null,
   onMoveSibling,
-  onUploadMomentPhoto,
+  onUploadMomentFile,
+  onMomentSaved,
 }) => {
   // Souvenirs d'abord quand il y en a, ou quand on peut en ajouter : c'est là qu'est le bouton
   const [tab, setTab] = useState(() => (getPersonMedias(person.id).length > 0 || canManageMedia ? 'medias' : 'infos'))
@@ -67,6 +68,8 @@ const PersonCard = ({
   // Fiche « Ajouter un moment » : null fermée, {} pour ajouter, { event } pour modifier
   const [momentSheet, setMomentSheet] = useState(null)
   const [lifeRevision, setLifeRevision] = useState(0)
+  // Moment envoyé par la famille : on dit qu'il attend la relecture
+  const [lifeNotice, setLifeNotice] = useState('')
 
   useEffect(() => {
     if (tab !== 'vie' || lifeRequestedFor.current === person.id) return undefined
@@ -118,6 +121,7 @@ const PersonCard = ({
     setSaveSuccess(false)
     setShowSourceMenu(false)
     setMomentSheet(null)
+    setLifeNotice('')
   }, [person.id])
 
   // Connexion Immich de l'arbre : métadonnées sans clé. Une erreur (rôle périmé, réseau) se
@@ -278,8 +282,10 @@ const PersonCard = ({
     }
     return [...seen.values()]
   })()
-  // Ajouter un moment : administrateurs, sur un arbre en ligne (la démo reste en lecture)
-  const canEditLife = Boolean(isAdmin && onUploadMomentPhoto && treeId && immichToken)
+  // Ajouter un moment : l'administrateur, et la famille qui peut proposer des souvenirs (relu ensuite).
+  // Modifier un moment ou compléter une naissance : l'administrateur. La démo reste en lecture.
+  const canAddMoment = Boolean(onUploadMomentFile && treeId && immichToken && (isAdmin || canManageMedia))
+  const canEditMoments = canAddMoment && isAdmin
   const lifeFamily = {
     parents: parentsList,
     children: childrenList,
@@ -644,9 +650,12 @@ const PersonCard = ({
             loading={lifeState.personId !== person.id || lifeState.loading}
             failed={lifeState.personId === person.id && lifeState.failed}
             medias={personMedias}
-            canEdit={canEditLife}
-            onAdd={() => setMomentSheet({})}
-            onEdit={(event) => setMomentSheet({ event })}
+            canAdd={canAddMoment}
+            canEdit={canEditMoments}
+            notice={lifeNotice}
+            onAdd={() => { setLifeNotice(''); setMomentSheet({ entry: null }) }}
+            onEdit={(entry) => { setLifeNotice(''); setMomentSheet({ entry }) }}
+            onOpenMedia={(media) => onMediaSelect?.(media, person)}
           />
         )}
 
@@ -872,16 +881,23 @@ const PersonCard = ({
       )}
 
       {/* ── Ajouter ou modifier un moment de l'onglet Vie (modale) ── */}
-      {momentSheet && canEditLife && (
+      {momentSheet && canAddMoment && (
         <MomentSheet
           person={person}
-          event={momentSheet.event || null}
+          entry={momentSheet.entry}
           treeId={treeId}
           token={immichToken}
           medias={personMedias}
-          onUploadPhoto={onUploadMomentPhoto}
+          isAdmin={canEditMoments}
+          onUploadFile={onUploadMomentFile}
           onClose={() => setMomentSheet(null)}
-          onSaved={() => { setMomentSheet(null); setLifeRevision((r) => r + 1) }}
+          onSaved={({ pending, uploaded }) => {
+            setMomentSheet(null)
+            if (pending) setLifeNotice(t('Merci, c’est envoyé. Le moment apparaîtra dans sa vie quand la personne qui gère l’arbre l’aura accepté.'))
+            // Nouveaux souvenirs : la fiche les recharge, puis la frise se relit
+            if (uploaded && !pending) onMomentSaved?.(person.id)
+            setLifeRevision((r) => r + 1)
+          }}
         />
       )}
     </div>

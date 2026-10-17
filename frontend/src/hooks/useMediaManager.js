@@ -166,33 +166,39 @@ export function useMediaManager({
     }
   }
 
-  // Photo d'un moment de l'onglet Vie : envoyée comme un souvenir de la personne, puis rattachée au moment.
+  // Fichier d'un moment de l'onglet Vie (photo, vidéo, enregistrement, acte en PDF…) : envoyé comme un
+  // souvenir de la personne et rattaché au moment. Pour la famille, il rejoint la relecture du moment.
   // Renvoie le souvenir créé ; une erreur remonte avec un message lisible.
-  const uploadMomentPhoto = async (personId, file, caption) => {
-    if (!canEditCurrentTree || !treeContext.treeId || !treeContext.accessToken) throw new Error(t('Action non autorisée.'))
-    const validationError = validateMediaFile(file, 'photo', {})
+  const uploadMomentFile = async (personId, file, { lifeEventId, caption = null, submittedByLabel = null } = {}) => {
+    if (!canUploadMedia || !treeContext.treeId || !treeContext.accessToken) throw new Error(t('Action non autorisée.'))
+    const type = resolveUploadMediaType(file, 'auto')
+    const validationError = validateMediaFile(file, type, {})
     if (validationError) throw new Error(validationError)
     try {
       const created = await uploadPersonMedia(
         treeContext.treeId,
         personId,
         {
-          type: 'photo',
-          fileName: file.name || 'photo.jpg',
-          mimeType: getUploadMimeType(file, 'photo'),
+          type,
+          fileName: file.name || 'fichier',
+          mimeType: getUploadMimeType(file, type),
           sizeBytes: file.size,
           dataBase64: await fileToBase64(file),
           caption: caption || null,
           source: null,
+          lifeEventId,
+          ...(submittedByLabel ? { submittedByLabel } : {}),
         },
         treeContext.accessToken,
       )
-      await refreshAfterMediaMutation(personId)
       return created
     } catch (error) {
       throw new Error(getAccountErrorMessage(error), { cause: error })
     }
   }
+
+  // Après l'enregistrement d'un moment : les nouveaux souvenirs apparaissent dans la fiche
+  const refreshMomentMedia = (personId) => refreshAfterMediaMutation(personId)
 
   const handleMovePersonMedia = async (mediaId, direction) => {
     if (!canEditCurrentTree || !selectedPerson || !treeContext.treeId || !treeContext.accessToken) {
@@ -278,7 +284,8 @@ export function useMediaManager({
     handleCloseMediaManager,
     handleUploadPersonMedia,
     handleMovePersonMedia,
-    uploadMomentPhoto,
+    uploadMomentFile,
+    refreshMomentMedia,
     handleDeletePersonMedia,
     resetMediaManager,
   }

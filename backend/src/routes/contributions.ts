@@ -147,7 +147,10 @@ const reorderSchema = z.object({
 
 type ContributionStatus = 'pending' | 'approved' | 'rejected'
 
-type ParsedChange = z.infer<typeof contributionChangeSchema>
+// Les souvenirs et les moments arrivent par leurs propres routes, jamais par une session envoyée en bloc
+type ParsedChange = Omit<z.infer<typeof contributionChangeSchema>, 'entityType'> & {
+  entityType: z.infer<typeof contributionChangeSchema>['entityType'] | 'life_event'
+}
 
 type TxClient = Prisma.TransactionClient
 
@@ -314,6 +317,21 @@ async function applyContributionChange(
   // rien à faire ici. Avant, elles tombaient dans la branche des liens et faisaient échouer la relecture.
   if (change.entityType === 'annotation') {
     return { entityId: change.entityId ?? null }
+  }
+
+  // Moment proposé par la famille : il existe déjà, on le rend visible
+  if (change.entityType === 'life_event') {
+    if (change.action !== 'create' || !change.entityId) {
+      throw new ContributionRouteError(400, 'unsupported_change_action_for_life_event')
+    }
+    const updated = await tx.lifeEvent.updateMany({
+      where: { id: change.entityId, treeId, deletedAt: null },
+      data: { status: 'approved' },
+    })
+    if (updated.count === 0) {
+      throw new ContributionRouteError(400, 'invalid_entity_reference')
+    }
+    return { entityId: change.entityId }
   }
 
   // Souvenir envoyé par la famille : le fichier existe déjà, on le rend visible
@@ -1294,6 +1312,12 @@ export const contributionRoutes: FastifyPluginAsync = async (app) => {
               }
             }
           } else {
+            if (change.entityType === 'life_event' && change.entityId) {
+              await tx.lifeEvent.updateMany({
+                where: { id: change.entityId, treeId: params.data.id },
+                data: { status: 'rejected', deletedAt: new Date() },
+              })
+            }
             if (change.entityType === 'media' && change.entityId) {
               await tx.mediaItem.updateMany({
                 where: { id: change.entityId, treeId: params.data.id },

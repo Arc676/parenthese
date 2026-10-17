@@ -342,7 +342,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
       app.prisma.person.findMany({ where: { treeId, deletedAt: null } }),
       app.prisma.union.findMany({ where: { treeId, deletedAt: null } }),
       app.prisma.parentChildLink.findMany({ where: { treeId, deletedAt: null } }),
-      app.prisma.lifeEvent.findMany({ where: { treeId, deletedAt: null }, orderBy: [{ date: 'asc' }, { displayOrder: 'asc' }] }),
+      app.prisma.lifeEvent.findMany({ where: { treeId, deletedAt: null, status: 'approved' }, orderBy: [{ date: 'asc' }, { displayOrder: 'asc' }] }),
     ])
 
     const personById = new Map(persons.map((p) => [p.id, p]))

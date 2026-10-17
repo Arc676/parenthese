@@ -56,9 +56,26 @@
 @media (hover: hover) and (pointer: fine) { .lt-title--edit:hover { text-decoration-color: var(--pz-a300); } }
 .lt-title--edit:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 2px; }
 
+/* Souvenirs rattachés : vignettes pour les photos, pastilles pour la vidéo, l'acte, la voix */
+.lt-attach { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.lt-photos { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
 .lt-photo {
-  display: block; width: 112px; height: 84px; object-fit: cover; margin-top: 8px;
-  border-radius: var(--pz-r-s); box-shadow: 0 0 0 1px rgba(42, 38, 34, .06);
+  appearance: none; border: 0; padding: 0; cursor: pointer; width: 84px; height: 64px; overflow: hidden;
+  border-radius: var(--pz-r-s); box-shadow: 0 0 0 1px rgba(42, 38, 34, .06); background: var(--pz-a100);
+  transition: transform 140ms var(--pz-ease);
 }
+.lt-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lt-photo:active { transform: scale(.97); }
+.lt-photo:focus-visible, .lt-file:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 2px; }
+.lt-file {
+  appearance: none; display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 30px; padding: 0 11px;
+  border: 1px solid var(--pz-line); border-radius: 999px; background: var(--pz-surface); cursor: pointer;
+  font: 500 12.5px var(--pz-sans); color: var(--pz-ink-2); transition: border-color 160ms ease, transform 140ms var(--pz-ease);
+}
+.lt-file svg { flex: none; color: var(--pz-a700); }
+.lt-file-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (hover: hover) and (pointer: fine) { .lt-file:hover { border-color: var(--pz-a300); } }
+.lt-file:active { transform: scale(.97); }
+.lt-notice { margin: 0 0 10px; }
 .lt-add { margin-top: 14px; }
 .pc-empty .lt-add { margin-top: 12px; }

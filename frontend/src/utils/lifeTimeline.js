@@ -108,8 +108,12 @@ const siblingWord = (p) => {
  * @param person   personne de la fiche (birthDate, deathDate, birthPlace, birthYear, deathYear)
  * @param family   { parents, children, siblings, unions: [{ id, partner, startYear, endYear, unionType }] }
  * @param life     réponse de GET /trees/:id/persons/:personId/life, ou null tant qu'elle n'est pas là
- * @returns entrées triées { key, year, kind: 'mile' | 'minor' | 'fam', title, meta, note, sources }
+ * @returns entrées triées { key, year, kind: 'mile' | 'minor' | 'fam', title, meta, note, sources, mediaIds,
+ *          event (moment modifiable), milestone ({ type, unionId } d'une naissance, d'un mariage, d'un décès) }
  */
+// Naissance, mariage, décès : leur ligne (sources, note, souvenirs) quand elle existe, et de quoi la créer sinon
+const milestoneFields = (row, milestone) => ({ mediaIds: row?.mediaIds || [], event: row || null, milestone })
+
 export function buildLifeTimeline(person, family = {}, life = null) {
   const details = life?.person || {}
   const lifeUnions = new Map((life?.unions || []).map((u) => [String(u.id), u]))
@@ -129,6 +133,7 @@ export function buildLifeTimeline(person, family = {}, life = null) {
       title: place ? t('Naissance à {place}', { place: place.split(',')[0] }) : t('Naissance'),
       meta: describeDate(person.birthDate, details.birthDateEnd, details.birthDatePrecision),
       note: extra?.notes || '', sources: extra?.sources || '',
+      ...milestoneFields(extra, { type: 'birth' }),
     })
   }
 
@@ -143,6 +148,7 @@ export function buildLifeTimeline(person, family = {}, life = null) {
       title: union.unionType === 'union' ? t('Union avec {name}', { name: partnerName }) : t('Épouse {name}', { name: partnerName }),
       meta: joinMeta(place, detail.startDatePrecision ? describeDate(detail.startDate, null, detail.startDatePrecision) : '', ageAt(birthYear, year)),
       note: extra?.notes || '', sources: extra?.sources || '',
+      ...milestoneFields(extra, { type: 'marriage', unionId: union.id }),
     })
     const hasEndEvent = events.some((e) => String(e.unionId) === String(union.id) && ['divorce', 'annulment'].includes(e.type))
     if (union.endYear && !hasEndEvent) {
@@ -166,7 +172,7 @@ export function buildLifeTimeline(person, family = {}, life = null) {
       key: `event-${event.id}`, year, order: 1, kind: 'minor', title,
       meta: joinMeta(formatPlace(event.place || ''), describeDate(event.date, event.dateEnd, event.datePrecision), ageAt(birthYear, year)),
       note: event.notes || '', sources: event.sources || '',
-      mediaId: event.mediaId || null,
+      mediaIds: event.mediaIds || [],
       // Seuls les moments propres à la personne se modifient depuis l'onglet (pas ceux d'une union)
       event: event.unionId ? null : event,
     })
@@ -195,6 +201,7 @@ export function buildLifeTimeline(person, family = {}, life = null) {
       title: place ? t('Décès à {place}', { place: place.split(',')[0] }) : t('Décès'),
       meta: joinMeta(describeDate(person.deathDate, details.deathDateEnd, details.deathDatePrecision), ageAt(birthYear, deathYear)),
       note: extra?.notes || '', sources: extra?.sources || '',
+      ...milestoneFields(extra, { type: 'death' }),
     })
   }
 
