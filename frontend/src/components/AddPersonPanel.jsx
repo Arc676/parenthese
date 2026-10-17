@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import DateField from './DateField.jsx'
 import { UserPlus, X, Search, ChevronDown } from 'lucide-react'
 import './AddPersonPanel.css'
 import PzBusy from './PzBusy.jsx'
@@ -35,6 +36,10 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
   const [birthName, setBirthName] = useState('')
   const [birthDate, setBirthDate] = useState('')
   const [deathDate, setDeathDate] = useState('')
+  // Décédé(e) sans date connue (issue #77)
+  const [isDeceased, setIsDeceased] = useState(false)
+  // Les champs de date gardent leur texte : on les recrée après chaque ajout
+  const [dateFieldsKey, setDateFieldsKey] = useState(0)
   const [relations, setRelations] = useState([])
   const [relationSearch, setRelationSearch] = useState('')
   const [relationDropdownOpen, setRelationDropdownOpen] = useState(false)
@@ -88,6 +93,8 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
       setBirthName('')
       setBirthDate('')
       setDeathDate('')
+      setIsDeceased(false)
+      setDateFieldsKey((k) => k + 1)
       setRelations([])
       setTouched({})
       setJustAdded(false)
@@ -134,6 +141,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
       birthName: birthName.trim() || null,
       birthDate: birthDate || null,
       deathDate: deathDate || null,
+      isDeceased: !deathDate && isDeceased,
       relations,
     })
   }
@@ -173,7 +181,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
 
       <form className="apn-form" onSubmit={handleSubmit}>
         <div className="apn-scroll">
-          <div className="pz-row2">
+          <div className="pz-row2 apn-row">
             <div className="pz-field">
               <label htmlFor="ap-firstName">{t('Prénom')}</label>
               <input
@@ -217,14 +225,20 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
             />
           </div>
 
-          <div className="pz-row2">
+          <div className="pz-row2 apn-row">
             <div className="pz-field">
               <label htmlFor="ap-birthDate">{t('Naissance')}</label>
-              <input id="ap-birthDate" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+              <DateField key={`b-${dateFieldsKey}`} id="ap-birthDate" value={birthDate} onChange={setBirthDate} />
             </div>
             <div className="pz-field">
               <label htmlFor="ap-deathDate">{t('Décès')}</label>
-              <input id="ap-deathDate" type="date" value={deathDate} onChange={(e) => setDeathDate(e.target.value)} />
+              <DateField key={`d-${dateFieldsKey}`} id="ap-deathDate" value={deathDate} onChange={setDeathDate} />
+              {!deathDate && (
+                <label className="apn-deceased">
+                  <input type="checkbox" checked={isDeceased} onChange={(e) => setIsDeceased(e.target.checked)} />
+                  {t('Décédé(e), date inconnue')}
+                </label>
+              )}
             </div>
           </div>
 

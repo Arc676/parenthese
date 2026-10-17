@@ -487,7 +487,7 @@ describe('Graph routes', () => {
     prismaMock.tree.findFirst.mockResolvedValue({ id: 'tree-1', name: 'Ragot', rootPersonId: null })
     prismaMock.person.findMany.mockResolvedValue([
       { ...base, id: 'p-1', firstName: 'Louis', lastName: 'Ragot', sex: 'male', birthDate: new Date('1879-01-01T00:00:00Z'), birthDatePrecision: 'about', birthPlace: 'La Roche-sur-Yon', deathDate: new Date('1950-05-02T00:00:00Z'), deathPlace: 'Nantes', nickname: 'Loulou', profession: 'Instituteur' },
-      { ...base, id: 'p-2', firstName: 'Marie', lastName: 'Bodin', sex: 'female', birthDate: null, birthDatePrecision: null, birthPlace: null },
+      { ...base, id: 'p-2', firstName: 'Marie', lastName: 'Bodin', sex: 'female', birthDate: null, birthDatePrecision: null, birthPlace: null, isDeceased: true },
       { ...base, id: 'p-3', firstName: 'Jean', lastName: 'Ragot', sex: 'male', birthDate: null, birthDatePrecision: null, birthPlace: null },
     ])
     prismaMock.union.findMany.mockResolvedValue([
@@ -513,6 +513,8 @@ describe('Graph routes', () => {
     expect(text).toContain('1 OCCU Instituteur\n2 DATE FROM 1900 TO 1935')
     expect(text.match(/1 OCCU/g)).toHaveLength(1)
     expect(text).toContain('2 PEDI adopted')
+    // Décédée sans date (issue #77) : la forme courte de la norme
+    expect(text).toContain('1 NAME Marie /Bodin/\n1 SEX F\n1 DEAT Y\n')
 
     const roots = parseGedcom(text)
     const records = indexGedcomRecords(roots)
@@ -627,6 +629,24 @@ describe('Graph routes', () => {
     expect(response.statusCode).toBe(200)
     await vi.waitFor(() => expect(prismaMock.treeVisit.findFirst).toHaveBeenCalled())
     expect(prismaMock.treeVisit.create).not.toHaveBeenCalled()
+    await app.close()
+  })
+})
+
+describe('Décès sans date (issue #77)', () => {
+  it('marque décédé sans date, et une date de décès retire le drapeau', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    const patch = (payload: object) => app.inject({ method: 'PATCH', url: '/trees/tree-1/persons/person-1', headers: { authorization: `Bearer ${token}` }, payload })
+
+    expect((await patch({ isDeceased: true })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ isDeceased: true })
+
+    expect((await patch({ deathDate: '1950-01-01', isDeceased: true })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ isDeceased: false, deathDate: new Date('1950-01-01T00:00:00.000Z') })
+
+    expect((await patch({ isDeceased: false, deathDate: null })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ isDeceased: false, deathDate: null })
     await app.close()
   })
 })

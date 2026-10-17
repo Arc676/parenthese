@@ -92,6 +92,10 @@ p, li, blockquote, figcaption, dd, .pz-sub, .pz-small, .pz-hint, .pz-error, .pz-
   transition: border-color 160ms ease, box-shadow 160ms ease; appearance: none;
 }
 .pz-field textarea { min-height: 96px; resize: vertical; }
+/* Champ de date : une année seule ou une date complète (DateField) */
+.pz-date { display: grid; align-content: start; gap: 4px; min-width: 0; }
+.pz-date input[aria-invalid="true"] { border-color: var(--pz-a500); }
+.pz-date-hint { font: 400 12px/1.35 var(--pz-sans); color: var(--pz-a700); }
 .pz-input::placeholder, .pz-field input::placeholder, .pz-field textarea::placeholder { color: var(--pz-faint); }
 .pz-input:focus, .pz-field input:focus, .pz-field textarea:focus, .pz-field select:focus {
   outline: none; border-color: var(--pz-a500); box-shadow: 0 0 0 3px var(--pz-a100);

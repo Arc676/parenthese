@@ -104,3 +104,10 @@
   .add-person-panel, .add-person-panel--open { transform: none; transition: opacity 180ms ease, visibility 0s linear 180ms; }
   .add-person-panel--open { transition: opacity 180ms ease, visibility 0s; }
 }
+
+/* Décédé(e) sans date connue (issue #77) */
+.apn-deceased { display: inline-flex; align-items: center; gap: 7px; margin-top: 6px; font: 400 13px var(--pz-sans); color: var(--pz-ink-2); cursor: pointer; }
+.apn-deceased input { width: 15px; height: 15px; accent-color: var(--pz-a500); }
+
+/* Colonnes alignées en haut : la case « décédé(e) » sous le décès ne décale pas la naissance */
+.apn-row { align-items: start; }

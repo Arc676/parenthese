@@ -615,7 +615,9 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
     ctx.font = '400 11px "DM Sans", system-ui, sans-serif'
     ctx.fillStyle = COLORS.textLight
     const birthYearLabel = person.birthYear ?? '-'
-    const years = person.deathYear ? `${birthYearLabel}–${person.deathYear}` : `${birthYearLabel}`
+    const years = person.deathYear
+      ? `${birthYearLabel}–${person.deathYear}`
+      : person.isAlive === false ? `${birthYearLabel}–?` : `${birthYearLabel}`
     ctx.fillText(years, 0, 15)
   }
 

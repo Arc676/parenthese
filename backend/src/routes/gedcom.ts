@@ -477,6 +477,9 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
         if (deathDate) lines.push(`2 DATE ${deathDate}`)
         if (person.deathPlace) lines.push(`2 PLAC ${oneLine(person.deathPlace)}`)
         pushNotesAndSources(lines, 2, deathDetails)
+      } else if (person.isDeceased) {
+        // Décédé(e) sans rien d'autre : la forme courte de la norme
+        lines.push('1 DEAT Y')
       }
 
       // Le champ « profession » s'écrit seulement s'il n'est pas déjà un des métiers datés
@@ -692,6 +695,8 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
             sex,
             birthDate,
             deathDate,
+            // « 1 DEAT Y » ou un décès sans date : décédé(e), date inconnue
+            isDeceased: Boolean(deatNode) && !deathDate,
             birthPlace,
             profession,
             notes,

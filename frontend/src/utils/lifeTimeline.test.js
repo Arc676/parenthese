@@ -61,6 +61,11 @@ describe('frise de vie', () => {
     expect(withMedia.find((e) => e.title === 'Maire').mediaIds).toEqual(['photo-1', 'photo-2'])
   })
 
+  it('décès sans date : le repère reste, en bas, « date inconnue » (issue #77)', () => {
+    const entries = buildLifeTimeline({ id: 1, firstName: 'X', birthYear: 1900, isAlive: false }, {}, null)
+    expect(entries.map((e) => [e.title, e.year, e.meta])).toEqual([['Naissance', 1900, ''], ['Décès', null, 'date inconnue']])
+  })
+
   it('dit les dates comme on les dit', () => {
     expect(describeDate('1879-01-01', null, 'about')).toBe('vers 1879')
     expect(describeDate('1879-01-01', null, 'before')).toBe('avant 1879')

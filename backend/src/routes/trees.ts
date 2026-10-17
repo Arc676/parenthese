@@ -89,6 +89,7 @@ const createPersonSchema = z.object({
   birthName: z.string().max(120).optional().nullable(),
   birthDate: z.string().regex(isoDateRegex).optional().nullable(),
   deathDate: z.string().regex(isoDateRegex).optional().nullable(),
+  isDeceased: z.boolean().optional(),
   birthPlace: z.string().max(200).optional().nullable(),
   profession: z.string().max(200).optional().nullable(),
   region: z.string().max(120).optional().nullable(),
@@ -104,6 +105,7 @@ const patchPersonSchema = z
     birthName: z.string().max(120).optional().nullable(),
     birthDate: z.string().regex(isoDateRegex).optional().nullable(),
     deathDate: z.string().regex(isoDateRegex).optional().nullable(),
+    isDeceased: z.boolean().optional(),
     birthPlace: z.string().max(200).optional().nullable(),
     profession: z.string().max(200).optional().nullable(),
     region: z.string().max(120).optional().nullable(),
@@ -1310,6 +1312,8 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
         birthName: toTrimmedStringOrNull(payload.data.birthName),
         birthDate: toDateOrNull(payload.data.birthDate),
         deathDate: toDateOrNull(payload.data.deathDate),
+        // Une date de décès dit déjà que la personne est décédée : le drapeau ne sert que sans date
+        isDeceased: !payload.data.deathDate && Boolean(payload.data.isDeceased),
         birthPlace: toTrimmedStringOrNull(payload.data.birthPlace),
         profession: toTrimmedStringOrNull(payload.data.profession),
         region: toTrimmedStringOrNull(payload.data.region),
@@ -1366,6 +1370,7 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
       birthName?: string | null
       birthDate?: Date | null
       deathDate?: Date | null
+      isDeceased?: boolean
       birthPlace?: string | null
       profession?: string | null
       region?: string | null
@@ -1393,6 +1398,14 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
 
     if (payload.data.deathDate !== undefined) {
       data.deathDate = toDateOrNull(payload.data.deathDate)
+    }
+
+    if (payload.data.isDeceased !== undefined) {
+      data.isDeceased = payload.data.isDeceased
+    }
+    // Avec une date de décès, le drapeau « sans date » n'a plus lieu d'être
+    if (data.deathDate) {
+      data.isDeceased = false
     }
 
     if (payload.data.birthPlace !== undefined) {
