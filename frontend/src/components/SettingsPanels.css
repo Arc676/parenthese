@@ -199,6 +199,9 @@
 .contrib-ann-drawing { padding-left: 8px; border-left: 3px solid; font: 400 13px var(--pz-sans); color: var(--pz-muted); }
 .contrib-ann-photo { max-width: 120px; border-radius: 8px; }
 .contrib-media-preview { display: grid; gap: 8px; padding: 2px 0 0; }
+.contrib-moment-preview { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 2px 0 0; font: 400 13px/1.5 var(--pz-sans); color: var(--pz-ink-2); }
+.contrib-moment-preview p { flex-basis: 100%; margin: 0; white-space: pre-line; }
+.contrib-moment-source span { color: var(--pz-muted); margin-right: 4px; }
 .contrib-media-photo { display: block; width: fit-content; max-width: 100%; }
 .contrib-media-photo img { display: block; max-width: min(100%, 280px); max-height: 220px; border-radius: 10px; object-fit: cover; border: 1px solid var(--pz-line); }
 .contrib-media-caption { margin: 0; font: 400 13.5px/1.5 var(--pz-sans); color: var(--pz-ink-2); }

@@ -200,13 +200,27 @@ export const graphRoutes: FastifyPluginAsync = async (app) => {
     })
     const unionIds = unions.map((union) => union.id)
     const events = await app.prisma.lifeEvent.findMany({
-      where: { treeId, deletedAt: null, OR: [{ personId }, ...(unionIds.length ? [{ unionId: { in: unionIds } }] : [])] },
+      where: { treeId, deletedAt: null, status: 'approved', OR: [{ personId }, ...(unionIds.length ? [{ unionId: { in: unionIds } }] : [])] },
       select: {
         id: true, personId: true, unionId: true, type: true, label: true, date: true, dateEnd: true, datePrecision: true,
         dateText: true, place: true, description: true, notes: true, sources: true, mediaId: true, displayOrder: true,
       },
       orderBy: [{ date: 'asc' }, { displayOrder: 'asc' }, { createdAt: 'asc' }],
     })
+
+    // Souvenirs rattachés à chaque moment (photo, vidéo, acte…), visibles seulement une fois acceptés
+    const attached = events.length
+      ? await app.prisma.mediaItem.findMany({
+        where: { treeId, lifeEventId: { in: events.map((event) => event.id) }, status: 'approved', deletedAt: null },
+        select: { id: true, lifeEventId: true },
+        orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
+      })
+      : []
+    const mediaIdsByEvent = new Map<string, string[]>()
+    for (const media of attached) {
+      if (!media.lifeEventId) continue
+      mediaIdsByEvent.set(media.lifeEventId, [...(mediaIdsByEvent.get(media.lifeEventId) ?? []), media.id])
+    }
 
     const day = (value: Date | null) => (value ? value.toISOString().slice(0, 10) : null)
     return reply.send({
@@ -226,7 +240,13 @@ export const graphRoutes: FastifyPluginAsync = async (app) => {
         startDatePrecision: union.startDatePrecision,
         endDate: day(union.endDate),
       })),
-      events: events.map((event) => ({ ...event, date: day(event.date), dateEnd: day(event.dateEnd) })),
+      // L'ancienne colonne mediaId est reprise par media_items.lifeEventId (migration du 17/10)
+      events: events.map(({ mediaId: _legacy, ...event }) => ({
+        ...event,
+        date: day(event.date),
+        dateEnd: day(event.dateEnd),
+        mediaIds: mediaIdsByEvent.get(event.id) ?? [],
+      })),
     })
   })
 }

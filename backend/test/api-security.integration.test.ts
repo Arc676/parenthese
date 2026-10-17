@@ -1398,6 +1398,35 @@ describe('API security and authz', () => {
     await app.close()
   })
 
+  it('un moment proposé par la famille devient visible si accepté, disparaît si refusé', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    const session = (status = 'pending') => ({
+      id: 'session-1',
+      treeId: 'tree-1',
+      status,
+      changes: [
+        { id: 'change-1', entityType: 'life_event', action: 'create', entityId: 'event-1', beforeJson: null, afterJson: { personId: 'person-1', title: 'Départ pour Paris' }, conflictState: 'none' },
+      ],
+    })
+    const review = (decision: string) => app.inject({
+      method: 'POST',
+      url: '/trees/tree-1/contributions/sessions/session-1/review',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { decision },
+    })
+
+    prismaMock.contributionSession.findFirst.mockResolvedValue(session())
+    prismaMock.lifeEvent.updateMany.mockResolvedValue({ count: 1 })
+    expect((await review('approved')).statusCode).toBe(200)
+    expect(prismaMock.lifeEvent.updateMany).toHaveBeenCalledWith({ where: { id: 'event-1', treeId: 'tree-1', deletedAt: null }, data: { status: 'approved' } })
+
+    prismaMock.contributionSession.findFirst.mockResolvedValue(session())
+    expect((await review('rejected')).statusCode).toBe(200)
+    expect(prismaMock.lifeEvent.updateMany).toHaveBeenCalledWith({ where: { id: 'event-1', treeId: 'tree-1' }, data: expect.objectContaining({ status: 'rejected' }) })
+    await app.close()
+  })
+
   it('reviews a session containing a drawing without failing', async () => {
     const app = createApp()
     const token = await createUserToken(app)

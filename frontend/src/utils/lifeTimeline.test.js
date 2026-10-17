@@ -49,6 +49,18 @@ describe('frise de vie', () => {
     expect(buildLifeTimeline({ id: 1, firstName: 'X' }, {}, null)).toEqual([])
   })
 
+  it('naissance, mariage et décès se complètent : leur ligne, ses souvenirs, et de quoi la créer', () => {
+    const withMedia = buildLifeTimeline(robert, family, {
+      ...life,
+      events: [...life.events.map((e) => (e.id === 'e1' ? { ...e, mediaIds: ['acte'] } : e)), { id: 'e9', type: 'occupation', description: 'Maire', date: '1936-01-01', mediaIds: ['photo-1', 'photo-2'] }],
+    })
+    const birth = withMedia.find((e) => e.key === 'birth')
+    expect(birth).toMatchObject({ milestone: { type: 'birth' }, mediaIds: ['acte'], event: expect.objectContaining({ id: 'e1' }) })
+    expect(withMedia.find((e) => e.key === 'union-u2')).toMatchObject({ milestone: { type: 'marriage', unionId: 'u2' }, event: null, mediaIds: [] })
+    expect(withMedia.find((e) => e.key === 'death')).toMatchObject({ milestone: { type: 'death' }, event: null })
+    expect(withMedia.find((e) => e.title === 'Maire').mediaIds).toEqual(['photo-1', 'photo-2'])
+  })
+
   it('dit les dates comme on les dit', () => {
     expect(describeDate('1879-01-01', null, 'about')).toBe('vers 1879')
     expect(describeDate('1879-01-01', null, 'before')).toBe('avant 1879')

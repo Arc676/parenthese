@@ -22,16 +22,35 @@
 .ms-check { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font: 400 14px var(--pz-sans); color: var(--pz-ink-2); cursor: pointer; }
 .ms-check input { width: 16px; height: 16px; accent-color: var(--pz-a500); }
 
-.ms-photo-add {
-  display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px;
+.ms-hint { margin: -2px 0 2px; }
+.ms-files { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ms-file { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ms-file img, .ms-file-icon {
+  flex: none; width: 52px; height: 40px; border-radius: 8px; object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(42, 38, 34, .06);
+}
+.ms-file-icon { display: grid; place-items: center; background: var(--pz-a50); color: var(--pz-a700); }
+.ms-file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 13.5px var(--pz-sans); color: var(--pz-ink); }
+.ms-file-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ms-file-add {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 14px;
   border: 1.5px dashed var(--pz-a300); border-radius: 999px; background: var(--pz-a50);
-  font: 500 13.5px var(--pz-sans); color: var(--pz-a700); cursor: pointer;
+  font: 500 13px var(--pz-sans); color: var(--pz-a700); cursor: pointer;
   transition: background-color 160ms ease, transform 140ms var(--pz-ease);
 }
-@media (hover: hover) and (pointer: fine) { .ms-photo-add:hover { background: var(--pz-a100); } }
-.ms-photo-add:active { transform: scale(.97); }
-.ms-photo-current { display: flex; align-items: center; gap: 12px; }
-.ms-photo-current img { width: 84px; height: 64px; object-fit: cover; border-radius: var(--pz-r-s); box-shadow: 0 0 0 1px rgba(42, 38, 34, .06); }
+@media (hover: hover) and (pointer: fine) { .ms-file-add:hover:not(:disabled) { background: var(--pz-a100); } }
+.ms-file-add:active:not(:disabled) { transform: scale(.97); }
+.ms-file-add:disabled { opacity: .6; cursor: default; }
+.ms-file-add:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 2px; }
+
+/* Choisir parmi ses souvenirs : une grille de vignettes à cocher */
+.ms-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; padding: 8px; background: var(--pz-bg); border-radius: var(--pz-r-s); max-height: 180px; overflow-y: auto; }
+.ms-pick-item { position: relative; appearance: none; border: 0; padding: 0; aspect-ratio: 4 / 3; border-radius: 8px; overflow: hidden; cursor: pointer; background: var(--pz-surface); box-shadow: 0 0 0 1px var(--pz-line); transition: box-shadow 160ms ease, transform 140ms var(--pz-ease); }
+.ms-pick-item img, .ms-pick-item .ms-file-icon { width: 100%; height: 100%; border-radius: 0; box-shadow: none; object-fit: cover; }
+.ms-pick-item.is-on { box-shadow: 0 0 0 2px var(--pz-a500); }
+.ms-pick-item:active { transform: scale(.97); }
+.ms-pick-item:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 2px; }
+.ms-pick-check { position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: var(--pz-a500); color: #fff; }
 
 .ms-more { border-top: 1px solid var(--pz-line-soft); padding-top: 12px; }
 .ms-more summary { cursor: pointer; font: 500 13.5px var(--pz-sans); color: var(--pz-ink-2); list-style-position: inside; }
@@ -42,4 +61,4 @@
 .ms-confirm { display: flex; gap: 8px; }
 .pz-btn.ms-delete { color: var(--pz-danger); padding-left: 0; }
 
-@media (prefers-reduced-motion: reduce) { .ms-chip, .ms-photo-add { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .ms-chip, .ms-file-add, .ms-pick-item { transition: none; } }
