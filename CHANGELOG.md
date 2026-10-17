@@ -2,7 +2,33 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
-## Unreleased
+## 1.1.0 (2026-10-17)
+
+### Life tab
+
+- Each profile has a new Life tab, a timeline of the person's life. Birth, marriages and death are the milestones, other events sit between them with their place and the person's age, and the close family the tree already knows (children and siblings born, parents, partner or a child dying) shows in grey. A profile with no recorded event still gets a timeline. Sources stay folded until clicked.
+- Admins add a moment from the bottom of the tab with what, when (a year, "about"), where, and files. Tapping a moment edits or deletes it.
+- A moment can carry several files of any kind, photos, videos, recordings or documents such as a birth record as a PDF. New files join the person's memories, and existing memories can be picked instead.
+- Birth, marriage and death accept their own documents, source and note.
+- Family members with the sharing link can propose a moment. It waits for the owner's review with its files, in the same proposal, and shows once accepted.
+
+### Dates
+
+- Date fields take a year alone (1950) or a full date, and a year alone reads "1950" instead of "1 January 1950" (#77, reported by @Akasiek).
+- A person can be marked as deceased without a date. The tree shows "1908–?" and the profile "Date unknown" (#77).
+- Dates imported as "about", "before", "between" or "from … to" keep their wording, and editing a date by hand drops it.
+
+### GEDCOM import and export
+
+- A zip holding the .ged file and its photos (or a GEDZIP .gdz) imports in one go. Portraits and other files are matched with the paths the GEDCOM cites, with no folder to pick.
+- Life events are imported and exported (baptism, occupations, residences, military service, custom events, divorce…), with place, notes and sources. Republican calendar dates, adoptions (`PEDI adopted`), nicknames and `1 DEAT Y` are read too. An import then an export keeps them.
+- Files cited by the GEDCOM, under a person, an event, a source or a family, become memories with their title and source (#59, reported by @zycker). Heredis places ("Town,INSEE code,département,…") are cleaned up, at import and for trees already imported.
+- All notes are kept, shared notes included, and dates are read in full instead of by year.
+
+### Family
+
+- Immich face recognition can fill portraits from an Immich server, set up in Settings > Advanced (#58 by @coutadeurf).
+- Siblings can be reordered by dragging one past another in edit mode, or with the arrows on the profile (#60 by @py5932). A new child goes after its siblings.
 
 ### First photos
 
@@ -19,6 +45,11 @@ Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 - Docker: on a first `docker compose up`, the API now gets 120 s to run its migrations before its health check counts (was 30 s). The web container waits for a healthy API and used to give up, so it had to be started again by hand.
 - Children of a family with only one known parent (common in GEDCOM files) are linked to that parent, under a single "Unknown" partner, instead of floating in the tree without a link.
 - Importing a GEDCOM file into a tree that already holds it no longer duplicates everyone: people with the same first name, last name, birth and death dates are reused, and existing unions and parent links are kept.
+- Parents no longer show "(null)" next to their names when the union has no type.
+
+### Dependencies
+
+- Grouped minor and patch updates for the app, the API and the landing, and GitHub Actions upload-artifact 7 and setup-node 7.
 
 ## 1.0.3 (2026-10-10)
 
