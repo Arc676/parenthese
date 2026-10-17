@@ -59,6 +59,14 @@ export async function fetchTreeGraph(treeId, token) {
   }
 }
 
+// Frise de vie d'une personne : événements, précisions de date, lieux des unions
+export async function fetchPersonLife(treeId, personId, token) {
+  return apiRequest(`/trees/${encodeURIComponent(treeId)}/persons/${encodeURIComponent(personId)}/life`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
 export async function listTrees(token) {
   const data = await apiRequest('/trees', {
     method: 'GET',
