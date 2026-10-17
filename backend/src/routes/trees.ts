@@ -156,6 +156,49 @@ const patchParentChildLinkSchema = z
     message: 'at_least_one_field_required',
   })
 
+// Événements de vie saisis dans l'onglet Vie (« Ajouter un moment »). Naissance, décès et mariage gardent
+// leur date sur la personne ou l'union et ne passent pas par ici.
+const LIFE_EVENT_PRECISIONS = ['about', 'estimated', 'calculated', 'before', 'after', 'between', 'from', 'to', 'interpreted'] as const
+const RESERVED_LIFE_EVENT_TYPES = new Set(['birth', 'death', 'marriage'])
+const lifeEventDateRegex = /^\d{4}(-\d{2}-\d{2})?$/
+const lifeEventPayloadSchema = z.object({
+  type: z.string().trim().min(1).max(40).regex(/^[a-z_]+$/).refine((type) => !RESERVED_LIFE_EVENT_TYPES.has(type)).default('custom'),
+  label: z.string().trim().max(120).nullable().optional(),
+  description: z.string().trim().max(1000).nullable().optional(),
+  date: z.string().regex(lifeEventDateRegex).nullable().optional(),
+  dateEnd: z.string().regex(lifeEventDateRegex).nullable().optional(),
+  datePrecision: z.enum(LIFE_EVENT_PRECISIONS).nullable().optional(),
+  place: z.string().trim().max(300).nullable().optional(),
+  notes: z.string().trim().max(4000).nullable().optional(),
+  sources: z.string().trim().max(4000).nullable().optional(),
+  mediaId: z.string().min(1).nullable().optional(),
+})
+const lifeEventParamsSchema = z.object({ id: z.string().min(1), eventId: z.string().min(1) })
+
+const lifeEventDate = (value: string | null | undefined) => {
+  if (value === undefined) return undefined
+  if (!value) return null
+  return new Date(`${value.length === 4 ? `${value}-01-01` : value}T00:00:00.000Z`)
+}
+const emptyToNull = (value: string | null | undefined) => (value === undefined ? undefined : value?.trim() ? value.trim() : null)
+
+function lifeEventData(payload: z.infer<typeof lifeEventPayloadSchema>) {
+  return {
+    type: payload.type,
+    label: emptyToNull(payload.label),
+    description: emptyToNull(payload.description),
+    date: lifeEventDate(payload.date),
+    dateEnd: lifeEventDate(payload.dateEnd),
+    datePrecision: payload.datePrecision,
+    // Saisi dans l'app : pas de texte GEDCOM d'origine à garder
+    dateText: null,
+    place: emptyToNull(payload.place),
+    notes: emptyToNull(payload.notes),
+    sources: emptyToNull(payload.sources),
+    mediaId: payload.mediaId,
+  }
+}
+
 const personParamsSchema = z.object({
   id: z.string().min(1),
   personId: z.string().min(1),
@@ -2006,6 +2049,84 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
   })
 
   // Réordonner une fratrie : displayOrder des liens parent-enfant réécrit en une transaction
+  // Photo rattachée : un souvenir de cette personne, dans cet arbre
+  const checkLifeEventMedia = async (treeId: string, personId: string, mediaId: string | null | undefined) => {
+    if (!mediaId) return true
+    const media = await app.prisma.mediaItem.findFirst({ where: { id: mediaId, treeId, personId, deletedAt: null }, select: { id: true } })
+    return Boolean(media)
+  }
+
+  app.post('/trees/:id/persons/:personId/life/events', async (request, reply) => {
+    const user = requireUser(request, reply)
+    if (!user) return
+    const params = personParamsSchema.safeParse(request.params)
+    if (!params.success) return reply.code(400).send({ error: 'invalid_params' })
+    const payload = lifeEventPayloadSchema.safeParse(request.body ?? {})
+    if (!payload.success) return reply.code(400).send({ error: 'invalid_payload', details: payload.error.flatten() })
+    if (!payload.data.label?.trim() && !payload.data.description?.trim() && payload.data.type === 'custom') {
+      return reply.code(400).send({ error: 'invalid_payload' })
+    }
+
+    const membership = await getAdminMembership(app, user.userId, params.data.id)
+    if (!hasActiveAdminMembership(membership)) return reply.code(403).send({ error: 'forbidden' })
+
+    const person = await app.prisma.person.findFirst({ where: { id: params.data.personId, treeId: params.data.id, deletedAt: null }, select: { id: true } })
+    if (!person) return reply.code(404).send({ error: 'person_not_found' })
+    if (!(await checkLifeEventMedia(params.data.id, params.data.personId, payload.data.mediaId))) {
+      return reply.code(400).send({ error: 'invalid_media_reference' })
+    }
+
+    const event = await app.prisma.lifeEvent.create({
+      data: { treeId: params.data.id, personId: params.data.personId, ...lifeEventData(payload.data) },
+    })
+    return reply.code(201).send({ event: { id: event.id } })
+  })
+
+  app.patch('/trees/:id/life/events/:eventId', async (request, reply) => {
+    const user = requireUser(request, reply)
+    if (!user) return
+    const params = lifeEventParamsSchema.safeParse(request.params)
+    if (!params.success) return reply.code(400).send({ error: 'invalid_params' })
+    const payload = lifeEventPayloadSchema.partial().safeParse(request.body ?? {})
+    if (!payload.success) return reply.code(400).send({ error: 'invalid_payload', details: payload.error.flatten() })
+
+    const membership = await getAdminMembership(app, user.userId, params.data.id)
+    if (!hasActiveAdminMembership(membership)) return reply.code(403).send({ error: 'forbidden' })
+
+    const existing = await app.prisma.lifeEvent.findFirst({
+      where: { id: params.data.eventId, treeId: params.data.id, deletedAt: null },
+      select: { personId: true, type: true },
+    })
+    if (!existing || !existing.personId || RESERVED_LIFE_EVENT_TYPES.has(existing.type)) {
+      return reply.code(404).send({ error: 'event_not_found' })
+    }
+    if (!(await checkLifeEventMedia(params.data.id, existing.personId, payload.data.mediaId))) {
+      return reply.code(400).send({ error: 'invalid_media_reference' })
+    }
+
+    // Le type ne change pas après coup (le schéma partiel remettrait sa valeur par défaut)
+    const data = lifeEventData({ ...payload.data, type: existing.type } as z.infer<typeof lifeEventPayloadSchema>)
+    await app.prisma.lifeEvent.update({ where: { id: params.data.eventId }, data })
+    return reply.send({ ok: true })
+  })
+
+  app.delete('/trees/:id/life/events/:eventId', async (request, reply) => {
+    const user = requireUser(request, reply)
+    if (!user) return
+    const params = lifeEventParamsSchema.safeParse(request.params)
+    if (!params.success) return reply.code(400).send({ error: 'invalid_params' })
+
+    const membership = await getAdminMembership(app, user.userId, params.data.id)
+    if (!hasActiveAdminMembership(membership)) return reply.code(403).send({ error: 'forbidden' })
+
+    const deleted = await app.prisma.lifeEvent.updateMany({
+      where: { id: params.data.eventId, treeId: params.data.id, deletedAt: null, personId: { not: null }, type: { notIn: [...RESERVED_LIFE_EVENT_TYPES] } },
+      data: { deletedAt: new Date() },
+    })
+    if (deleted.count === 0) return reply.code(404).send({ error: 'event_not_found' })
+    return reply.code(204).send()
+  })
+
   app.put('/trees/:id/links/order', async (request, reply) => {
     const user = requireUser(request, reply)
     if (!user) {

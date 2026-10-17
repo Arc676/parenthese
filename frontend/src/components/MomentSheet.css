@@ -1,0 +1,45 @@
+/* Fiche « Ajouter un moment » de l'onglet Vie. Variables --pz-* : src/styles/pz.css */
+
+.ms { width: min(100%, 460px); }
+.ms-title { font-size: 26px; }
+.ms-form { display: grid; gap: 16px; }
+.ms-optional { font-weight: 400; color: var(--pz-faint); margin-left: 4px; }
+
+.ms-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ms-chip {
+  appearance: none; border: 1px solid var(--pz-line); background: var(--pz-surface); border-radius: 999px;
+  padding: 5px 11px; font: 500 12.5px var(--pz-sans); color: var(--pz-ink-2); cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, transform 140ms var(--pz-ease);
+}
+@media (hover: hover) and (pointer: fine) { .ms-chip:hover { border-color: var(--pz-a300); } }
+.ms-chip:active { transform: scale(.97); }
+.ms-chip.is-on { background: var(--pz-a50); border-color: var(--pz-a300); color: var(--pz-a700); }
+.ms-chip:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 2px; }
+
+.ms-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.ms-row > .pz-field { flex: 1 1 150px; min-width: 0; }
+.ms-row > .ms-year { flex: 0 1 120px; }
+.ms-check { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font: 400 14px var(--pz-sans); color: var(--pz-ink-2); cursor: pointer; }
+.ms-check input { width: 16px; height: 16px; accent-color: var(--pz-a500); }
+
+.ms-photo-add {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px;
+  border: 1.5px dashed var(--pz-a300); border-radius: 999px; background: var(--pz-a50);
+  font: 500 13.5px var(--pz-sans); color: var(--pz-a700); cursor: pointer;
+  transition: background-color 160ms ease, transform 140ms var(--pz-ease);
+}
+@media (hover: hover) and (pointer: fine) { .ms-photo-add:hover { background: var(--pz-a100); } }
+.ms-photo-add:active { transform: scale(.97); }
+.ms-photo-current { display: flex; align-items: center; gap: 12px; }
+.ms-photo-current img { width: 84px; height: 64px; object-fit: cover; border-radius: var(--pz-r-s); box-shadow: 0 0 0 1px rgba(42, 38, 34, .06); }
+
+.ms-more { border-top: 1px solid var(--pz-line-soft); padding-top: 12px; }
+.ms-more summary { cursor: pointer; font: 500 13.5px var(--pz-sans); color: var(--pz-ink-2); list-style-position: inside; }
+.ms-more summary:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 2px; border-radius: 4px; }
+.ms-more-body { display: grid; gap: 14px; margin-top: 12px; }
+
+.ms-actions-end { display: flex; gap: 8px; margin-left: auto; }
+.ms-confirm { display: flex; gap: 8px; }
+.pz-btn.ms-delete { color: var(--pz-danger); padding-left: 0; }
+
+@media (prefers-reduced-motion: reduce) { .ms-chip, .ms-photo-add { transition: none; } }

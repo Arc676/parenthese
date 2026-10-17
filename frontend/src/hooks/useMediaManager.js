@@ -166,6 +166,34 @@ export function useMediaManager({
     }
   }
 
+  // Photo d'un moment de l'onglet Vie : envoyée comme un souvenir de la personne, puis rattachée au moment.
+  // Renvoie le souvenir créé ; une erreur remonte avec un message lisible.
+  const uploadMomentPhoto = async (personId, file, caption) => {
+    if (!canEditCurrentTree || !treeContext.treeId || !treeContext.accessToken) throw new Error(t('Action non autorisée.'))
+    const validationError = validateMediaFile(file, 'photo', {})
+    if (validationError) throw new Error(validationError)
+    try {
+      const created = await uploadPersonMedia(
+        treeContext.treeId,
+        personId,
+        {
+          type: 'photo',
+          fileName: file.name || 'photo.jpg',
+          mimeType: getUploadMimeType(file, 'photo'),
+          sizeBytes: file.size,
+          dataBase64: await fileToBase64(file),
+          caption: caption || null,
+          source: null,
+        },
+        treeContext.accessToken,
+      )
+      await refreshAfterMediaMutation(personId)
+      return created
+    } catch (error) {
+      throw new Error(getAccountErrorMessage(error), { cause: error })
+    }
+  }
+
   const handleMovePersonMedia = async (mediaId, direction) => {
     if (!canEditCurrentTree || !selectedPerson || !treeContext.treeId || !treeContext.accessToken) {
       return
@@ -250,6 +278,7 @@ export function useMediaManager({
     handleCloseMediaManager,
     handleUploadPersonMedia,
     handleMovePersonMedia,
+    uploadMomentPhoto,
     handleDeletePersonMedia,
     resetMediaManager,
   }

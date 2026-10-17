@@ -46,3 +46,19 @@
 .lt-failed { margin-top: 10px; }
 
 @media (prefers-reduced-motion: reduce) { .lt-src-list { animation: none; } }
+
+/* Moment modifiable (administrateurs) : le titre s'ouvre en fiche */
+.lt-title--edit {
+  appearance: none; border: 0; background: none; padding: 0; margin: 0; text-align: left; cursor: pointer;
+  font: inherit; color: inherit; border-radius: 4px; text-decoration: underline; text-decoration-color: transparent;
+  text-underline-offset: 3px; transition: text-decoration-color 160ms ease;
+}
+@media (hover: hover) and (pointer: fine) { .lt-title--edit:hover { text-decoration-color: var(--pz-a300); } }
+.lt-title--edit:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 2px; }
+
+.lt-photo {
+  display: block; width: 112px; height: 84px; object-fit: cover; margin-top: 8px;
+  border-radius: var(--pz-r-s); box-shadow: 0 0 0 1px rgba(42, 38, 34, .06);
+}
+.lt-add { margin-top: 14px; }
+.pc-empty .lt-add { margin-top: 12px; }

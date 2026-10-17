@@ -2966,6 +2966,7 @@ function App() {
           relationActionError={relationFeedback.error}
           siblingPlace={siblingPlace}
           onMoveSibling={(delta) => galaxyZoomApiRef.current?.moveSibling?.(tree.selectedPerson.id, delta)}
+          onUploadMomentPhoto={tree.canEditCurrentTree ? media.uploadMomentPhoto : undefined}
         />
       )}
       {tree.selectedMedia && (

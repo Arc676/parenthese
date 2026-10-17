@@ -45,6 +45,16 @@ const EVENT_LABELS = {
   marriage_settlement: t('Accord de mariage'),
 }
 
+// Types dont la description dit déjà ce que c'est (« Instituteur », « École normale »)
+export const DESCRIBED_TYPES = ['occupation', 'education', 'graduation', 'degree', 'title']
+
+// Titre d'un événement : son libellé s'il en a un, sinon le nom du type, complété de la description
+export function eventTitle(event) {
+  if (DESCRIBED_TYPES.includes(event.type) && event.description) return event.description
+  const base = event.label || (event.type === 'custom' ? '' : EVENT_LABELS[event.type]) || t('Événement')
+  return event.description ? `${base}, ${event.description}` : base
+}
+
 const yearOf = (value) => {
   const match = String(value ?? '').match(/^(\d{4})/)
   return match ? Number(match[1]) : null
@@ -147,11 +157,7 @@ export function buildLifeTimeline(person, family = {}, life = null) {
   for (const event of events) {
     if (['birth', 'death', 'marriage'].includes(event.type)) continue
     const year = yearOf(event.date)
-    let title = event.type === 'custom' ? (event.label || t('Événement')) : (EVENT_LABELS[event.type] || event.label || t('Événement'))
-    // Métier, études, diplôme, titre : la description dit déjà ce que c'est (« Instituteur », « École normale »)
-    if (['occupation', 'education', 'graduation', 'degree', 'title'].includes(event.type) && event.description) title = event.description
-    else if (event.description && event.type !== 'custom') title = `${title}, ${event.description}`
-    else if (event.type === 'custom' && event.description) title = `${title}, ${event.description}`
+    let title = eventTitle(event)
     if (event.unionId) {
       const union = (family.unions || []).find((u) => String(u.id) === String(event.unionId))
       if (union?.partner && ['divorce', 'annulment', 'engagement', 'marriage_contract'].includes(event.type)) title = `${title} (${union.partner.firstName})`
@@ -160,6 +166,9 @@ export function buildLifeTimeline(person, family = {}, life = null) {
       key: `event-${event.id}`, year, order: 1, kind: 'minor', title,
       meta: joinMeta(formatPlace(event.place || ''), describeDate(event.date, event.dateEnd, event.datePrecision), ageAt(birthYear, year)),
       note: event.notes || '', sources: event.sources || '',
+      mediaId: event.mediaId || null,
+      // Seuls les moments propres à la personne se modifient depuis l'onglet (pas ceux d'une union)
+      event: event.unionId ? null : event,
     })
   }
 

@@ -203,7 +203,7 @@ export const graphRoutes: FastifyPluginAsync = async (app) => {
       where: { treeId, deletedAt: null, OR: [{ personId }, ...(unionIds.length ? [{ unionId: { in: unionIds } }] : [])] },
       select: {
         id: true, personId: true, unionId: true, type: true, label: true, date: true, dateEnd: true, datePrecision: true,
-        dateText: true, place: true, description: true, notes: true, sources: true, displayOrder: true,
+        dateText: true, place: true, description: true, notes: true, sources: true, mediaId: true, displayOrder: true,
       },
       orderBy: [{ date: 'asc' }, { displayOrder: 'asc' }, { createdAt: 'asc' }],
     })
