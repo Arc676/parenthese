@@ -241,6 +241,7 @@ function buildContributionChangesFromDraft(draft = {}) {
         birthName: person.birthName ? String(person.birthName).trim() : null,
         birthDate: person.birthDate || null,
         deathDate: person.deathDate || null,
+        isDeceased: !person.deathDate && Boolean(person.isDeceased),
       },
     })
 
@@ -289,7 +290,10 @@ function buildContributionChangesFromDraft(draft = {}) {
     if (Object.prototype.hasOwnProperty.call(source, 'region')) after.region = (source.region || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(source, 'nationality')) after.nationality = (source.nationality || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(source, 'note')) after.notes = source.note || null
-    if (Object.prototype.hasOwnProperty.call(source, 'isAlive') && source.isAlive === true) after.deathDate = null
+    if (Object.prototype.hasOwnProperty.call(source, 'isAlive')) {
+      if (source.isAlive === true) after.deathDate = null
+      after.isDeceased = source.isAlive === false
+    }
 
     if (Object.keys(after).length > 0) {
       changes.push({
@@ -1073,6 +1077,7 @@ function App() {
             birthName: formData.birthName || null,
             birthDate: formData.birthDate || null,
             deathDate: formData.deathDate || null,
+            isDeceased: Boolean(formData.isDeceased),
             relations: (formData.relations || []).map((rel) => ({ type: rel.type, personId: rel.personId })),
             siblingParentLinks,
           },
@@ -1098,6 +1103,7 @@ function App() {
           birthName: formData.birthName,
           birthDate: formData.birthDate,
           deathDate: formData.deathDate,
+          isDeceased: Boolean(formData.isDeceased),
         },
         auth.userAuth.token
       )
@@ -1230,7 +1236,10 @@ function App() {
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'profession')) payload.profession = (rawChanges.profession || '').trim() || null
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'region')) payload.region = (rawChanges.region || '').trim() || null
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'nationality')) payload.nationality = (rawChanges.nationality || '').trim() || null
-          if (Object.prototype.hasOwnProperty.call(rawChanges, 'isAlive') && rawChanges.isAlive === true) payload.deathDate = null
+          if (Object.prototype.hasOwnProperty.call(rawChanges, 'isAlive')) {
+            if (rawChanges.isAlive === true) payload.deathDate = null
+            payload.isDeceased = rawChanges.isAlive === false
+          }
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'note')) payload.notes = rawChanges.note || null
 
           if (Object.keys(payload).length > 0) {
@@ -1510,8 +1519,13 @@ function App() {
         if (Object.prototype.hasOwnProperty.call(changes, 'region')) localPerson.region = changes.region || null
         if (Object.prototype.hasOwnProperty.call(changes, 'nationality')) localPerson.nationality = changes.nationality || null
         if (Object.prototype.hasOwnProperty.call(changes, 'note')) localPerson.note = changes.note || null
-        if (Object.prototype.hasOwnProperty.call(changes, 'isAlive') && changes.isAlive === true) {
-          localPerson.deathYear = null
+        if (Object.prototype.hasOwnProperty.call(changes, 'isAlive')) {
+          if (changes.isAlive === true) {
+            localPerson.deathYear = null
+            localPerson.deathDate = null
+          }
+          localPerson.isAlive = changes.isAlive === true
+          localPerson.isDeceased = changes.isAlive === false && !localPerson.deathYear
         }
         tree.setSelectedPerson({ ...localPerson })
       }
@@ -1532,7 +1546,10 @@ function App() {
     if (Object.prototype.hasOwnProperty.call(changes, 'profession')) payload.profession = (changes.profession || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(changes, 'region')) payload.region = (changes.region || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(changes, 'nationality')) payload.nationality = (changes.nationality || '').trim() || null
-    if (Object.prototype.hasOwnProperty.call(changes, 'isAlive') && changes.isAlive === true) payload.deathDate = null
+    if (Object.prototype.hasOwnProperty.call(changes, 'isAlive')) {
+      if (changes.isAlive === true) payload.deathDate = null
+      payload.isDeceased = changes.isAlive === false
+    }
     if (Object.prototype.hasOwnProperty.call(changes, 'note')) payload.notes = changes.note || null
 
     if (Object.keys(payload).length > 0) {

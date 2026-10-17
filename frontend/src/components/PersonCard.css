@@ -175,6 +175,10 @@
 .pc-label { flex: none; font: 400 13.5px var(--pz-sans); color: var(--pz-muted); }
 .pc-row .value { font: 400 14px/1.4 var(--pz-sans); color: var(--pz-ink); text-align: right; font-variant-numeric: tabular-nums; }
 .pc-row .pc-input { max-width: 62%; text-align: right; }
+/* Date : une année seule ou une date complète (issue #77), avec une aide si le texte n'en est pas une */
+.pc-row .pz-date { justify-items: end; max-width: 62%; }
+.pc-row .pz-date .pc-input { max-width: 100%; }
+.pc-row .pz-date-hint { text-align: right; }
 .pc-note { margin: 0; font: 400 italic 16px/1.5 var(--pz-serif); color: var(--pz-ink-2); white-space: pre-wrap; }
 
 .pc-alive {

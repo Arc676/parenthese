@@ -193,13 +193,13 @@ export function buildLifeTimeline(person, family = {}, life = null) {
     if (within(year)) out.push({ key: `parent-death-${parent.id}`, year, order: 6, kind: 'fam', title: parentWord(parent) })
   }
 
-  if (deathYear) {
+  if (deathYear || person.isAlive === false) {
     const place = formatPlace(details.deathPlace || '')
     const extra = sourcesOf('death')
     out.push({
       key: 'death', year: deathYear, order: 9, kind: 'mile',
       title: place ? t('Décès à {place}', { place: place.split(',')[0] }) : t('Décès'),
-      meta: joinMeta(describeDate(person.deathDate, details.deathDateEnd, details.deathDatePrecision), ageAt(birthYear, deathYear)),
+      meta: deathYear ? joinMeta(describeDate(person.deathDate, details.deathDateEnd, details.deathDatePrecision), ageAt(birthYear, deathYear)) : t('date inconnue'),
       note: extra?.notes || '', sources: extra?.sources || '',
       ...milestoneFields(extra, { type: 'death' }),
     })

@@ -12,6 +12,8 @@ import './PersonCard.css'
 import PzBusy from './PzBusy.jsx'
 import { t, dateLocale } from '../i18n/index.js'
 import { formatPlace } from '../utils/place.js'
+import { isYearOnly } from '../utils/dateInput.js'
+import DateField from './DateField.jsx'
 
 const TYPE_LABELS = {
   photo: t('Photo'),
@@ -329,7 +331,9 @@ const PersonCard = ({
       if (union) {
         const p1 = persons.find(p => p.id === union.partner1Id)
         const p2 = persons.find(p => p.id === union.partner2Id)
-        return `${p1?.firstName || '?'} + ${p2?.firstName || '?'} (${unionTypeLabel(union.unionType)})`
+        // Union sans type (fréquent après un import GEDCOM) : pas de « (null) » à côté des prénoms
+        const kind = union.unionType ? ` (${unionTypeLabel(union.unionType)})` : ''
+        return `${p1?.firstName || '?'} + ${p2?.firstName || '?'}${kind}`
       }
     }
 
@@ -363,14 +367,26 @@ const PersonCard = ({
   }
 
   // Rendu d'un champ éditable ou lecture seule
-  const renderEditableValue = ({ field, value, placeholder, type = 'text', format = null }) => {
+  const renderEditableValue = ({ field, value, placeholder, type = 'text', format = null, emptyLabel = '-' }) => {
     if (!editMode) {
       const isEmptyValue = value === null || value === undefined || value === ''
-      // Une date complète se lit « 22 octobre 1928 », pas « 1928-10-22 »
-      const shown = type === 'date' && /^\d{4}-\d{2}-\d{2}/.test(String(value))
-        ? new Date(`${String(value).slice(0, 10)}T00:00:00Z`).toLocaleDateString(dateLocale, { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
-        : format ? format(value) : value
-      return <span className="value">{isEmptyValue ? '-' : shown}</span>
+      // Une date complète se lit « 22 octobre 1928 », une année seule « 1928 », pas « 1 janvier 1928 »
+      let shown = format ? format(value) : value
+      if (type === 'date' && isYearOnly(value)) shown = String(value).slice(0, 4)
+      else if (type === 'date' && /^\d{4}-\d{2}-\d{2}/.test(String(value))) {
+        shown = new Date(`${String(value).slice(0, 10)}T00:00:00Z`).toLocaleDateString(dateLocale, { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+      }
+      return <span className="value">{isEmptyValue ? emptyLabel : shown}</span>
+    }
+    if (type === 'date') {
+      return (
+        <DateField
+          key={`${person.id}-${field}`}
+          className="pc-input value--editable"
+          value={getEditValue(field, value)}
+          onChange={(next) => handleFieldChange(field, next)}
+        />
+      )
     }
     return (
       <input
@@ -395,7 +411,7 @@ const PersonCard = ({
     const died = person.deathYear || (person.deathDate ? String(person.deathDate).slice(0, 4) : '')
     const parts = []
     if (born) parts.push(`${born}${person.birthPlace ? `, ${formatPlace(person.birthPlace)}` : ''}`)
-    if (!person.isAlive && died) parts.push(died)
+    if (!person.isAlive) parts.push(died || '?')
     return parts.join(' – ')
   })()
   const ageLabel = age === null ? null : person.isAlive ? t('{age} ans', { age }) : t('{age} ans au décès', { age })
@@ -697,7 +713,7 @@ const PersonCard = ({
                 {(!getEditValue('isAlive', person.isAlive) || (!editMode && !person.isAlive)) && (
                   <div className="pc-row">
                     <span className="pc-label">{t('Décès')}</span>
-                    {renderEditableValue({ field: 'deathYear', value: person.deathDate || person.deathYear || '', placeholder: t('Date de décès'), type: 'date' })}
+                    {renderEditableValue({ field: 'deathYear', value: person.deathDate || person.deathYear || '', placeholder: t('Date de décès'), type: 'date', emptyLabel: t('Date inconnue') })}
                   </div>
                 )}
                 {!editMode && (
