@@ -60,6 +60,8 @@ import AnnotationToolbar from './components/annotations/AnnotationToolbar'
 import TextInputOverlay from './components/annotations/TextInputOverlay'
 import { filiations, getChildren, getParents, getPersonUnions, medias, persons, unions } from './data/mockData'
 import { readGedcomFile } from './utils/gedcomText'
+import { readGedcomBundle, zipErrorMessage } from './utils/gedcomBundle.js'
+import { materializeFile } from './utils/zipReader.js'
 import { loadMediaRefs, loadPhotoRefs, pickFirstFaces, prepareImageForUpload, saveMediaRefs, savePhotoRefs, sizeBucket } from './utils/photoImport'
 import { fileToBase64, getAccountErrorMessage } from './utils/errorMessages'
 import { getSiblingParentLinks } from './utils/familyLinks'
@@ -484,7 +486,7 @@ function App() {
 
   const [adminPanelVisible, setAdminPanelVisible] = useState(false)
   // Premiers visages : fenêtre ouverte après un import GEDCOM, ou depuis les paramètres de l'arbre
-  const [photoStart, setPhotoStart] = useState({ visible: false, personsImported: null, refs: [], mediaRefs: [], faces: [] })
+  const [photoStart, setPhotoStart] = useState({ visible: false, personsImported: null, refs: [], mediaRefs: [], faces: [], bundledFiles: [] })
   const photoStartDirtyRef = useRef(false)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [showDraftBanner, setShowDraftBanner] = useState(false)
@@ -577,7 +579,8 @@ function App() {
       .filter(Boolean),
   }), [linkedSelfPersonId, tree.treeContext.rootPersonId])
 
-  const openPhotoStart = useCallback(({ personsImported = null, refs = null, mediaRefs = null, treeId = null } = {}) => {
+  // bundledFiles : les photos et actes d'un zip importé, rapprochés tout de suite sans demander de dossier
+  const openPhotoStart = useCallback(({ personsImported = null, refs = null, mediaRefs = null, treeId = null, bundledFiles = [] } = {}) => {
     photoStartDirtyRef.current = false
     setPhotoStart({
       visible: true,
@@ -585,6 +588,7 @@ function App() {
       refs: refs ?? loadPhotoRefs(treeId || tree.treeContext.treeId),
       mediaRefs: mediaRefs ?? loadMediaRefs(treeId || tree.treeContext.treeId),
       faces: computeFirstFaces(),
+      bundledFiles,
     })
   }, [computeFirstFaces, tree.treeContext.treeId])
 
@@ -2373,14 +2377,23 @@ function App() {
       if (payload.gedcomFile) {
         let imported = null
         let importError = ''
+        let bundledFiles = []
         try {
-          const content = (await readGedcomFile(payload.gedcomFile)).text
+          // Un zip apporte le .ged et ses photos : le .ged s'importe, les photos attendent l'étape des visages
+          let bundle
+          try {
+            bundle = await readGedcomBundle(payload.gedcomFile)
+          } catch (error) {
+            throw new Error(error?.code === 'no_gedcom' ? error.message : zipErrorMessage(error), { cause: error })
+          }
+          bundledFiles = bundle.bundledFiles
+          const content = (await readGedcomFile(bundle.gedcomFile)).text
           imported = content.trim()
             ? await importGedcom(createdTree.id, content, token)
             : null
           if (!imported) importError = t('Le fichier GEDCOM est vide.')
         } catch (error) {
-          importError = getAccountErrorMessage(error) || t("Impossible d'importer ce fichier GEDCOM.")
+          importError = (error?.cause && error.message) || getAccountErrorMessage(error) || t("Impossible d'importer ce fichier GEDCOM.")
         }
 
         await auth.loadAccountTrees(token)
@@ -2406,7 +2419,7 @@ function App() {
             media_refs: sizeBucket(mediaRefs.length),
             via: 'wizard',
           })
-          openPhotoStart({ personsImported: (imported.personsCreated || 0) + (imported.personsReused || 0), refs, mediaRefs })
+          openPhotoStart({ personsImported: (imported.personsCreated || 0) + (imported.personsReused || 0), refs, mediaRefs, bundledFiles })
         } else {
           // L'arbre existe déjà : on l'ouvre vide et on dit où réessayer, plutôt que d'en créer un second
           setTreeImportError(importError)
@@ -2564,7 +2577,7 @@ function App() {
     }
   }
 
-  const handleGedcomImported = useCallback(async (result, treeIdOverride = null) => {
+  const handleGedcomImported = useCallback(async (result, treeIdOverride = null, bundledFiles = []) => {
     await refreshTreeAndKeepSelection(null, { relayout: true })
     const refs = Array.isArray(result?.photoRefs) ? result.photoRefs : []
     const mediaRefs = Array.isArray(result?.mediaRefs) ? result.mediaRefs : []
@@ -2576,7 +2589,7 @@ function App() {
       media_refs: sizeBucket(mediaRefs.length),
     })
     setAdminPanelVisible(false)
-    openPhotoStart({ personsImported: (result?.personsCreated || 0) + (result?.personsReused || 0), refs, mediaRefs })
+    openPhotoStart({ personsImported: (result?.personsCreated || 0) + (result?.personsReused || 0), refs, mediaRefs, bundledFiles })
   }, [refreshTreeAndKeepSelection, openPhotoStart, tree.treeContext.treeId])
 
   // Un portrait envoyé sans recharger l'arbre (rechargé une fois, à la fermeture de la fenêtre).
@@ -2584,7 +2597,8 @@ function App() {
   const sendPortrait = useCallback(async (personId, file) => {
     const accessToken = tree.treeContext.accessToken || auth.userAuth.token
     if (!accessToken || !tree.treeContext.treeId) return t('Session expirée, reconnectez-vous.')
-    const prepared = await prepareImageForUpload(file)
+    // Photo d'un zip : décompressée seulement maintenant
+    const prepared = await prepareImageForUpload(await materializeFile(file))
     const validationError = validateMediaFile(prepared, 'photo')
     if (validationError) return validationError
     const payload = {
@@ -2631,9 +2645,10 @@ function App() {
     const accessToken = tree.treeContext.accessToken || auth.userAuth.token
     const added = []
     for (let i = 0; i < matches.length; i += 1) {
-      const { personId, file, caption, source } = matches[i]
+      const { personId, caption, source } = matches[i]
       try {
         if (!accessToken || !tree.treeContext.treeId) break
+        const file = await materializeFile(matches[i].file)
         const prepared = await prepareImageForUpload(file)
         const type = inferMediaTypeFromMimeType(prepared.type)
         if (!validateMediaFile(prepared, type)) {
@@ -3035,6 +3050,7 @@ function App() {
         personsImported={photoStart.personsImported}
         photoRefs={photoStart.refs}
         mediaRefs={photoStart.mediaRefs}
+        bundledFiles={photoStart.bundledFiles}
         faces={photoStart.faces}
         onUploadOne={handlePhotoStartUploadOne}
         onBulkPlace={handlePhotoStartBulk}

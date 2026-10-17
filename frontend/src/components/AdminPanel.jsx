@@ -21,6 +21,7 @@ import PzBusy from './PzBusy.jsx'
 import TreeVisitsSection from './TreeVisitsSection.jsx'
 import { t } from '../i18n/index.js'
 import { readGedcomFile } from '../utils/gedcomText.js'
+import { readGedcomBundle, zipErrorMessage } from '../utils/gedcomBundle.js'
 
 function normalizeSlug(value) {
   return String(value || '')
@@ -234,7 +235,15 @@ const AdminPanel = ({
     setSuccessMessage('')
 
     try {
-      const fileContent = await readFileAsText(gedcomFile)
+      // Un zip apporte le .ged et ses photos : le .ged s'importe, les photos passent à l'étape des visages
+      let bundle
+      try {
+        bundle = await readGedcomBundle(gedcomFile)
+      } catch (error) {
+        setErrorMessage(error?.code === 'no_gedcom' ? error.message : zipErrorMessage(error))
+        return
+      }
+      const fileContent = await readFileAsText(bundle.gedcomFile)
       if (!fileContent.trim()) {
         setErrorMessage(t('Le fichier GEDCOM est vide.'))
         return
@@ -256,7 +265,7 @@ const AdminPanel = ({
       if (gedcomInputRef.current) {
         gedcomInputRef.current.value = ''
       }
-      await onGedcomImported?.(result)
+      await onGedcomImported?.(result, null, bundle.bundledFiles)
     } catch {
       setErrorMessage(t("Impossible d'importer ce fichier GEDCOM."))
     } finally {
@@ -474,7 +483,7 @@ const AdminPanel = ({
                   <div className="ts-row">
                     <div className="ts-row-text">
                       <strong>{t('Importer un fichier GEDCOM')}</strong>
-                      <p className="pz-small">{t('Ajoute les personnes et les liens du fichier à cet arbre.')}</p>
+                      <p className="pz-small">{t('Ajoute les personnes et les liens du fichier à cet arbre. Un fichier .ged, ou un zip qui contient le .ged et ses photos.')}</p>
                       {gedcomFile && <span className="pz-tag pz-tag--accent ts-file">{gedcomFile.name}</span>}
                     </div>
                     <div className="ts-row-actions">
@@ -482,7 +491,7 @@ const AdminPanel = ({
                         ref={gedcomInputRef}
                         className="ts-file-input"
                         type="file"
-                        accept=".ged,text/x-gedcom,text/plain"
+                        accept=".ged,.zip,.gdz,text/x-gedcom,text/plain,application/zip"
                         onChange={(event) => setGedcomFile(event.target.files?.[0] || null)}
                       />
                       <button type="button" className="pz-btn pz-btn--secondary pz-btn--sm" onClick={() => gedcomInputRef.current?.click()} disabled={saving}>

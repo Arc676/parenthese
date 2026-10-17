@@ -151,15 +151,15 @@ function TreeCreationWizard({
                   <label htmlFor="wizardGedcom" className="tw-photo">
                     <span className="tw-photo-icon" aria-hidden="true"><FileUp size={20} strokeWidth={1.8} /></span>
                     <span className="tw-photo-text">
-                      <strong>{form.gedcomFile ? form.gedcomFile.name : t('Choisir le fichier .ged')}</strong>
-                      <span>{form.gedcomFile ? t('Cliquez pour en choisir un autre') : t('Exporté depuis le logiciel où vous tenez votre arbre')}</span>
+                      <strong>{form.gedcomFile ? form.gedcomFile.name : t('Choisir le fichier .ged ou le zip')}</strong>
+                      <span>{form.gedcomFile ? t('Cliquez pour en choisir un autre') : t('Exporté depuis votre logiciel. Un zip avec le .ged et ses photos fait tout en une fois.')}</span>
                     </span>
                   </label>
                   <input
                     id="wizardGedcom"
                     className="tw-photo-input"
                     type="file"
-                    accept=".ged,text/x-gedcom,text/plain"
+                    accept=".ged,.zip,.gdz,text/x-gedcom,text/plain,application/zip"
                     onChange={(event) => updateField('gedcomFile', event.target.files?.[0] || null)}
                   />
                 </div>
