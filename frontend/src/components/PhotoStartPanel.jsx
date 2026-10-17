@@ -4,6 +4,7 @@ import './PhotoStartPanel.css'
 import PzBusy from './PzBusy.jsx'
 import { t } from '../i18n/index.js'
 import { matchPhotoFiles } from '../utils/photoImport.js'
+import { materializeFile } from '../utils/zipReader.js'
 
 function withEmphasis(text) {
   const [before, emphasized = '', after = ''] = text.split(/<\/?em>/)
@@ -41,6 +42,8 @@ export default function PhotoStartPanel({
   personsImported = null,
   photoRefs = [],
   mediaRefs = [],
+  // Photos et actes d'un zip importé : rapprochés dès l'ouverture, sans demander de dossier
+  bundledFiles = [],
   faces = [],
   onUploadOne,
   onBulkPlace,
@@ -60,13 +63,22 @@ export default function PhotoStartPanel({
   const [shownFaces, setShownFaces] = useState(faces)
   const [placedTotal, setPlacedTotal] = useState(0)
   const [memoriesTotal, setMemoriesTotal] = useState(0)
+  // Ouvert après l'import d'un zip : les fichiers sont déjà là, on n'explique pas le choix d'un dossier
+  const [zipMode, setZipMode] = useState(false)
 
   // La liste des visages et les chemins sont figés à l'ouverture : une ligne ne disparaît pas sous le doigt
   useEffect(() => {
     if (!visible) return
     setRemaining(photoRefs)
     setRemainingMedia(mediaRefs)
-    setFound(null)
+    setZipMode(bundledFiles.length > 0)
+    if (bundledFiles.length > 0) {
+      const portraits = matchPhotoFiles(photoRefs, bundledFiles)
+      const media = matchPhotoFiles(mediaRefs, bundledFiles)
+      setFound({ matches: portraits.matches, media: media.matches, fromZip: true })
+    } else {
+      setFound(null)
+    }
     setBulk({ running: false, done: 0, total: 0, placed: null, added: 0, failed: 0 })
     setFaceState({})
     setShownFaces(faces)
@@ -126,7 +138,8 @@ export default function PhotoStartPanel({
     const placedFaces = {}
     for (const match of found.matches) {
       if (!placedIds.has(match.personId) || !shownIds.has(String(match.personId))) continue
-      const preview = URL.createObjectURL(match.file)
+      // Photo d'un zip : relue pour l'aperçu (quelques visages au plus)
+      const preview = URL.createObjectURL(await materializeFile(match.file))
       previewsRef.current.push(preview)
       placedFaces[match.personId] = { busy: false, error: '', preview, fromFolder: true }
     }
@@ -166,10 +179,14 @@ export default function PhotoStartPanel({
   const foundMedia = found?.media || []
   const foundTotal = (found?.matches.length || 0) + foundMedia.length
   const intro = () => {
+    if (zipMode) {
+      return t('Votre zip contient le fichier .ged et les photos ou actes qu’il cite. Parenthèse les a retrouvés, il ne reste qu’à les ajouter. Les portraits vont sur chaque fiche, le reste rejoint les souvenirs.')
+    }
     if (remaining.length > 0 && remainingMedia.length > 0) {
+      const others = plural(remainingMedia.length, '1 autre fichier, un acte ou une photo de famille', '{n} autres fichiers, actes ou photos de famille')
       return remaining.length === 1
-        ? t('Votre logiciel associait une photo à 1 personne, et citait {m} autres fichiers, actes ou photos de famille. Choisissez le dossier où il les range, Parenthèse place le portrait et ajoute le reste aux souvenirs.', { m: remainingMedia.length })
-        : t('Votre logiciel associait une photo à {n} personnes, et citait {m} autres fichiers, actes ou photos de famille. Choisissez le dossier où il les range, Parenthèse place les portraits et ajoute le reste aux souvenirs.', { n: remaining.length, m: remainingMedia.length })
+        ? t('Votre logiciel associait une photo à 1 personne, et citait {others}. Choisissez le dossier où il les range, Parenthèse place le portrait et ajoute le reste aux souvenirs.', { others })
+        : t('Votre logiciel associait une photo à {n} personnes, et citait {others}. Choisissez le dossier où il les range, Parenthèse place les portraits et ajoute le reste aux souvenirs.', { n: remaining.length, others })
     }
     if (remainingMedia.length > 0) {
       return plural(remainingMedia.length, 'Votre logiciel citait 1 fichier, un acte ou une photo de famille. Choisissez le dossier où il le range, Parenthèse l’ajoute aux souvenirs.', 'Votre logiciel citait {n} fichiers, actes ou photos de famille. Choisissez le dossier où il les range, Parenthèse les ajoute aux souvenirs de chaque personne.')
@@ -204,11 +221,11 @@ export default function PhotoStartPanel({
 
         {refsKnown && (
           <section className="psp-block psp-block--folder" aria-labelledby="pspFolderTitle">
-            <h3 id="pspFolderTitle" className="psp-h">{t('Vos photos sont déjà sur votre ordinateur')}</h3>
+            <h3 id="pspFolderTitle" className="psp-h">{zipMode ? t('Les photos et actes de votre zip') : t('Vos photos sont déjà sur votre ordinateur')}</h3>
             {somethingLeft ? (
               <>
                 <p className="psp-p">{intro()}</p>
-                {exampleFolder && (
+                {exampleFolder && !zipMode && (
                   <p className="pz-hint">{t('Il les rangeait dans {folder}', { folder: exampleFolder })}</p>
                 )}
               </>
@@ -250,7 +267,11 @@ export default function PhotoStartPanel({
                   </>
                 ) : (
                   <>
-                    <p className="pz-error">{t("Aucune photo de ce dossier ne correspond. Essayez le dossier indiqué plus haut, ou celui qui le contient.")}</p>
+                    <p className="pz-error">
+                      {found.fromZip
+                        ? t('Aucun fichier du zip ne correspond à ceux que votre logiciel citait. Choisissez le dossier où il les range.')
+                        : t("Aucune photo de ce dossier ne correspond. Essayez le dossier indiqué plus haut, ou celui qui le contient.")}
+                    </p>
                     <button type="button" className="pz-btn pz-btn--secondary" onClick={() => folderInputRef.current?.click()}>
                       <FolderOpen size={18} strokeWidth={2} aria-hidden="true" />
                       {t('Choisir un autre dossier')}
