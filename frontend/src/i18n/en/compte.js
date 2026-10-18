@@ -221,4 +221,16 @@ export default {
   "Pas besoin de compte pour regarder l'arbre.": "No account needed to look at the tree.",
   "Pour retrouver vos arbres et ajouter des souvenirs.": "To find your trees again and add memories.",
   "Ce n'est pas mon compte": "This is not my account",
+
+  // Barre d'actions : menu « + » (ajouter, corriger) et menu du compte
+  "Ajouter ou corriger": "Add or correct",
+  "Un souvenir": "A memory",
+  "photo, vidéo, voix, document": "photo, video, voice, document",
+  "Une personne": "A person",
+  "Un mot ou un dessin sur l'arbre": "A word or a drawing on the tree",
+  "Corriger": "Correct",
+  "dates, noms, liens, le propriétaire relit": "dates, names, links, the owner reviews",
+  "Terminer la modification": "Finish editing",
+  "Aide": "Help",
+  "Se déconnecter": "Sign out",
 }

@@ -1,4 +1,4 @@
-/* Barre d'actions flottante en bas à droite (DA terracotta) */
+/* Barre flottante en bas à droite : une seule pilule (+ et compte), le zoom reste à gauche (DA terracotta, maquette C) */
 .contextual-navbar {
   position: fixed;
   bottom: 20px;
@@ -17,39 +17,70 @@
   to { opacity: 1; transform: none; }
 }
 
+/* La pilule : ancre des menus (ils s'ouvrent au-dessus, calés à droite) */
 .navbar-content {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 5px;
+  gap: 4px;
+  padding: 6px;
   background: var(--pz-surface);
-  border: 1px solid var(--pz-line);
   border-radius: 999px;
-  box-shadow: var(--pz-shadow-lg);
+  box-shadow: 0 1px 2px rgba(42, 38, 34, 0.05), 0 10px 30px rgba(42, 38, 34, 0.12);
 }
 
-.nav-dropdown-wrapper {
+/* Bouton + : noir, rond ; « Ajouter » à côté quand il y a la place */
+.nav-add {
   position: relative;
-  margin-left: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 46px;
+  height: 46px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--pz-ink);
+  color: #fff;
+  font: 500 14px/1 var(--pz-sans);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 160ms ease, box-shadow 160ms ease, transform 140ms var(--pz-ease);
+  -webkit-tap-highlight-color: transparent;
 }
+.nav-add--label { padding: 0 18px 0 14px; }
+.nav-add:active { transform: scale(0.96); }
+.nav-add:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) { .nav-add:hover { background: #3a3530; } }
+.nav-add.is-open,
+.nav-add.is-editing { box-shadow: 0 0 0 4px var(--pz-a100); }
 
-/* Avatar du compte */
+/* Rond du compte */
+.nav-dropdown-wrapper { position: static; }
 .nav-avatar {
-  width: 44px;
-  height: 44px;
+  position: relative;
+  width: 46px;
+  height: 46px;
+  flex: none;
   display: grid;
   place-items: center;
-  overflow: hidden;
+  overflow: visible;
+  padding: 0;
+  border: 0;
   border-radius: 50%;
   background: var(--pz-a100);
+  color: var(--pz-a700);
   cursor: pointer;
   transition: box-shadow 160ms ease, transform 140ms var(--pz-ease);
-  box-shadow: 0 0 0 2px var(--pz-surface), 0 0 0 3px var(--pz-line);
+  -webkit-tap-highlight-color: transparent;
 }
-.nav-avatar:active { transform: scale(.95); }
-@media (hover: hover) and (pointer: fine) { .nav-avatar:hover { box-shadow: 0 0 0 2px var(--pz-surface), 0 0 0 3px var(--pz-a300); } }
-.nav-avatar.active,
-.nav-avatar.admin.active { box-shadow: 0 0 0 2px var(--pz-surface), 0 0 0 4px var(--pz-a500); }
+.nav-avatar > img,
+.nav-avatar-photo { border-radius: 50%; }
+.nav-avatar--guest { background: var(--pz-line-soft); color: var(--pz-muted); }
+.nav-avatar:active { transform: scale(0.95); }
+@media (hover: hover) and (pointer: fine) { .nav-avatar:hover { box-shadow: 0 0 0 3px var(--pz-a300); } }
+.nav-avatar.active { box-shadow: 0 0 0 4px var(--pz-a500); }
 .nav-avatar:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 3px; }
 
 .nav-avatar-initial {
@@ -64,11 +95,30 @@
   object-fit: cover;
 }
 
-@media (max-width: 768px) {
-  .contextual-navbar { bottom: 12px; right: 12px; }
-  .navbar-content { padding: 4px; }
+/* Pastille : propositions à relire, sur le rond lui-même */
+.nav-avatar-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  padding: 0 5px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: var(--pz-a500);
+  color: #fff;
+  font: 600 10.5px/14px var(--pz-sans);
+  text-align: center;
 }
 
+@media (max-width: 767px) {
+  .contextual-navbar { bottom: 12px; right: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .contextual-navbar { animation-duration: 1ms; }
+}
 /* ============================================================
    Mobile Annotation Mode — Navbar Morph
    The pill transforms to host annotation tools on mobile
@@ -279,95 +329,3 @@
     transform: translateY(0) scale(1);
   }
 }
-
-/* ============================================================
-   Famille arrivée par le lien : gestes écrits en toutes lettres
-   ============================================================ */
-.nav-family-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 48px;
-  padding: 0 18px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  font: 500 15.5px/1 var(--pz-sans);
-  color: var(--pz-ink);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 140ms ease, transform 140ms var(--pz-ease);
-}
-.nav-family-btn:active { transform: scale(.97); }
-.nav-family-btn:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 2px; }
-@media (hover: hover) and (pointer: fine) { .nav-family-btn:hover { background: var(--pz-a50); } }
-.nav-family-btn--primary { background: var(--pz-ink); color: #fff; }
-@media (hover: hover) and (pointer: fine) { .nav-family-btn--primary:hover { background: #3a3530; } }
-.nav-family-btn--more.is-open { background: var(--pz-a100); }
-
-.nav-more-wrapper { position: relative; }
-.nav-more-menu {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 12px);
-  min-width: 260px;
-  display: grid;
-  gap: 2px;
-  padding: 6px;
-  background: var(--pz-surface);
-  border: 1px solid var(--pz-line);
-  border-radius: var(--pz-r-m);
-  box-shadow: var(--pz-shadow-lg);
-  animation: pz-rise 180ms var(--pz-ease) both;
-}
-.nav-more-menu button,
-.nav-more-menu a {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 48px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  font: 500 15.5px/1.2 var(--pz-sans);
-  color: var(--pz-ink);
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
-}
-@media (hover: hover) and (pointer: fine) { .nav-more-menu button:hover, .nav-more-menu a:hover { background: var(--pz-a50); } }
-
-@media (max-width: 768px) {
-  /* Sur téléphone, la barre prend toute la largeur : trois cibles larges, icône et mot court */
-  .contextual-navbar--family { left: 12px; right: 12px; }
-  .contextual-navbar--family .navbar-content { justify-content: space-between; gap: 4px; }
-  .contextual-navbar--family .nav-family-btn {
-    flex: 1;
-    flex-direction: column;
-    justify-content: center;
-    gap: 4px;
-    min-height: 64px;
-    padding: 8px 6px;
-    border-radius: 22px;
-    font-size: 14px;
-    line-height: 1.15;
-    white-space: normal;
-    text-align: center;
-  }
-  .contextual-navbar--family .nav-family-label-short { display: none; }
-  /* Sous 420 px, trois libellés complets passent sur deux lignes : on prend les courts, sur une ligne */
-  @media (max-width: 419px) {
-    .contextual-navbar--family .nav-family-label-full { display: none; }
-    .contextual-navbar--family .nav-family-label-short { display: inline; white-space: nowrap; }
-  }
-  .contextual-navbar--family .nav-more-wrapper { flex: 1; display: flex; }
-  .contextual-navbar--family .nav-dropdown-wrapper { margin-left: 0; align-self: center; }
-  /* Le zoom passe au-dessus de la barre pleine largeur */
-  body:has(.contextual-navbar--family) .zoom-control { bottom: 104px; }
-  /* Les messages (merci, ajout) passent au-dessus de la barre, en gros */
-  body:has(.contextual-navbar--family) .contrib-success-toast { bottom: 108px; font-size: 15px; }
-}
-
-/* Choix de la langue dans le menu « Plus » de la famille : même gabarit que les autres lignes */
-.nav-more-menu .pz-lang-row { min-height: 48px; padding-left: 14px; font-size: 15.5px; }
