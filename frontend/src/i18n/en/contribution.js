@@ -177,9 +177,10 @@ export default {
   'Envoyer les modifications': 'Send changes',
   'Aucune modification à soumettre': 'No changes to submit',
   "Vous modifiez l'arbre": "You're editing the tree",
-  'Vos propositions': 'Your suggestions',
+  'Vous proposez des changements': 'You are suggesting changes',
+  'Vous proposez': 'You are suggesting',
+  'Proposer des changements': 'Suggest changes',
   "Mettre à jour l'arbre": 'Update the tree',
-  'Envoyer mes ajouts': 'Send my additions',
   "Aucune modification à envoyer pour l'instant": 'Nothing to send yet',
   'Quitter le mode édition': 'Exit edit mode',
 

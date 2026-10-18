@@ -355,6 +355,12 @@
     white-space: normal;
     text-align: center;
   }
+  .contextual-navbar--family .nav-family-label-short { display: none; }
+  /* Sous 420 px, trois libellés complets passent sur deux lignes : on prend les courts, sur une ligne */
+  @media (max-width: 419px) {
+    .contextual-navbar--family .nav-family-label-full { display: none; }
+    .contextual-navbar--family .nav-family-label-short { display: inline; white-space: nowrap; }
+  }
   .contextual-navbar--family .nav-more-wrapper { flex: 1; display: flex; }
   .contextual-navbar--family .nav-dropdown-wrapper { margin-left: 0; align-self: center; }
   /* Le zoom passe au-dessus de la barre pleine largeur */

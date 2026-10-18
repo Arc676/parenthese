@@ -160,13 +160,23 @@ function ContextualNavbar({
   const isFamily = (navbarType === 'contributor_anon' || navbarType === 'contributor_auth') && Boolean(onAddSouvenirClick)
   const renderFamilyButtons = () => (
     <>
-      <button type="button" className="nav-family-btn nav-family-btn--primary" onClick={onAddSouvenirClick}>
+      {/* Le même crayon que le propriétaire : proposer des changements sans passer par « Plus » */}
+      <NavButton
+        icon={<Edit3 size={20} strokeWidth={2} />}
+        label={t('Proposer des changements')}
+        onClick={onEditClick}
+        active={editModeActive}
+      />
+      {/* Sous 420 px, un libellé court tient sur une ligne ; le libellé complet reste en aria-label et en title */}
+      <button type="button" className="nav-family-btn nav-family-btn--primary" onClick={onAddSouvenirClick} aria-label={t('Ajouter un souvenir')} title={t('Ajouter un souvenir')}>
         <ImagePlus size={20} strokeWidth={2} aria-hidden="true" />
-        <span>{t('Ajouter un souvenir')}</span>
+        <span className="nav-family-label-full">{t('Ajouter un souvenir')}</span>
+        <span className="nav-family-label-short" aria-hidden="true">{t('Souvenir')}</span>
       </button>
-      <button type="button" className="nav-family-btn" onClick={onAddPersonClick}>
+      <button type="button" className="nav-family-btn" onClick={onAddPersonClick} aria-label={t('Ajouter une personne')} title={t('Ajouter une personne')}>
         <UserPlus size={20} strokeWidth={2} aria-hidden="true" />
-        <span>{t('Ajouter une personne')}</span>
+        <span className="nav-family-label-full">{t('Ajouter une personne')}</span>
+        <span className="nav-family-label-short" aria-hidden="true">{t('Personne')}</span>
       </button>
       <div ref={moreRef} className="nav-more-wrapper">
         <button type="button" className={`nav-family-btn nav-family-btn--more${moreOpen ? ' is-open' : ''}`} onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen} aria-haspopup="menu">
@@ -239,7 +249,7 @@ function ContextualNavbar({
           <>
             <NavButton
               icon={<Edit3 size={20} strokeWidth={2} />}
-              label={t('Contribuer')}
+              label={t('Proposer des changements')}
               onClick={onEditClick}
               active={editModeActive}
             />
@@ -258,7 +268,7 @@ function ContextualNavbar({
           <>
             <NavButton
               icon={<Edit3 size={20} strokeWidth={2} />}
-              label={t("Contribuer à l'arbre")}
+              label={t('Proposer des changements')}
               onClick={onEditClick}
               active={editModeActive}
             />

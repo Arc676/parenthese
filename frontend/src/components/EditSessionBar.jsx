@@ -11,8 +11,9 @@ function EditSessionBar({ active, hasDraft, role = 'contributor', onDeactivate, 
   ), [isAdmin])
 
   // Libellés courts : ils doivent tenir sur un téléphone à côté du bouton
-  const toastLabel = isAdmin ? t("Vous modifiez l'arbre") : t('Vos propositions')
-  const submitLabel = isAdmin ? t("Mettre à jour l'arbre") : t('Envoyer mes ajouts')
+  // Invité : « Vous proposez » sur téléphone (une seule ligne), la phrase complète sur ordinateur
+  const toastLabel = isAdmin ? t("Vous modifiez l'arbre") : null
+  const submitLabel = isAdmin ? t("Mettre à jour l'arbre") : t('Envoyer')
   // La famille ne voit le bouton d'envoi que lorsqu'il y a quelque chose à envoyer
   const showSubmit = Boolean(onSubmit) && (isAdmin || hasDraft)
 
@@ -22,9 +23,16 @@ function EditSessionBar({ active, hasDraft, role = 'contributor', onDeactivate, 
     <>
       <div className={borderClass} aria-hidden="true" />
 
-      <div className={`edit-mode-toast${isAdmin ? ' edit-mode-toast--admin' : ''}${showSubmit ? ' edit-mode-toast--with-submit' : ''}`} role="status" aria-live="polite">
+      <div className={`edit-mode-toast${isAdmin ? ' edit-mode-toast--admin' : ' edit-mode-toast--contrib'}${showSubmit ? ' edit-mode-toast--with-submit' : ''}`} role="status" aria-live="polite">
         <span className="edit-mode-toast-dot" aria-hidden="true" />
-        <span className="edit-mode-toast-text">{toastLabel}</span>
+        {isAdmin ? (
+          <span className="edit-mode-toast-text">{toastLabel}</span>
+        ) : (
+          <span className="edit-mode-toast-text">
+            <span className="edit-mode-toast-long">{t('Vous proposez des changements')}</span>
+            <span className="edit-mode-toast-short">{t('Vous proposez')}</span>
+          </span>
+        )}
 
         {showSubmit && (
           <button
