@@ -277,7 +277,9 @@ const PersonCard = ({
 
   // Onglet Infos en modification : seuls les champs remplis (ou ouverts) s'affichent, le reste est en pastilles
   const isFilled = (value) => value !== null && value !== undefined && String(value).trim() !== ''
-  const openedHas = (field) => openedFields.includes(field)
+  // Un champ ouvert par sa pastille, ou en cours de saisie, reste affiché jusqu'à l'enregistrement,
+  // même vidé : sinon il disparaît sous les doigts et la frappe part dans le champ suivant
+  const openedHas = (field) => openedFields.includes(field) || field in edits
   const openField = (field) => {
     setOpenedFields((prev) => (prev.includes(field) ? prev : [...prev, field]))
     setFocusField(field)
