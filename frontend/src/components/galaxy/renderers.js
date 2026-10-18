@@ -126,6 +126,39 @@ function traceBus(ctx, sx, sy, by, ex, ey) {
   ctx.stroke()
 }
 
+// Une union, toute sa fratrie : une seule trajectoire (un tronc, une accolade, un trait par enfant).
+// Un chemin par enfant aurait un rayon de virage propre, donc des brins qui se séparent sous l'union.
+// Le rayon est commun à chaque côté (le plus petit écart du côté), et le tout part dans un seul stroke
+// pour que les parties superposées ne s'additionnent pas en alpha.
+function traceSibship(ctx, sourceId, sourcePos, items) {
+  const sx = sourcePos.cx, sy = sourcePos.cy
+  const by = busY(sourceId, sy)
+  const drop = Math.min(by - sy, 64)
+  const turnFor = (dir) => {
+    let t = BUS_TURN
+    for (const it of items) {
+      const dx = it.cx - sx
+      if (Math.sign(dx) === dir && Math.abs(dx) >= BUS_STRAIGHT_DX) t = Math.min(t, Math.abs(dx) / 2)
+    }
+    return t
+  }
+  const turns = { '-1': turnFor(-1), '1': turnFor(1) }
+  ctx.beginPath()
+  for (const { cx: ex, cy: ey } of items) {
+    const dx = ex - sx
+    ctx.moveTo(sx, sy)
+    ctx.lineTo(sx, by - drop)
+    // Enfant presque sous l'union : descente droite depuis la barre, pas de second brin depuis l'union
+    if (Math.abs(dx) < BUS_STRAIGHT_DX) { ctx.lineTo(ex, by); ctx.lineTo(ex, ey); continue }
+    const dir = Math.sign(dx)
+    const turn = turns[dir]
+    ctx.quadraticCurveTo(sx, by, sx + dir * turn, by)
+    ctx.lineTo(ex - dir * turn, by)
+    ctx.quadraticCurveTo(ex, by, ex, ey)
+  }
+  ctx.stroke()
+}
+
 // Trace une filiation union → enfant. progress < 1 : entrée en fondu
 function traceFiliation(ctx, sourceId, sourcePos, targetPos, childR, progress) {
   const a = ctx.globalAlpha
@@ -251,6 +284,7 @@ export function drawFiliations(ctx, edges, posMap, nodeMap, nodeRandomData, entr
   renvoiHitAreas.length = 0
   renvoiPills.length = 0
   if (!edges) return
+  const sibships = new Map()
 
   edges.forEach(edge => {
     const sourceId = edge.sources[0]
@@ -271,7 +305,22 @@ export function drawFiliations(ctx, edges, posMap, nodeMap, nodeRandomData, entr
 
     const targetNode = nodeMap.get(targetId)
     const pType = edge._parentageType || 'biologique'
+    const childR = nodeRadius(targetNode)
+    if (edge._renvoi) {
+      ctx.globalAlpha = Math.min(1, edgeProgress * 1.5)
+      drawRenvoi(ctx, edge, sourcePos, targetPos, targetNode, childR, view)
+      ctx.globalAlpha = 1
+      return
+    }
+    // Les enfants d'une même union (même type de filiation) forment une seule fratrie, tracée d'un coup
+    const key = `${sourceId}|${pType}`
+    if (!sibships.has(key)) sibships.set(key, { sourceId, sourcePos, pType, items: [], progress: 0 })
+    const sib = sibships.get(key)
+    sib.items.push({ cx: targetPos.cx, cy: targetPos.cy - childR })
+    sib.progress += edgeProgress
+  })
 
+  for (const { sourceId, sourcePos, pType, items, progress } of sibships.values()) {
     if (pType === 'adoption') {
       ctx.setLineDash([8, 5])
       ctx.strokeStyle = FIL.color
@@ -284,19 +333,12 @@ export function drawFiliations(ctx, edges, posMap, nodeMap, nodeRandomData, entr
     }
     ctx.lineWidth = FIL.width
     ctx.lineCap = 'round'
-    ctx.globalAlpha = Math.min(1, edgeProgress * 1.5)
-
-    const childR = nodeRadius(targetNode)
-    if (edge._renvoi) {
-      drawRenvoi(ctx, edge, sourcePos, targetPos, targetNode, childR, view)
-      ctx.globalAlpha = 1
-      ctx.setLineDash([])
-      return
-    }
-    traceFiliation(ctx, sourceId, sourcePos, targetPos, childR, edgeProgress)
+    const p = progress / items.length
+    ctx.globalAlpha = Math.min(1, p * 1.5) * p
+    traceSibship(ctx, sourceId, sourcePos, items)
     ctx.globalAlpha = 1
     ctx.setLineDash([])
-  })
+  }
 }
 
 // ============================================================
