@@ -76,3 +76,17 @@ describe('loadGraphData, union à un seul parent', () => {
     expect(getChildren('julien').map((p) => p.id).sort()).toEqual(['hugo', 'lea'])
   })
 })
+
+describe('loadGraphData, surnom', () => {
+  it("garde le surnom renvoyé par l'API", () => {
+    loadGraphData({
+      persons: [
+        { id: 'p-1', firstName: 'Louise', lastName: 'Martin', birthDate: null, deathDate: null, notes: null, nickname: 'Loulou' },
+        { id: 'p-2', firstName: 'Paul', lastName: 'Martin', birthDate: null, deathDate: null, notes: null, nickname: null },
+      ],
+      unions: [], filiations: [], medias: [], annotations: [],
+    })
+    expect(getPersonById('p-1').nickname).toBe('Loulou')
+    expect(getPersonById('p-2').nickname).toBeNull()
+  })
+})
