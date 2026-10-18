@@ -111,3 +111,6 @@
 
 /* Colonnes alignées en haut : la case « décédé(e) » sous le décès ne décale pas la naissance */
 .apn-row { align-items: start; }
+
+/* Titre de section en casse normale (pas de sur-titre en capitales dans le panneau d'ajout) */
+.apn-section-title { font: 500 14px/1.3 var(--pz-sans); color: var(--pz-ink); margin: 0 0 10px; }

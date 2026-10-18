@@ -407,4 +407,5 @@ export default {
   'Décédé(e), date inconnue': 'Deceased, date unknown',
   'Prénom inconnu': 'Unknown first name',
   'Je ne connais pas son prénom': "I don't know their first name",
+  'Il faut au moins un nom si le prénom est inconnu.': 'A last name is required when the first name is unknown.',
 }
