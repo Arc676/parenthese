@@ -1,5 +1,4 @@
 import { computeLayout, componentOrderPerGen, chainGap } from './elkLayout'
-import { RENVOI_MIN_DX } from './constants'
 
 // ============================================================
 // Layout par blocs familiaux (Reingold-Tilford adapté aux couples)
@@ -26,6 +25,18 @@ import { RENVOI_MIN_DX } from './constants'
 
 const NODE_SPACING = 30
 const FAMILY_GAP = 60
+
+// Le fil d'une filiation union → enfant : une personne d'une autre famille, sur la ligne de l'enfant,
+// entre l'aplomb de l'union et l'enfant, est croisée. Frères et sœurs et conjoint(e)s de l'enfant ne comptent pas.
+export function filCroiseAutreFamille(nodes, childrenOfUnion, spouseKeysOf, u, c) {
+  const byIdLocal = new Map(nodes.map(n => [n.id, n]))
+  const kid = byIdLocal.get(c)
+  const cx = (id) => byIdLocal.get(id).x + byIdLocal.get(id).width / 2
+  const excluded = new Set([c, ...(childrenOfUnion.get(u) || []), ...(spouseKeysOf.get(c) || [])])
+  const lo = Math.min(cx(u), cx(c)), hi = Math.max(cx(u), cx(c))
+  return nodes.some(n => n._type === 'person' && n._generation === kid._generation && !excluded.has(n.id)
+    && n.x + n.width > lo && n.x < hi)
+}
 
 export function computeBlockLayout(graphData = null) {
   const result = computeLayout(graphData)
@@ -209,13 +220,25 @@ export function computeBlockLayout(graphData = null) {
   for (const n of nodes) if (pos.has(n.id)) minX = Math.min(minX, pos.get(n.id))
   for (const n of nodes) if (pos.has(n.id)) n.x = pos.get(n.id) - minX
 
-  // Arête longue vers un enfant placé sous l'autre lignée : dessinée en renvoi (voir drawFiliations)
-  // Plusieurs renvois sous la même union : pastilles empilées (_renvoiIndex)
-  const centerX = (id) => byId.get(id).x + byId.get(id).width / 2
+  // Arête vers un enfant placé sous l'autre lignée : renvoi (voir drawFiliations) seulement si le fil
+  // croise une autre famille. Plusieurs renvois sous la même union : pastilles empilées (_renvoiIndex)
+  // Le fil descend de l'union puis file sur la ligne de la fratrie jusqu'à l'enfant (traceBus) :
+  // il ne traverse une autre famille que si une personne de cette famille se trouve sur cette ligne,
+  // entre l'aplomb de l'union et l'enfant. Frères et sœurs et conjoint(e)s de l'enfant ne comptent pas.
+  const spouseKeysOf = new Map()
+  for (const n of nodes) {
+    if (n._type !== 'union' || !n._data?.p1Key || !n._data?.p2Key) continue
+    const { p1Key, p2Key } = n._data
+    if (!spouseKeysOf.has(p1Key)) spouseKeysOf.set(p1Key, new Set())
+    if (!spouseKeysOf.has(p2Key)) spouseKeysOf.set(p2Key, new Set())
+    spouseKeysOf.get(p1Key).add(p2Key)
+    spouseKeysOf.get(p2Key).add(p1Key)
+  }
+  const crossesOtherFamily = (u, c) => filCroiseAutreFamille(nodes, childrenOfUnion, spouseKeysOf, u, c)
   const renvoisByUnion = new Map()
   for (const e of result.edges) {
     const u = e.sources[0], c = e.targets[0]
-    if (!externalEdges.has(`${u}>${c}`) || Math.abs(centerX(u) - centerX(c)) <= RENVOI_MIN_DX) continue
+    if (!externalEdges.has(`${u}>${c}`) || !crossesOtherFamily(u, c)) continue
     e._renvoi = true
     e._renvoiIndex = renvoisByUnion.get(u) || 0
     renvoisByUnion.set(u, e._renvoiIndex + 1)
