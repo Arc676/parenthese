@@ -261,6 +261,5 @@ button:disabled:has(.pz-busy.is-busy) { opacity: 1; cursor: progress; }
 .pz-lang-row-label { display: inline-flex; align-items: center; gap: 10px; }
 .pz-lang-row-label svg { color: var(--pz-muted); flex: none; }
 /* Dans la barre d'actions, séparé des boutons par un filet */
-.pz-lang--nav { margin-left: 4px; padding: 0 4px 0 8px; border-left: 1px solid var(--pz-line); align-self: stretch; }
 /* Sous les écrans d'accès et de connexion */
 .pz-lang--screen { justify-self: center; }

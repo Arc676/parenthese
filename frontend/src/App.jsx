@@ -3057,8 +3057,8 @@ function App() {
         activeTreeId={tree.treeContext.treeId}
         onEditClick={handleEditToggle}
         onAddPersonClick={handleOpenAddPerson}
-        onAddSouvenirClick={isFamilyVisitor ? handleOpenSouvenirPicker : undefined}
-        helpUrl={isFamilyVisitor ? HELP_URL : ''}
+        onAddSouvenirClick={isFamilyVisitor || userRole.isAdmin ? handleOpenSouvenirPicker : undefined}
+        helpUrl={HELP_URL}
         onShareClick={userRole.isAdmin ? handleOpenContributionPanel : undefined}
         onTreeSelect={handleOpenTreeFromAccount}
         onCreateTree={handleOpenTreeWizard}

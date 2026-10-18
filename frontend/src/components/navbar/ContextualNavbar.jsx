@@ -126,6 +126,17 @@ function ContextualNavbar({
   }
 
   const closeMenus = () => setOpenMenu(null)
+
+  // « Propositions à relire » ouvre la fenêtre de partage, positionnée sur la section des propositions
+  const openProposals = () => {
+    onShareClick?.()
+    const scrollWhenReady = (retries) => {
+      const section = document.getElementById('contrib-propositions')
+      if (section) section.scrollIntoView({ block: 'start' })
+      else if (retries > 0) setTimeout(() => scrollWhenReady(retries - 1), 100)
+    }
+    scrollWhenReady(20)
+  }
   // Chaque action ferme le menu avant de se lancer
   const run = (action) => () => {
     closeMenus()
@@ -188,7 +199,7 @@ function ContextualNavbar({
     }]
   } else {
     const addItems = []
-    if (isFamily) {
+    if (onAddSouvenirClick) {
       addItems.push({ key: 'souvenir', icon: <ImagePlus {...ICON} />, label: t('Un souvenir'), sub: t('photo, vidéo, voix, document'), onSelect: onAddSouvenirClick })
     }
     if (isFamily || isOwner || isDemo) {
@@ -389,7 +400,8 @@ function ContextualNavbar({
                   activeTreeName={activeTreeName}
                   isOwner={isOwner}
                   pendingContributions={pendingContributions}
-                  onContributionsClick={onShareClick}
+                  onContributionsClick={openProposals}
+                  onShareClick={onShareClick}
                   helpUrl={helpUrl}
                   onAccountClick={onAccountClick}
                   onSelectTree={onTreeSelect}

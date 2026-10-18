@@ -233,4 +233,5 @@ export default {
   "Terminer la modification": "Finish editing",
   "Aide": "Help",
   "Se déconnecter": "Sign out",
+  "Partager l'arbre": "Share the tree",
 }

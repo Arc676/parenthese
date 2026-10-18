@@ -24,6 +24,7 @@ function AvatarMenu({
   isOwner = false,
   pendingContributions = 0,
   onContributionsClick,
+  onShareClick,
   helpUrl = '',
   onAccountClick,
   onSelectTree,
@@ -105,6 +106,10 @@ function AvatarMenu({
         )}
         <NavMenuItem icon={<Plus {...ICON} />} label={t('Créer un nouvel arbre')} onSelect={() => { onClose(); onCreateTree?.() }} />
       </NavMenuGroup>
+
+      {isOwner && onShareClick && (
+        <NavMenuItem icon={<Share2 {...ICON} />} label={t("Partager l'arbre")} onSelect={() => { onClose(); onShareClick() }} />
+      )}
 
       {isOwner && (
         <NavMenuItem icon={<Settings {...ICON} />} label={t("Paramètres de l'arbre")} onSelect={() => { onClose(); onSettings?.() }} />
