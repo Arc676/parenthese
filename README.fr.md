@@ -99,7 +99,7 @@ docker run --rm -v parenthese_media:/data -v "$PWD":/backup alpine tar -czf /bac
 
 La première commande sauvegarde la base. Elle contient les personnes, leurs liens, les comptes et les contributions, et elle sait à qui appartient chaque photo, vidéo ou enregistrement. La seconde sauvegarde les fichiers eux-mêmes. Il faut les deux. Restaurez la base seule et les souvenirs pointent vers des fichiers disparus. Restaurez l'archive seule et vous avez un dossier de fichiers rattachés à personne. L'export GEDCOM n'est pas une sauvegarde non plus. Il sert à emmener l'arbre vers un autre logiciel de généalogie et laisse de côté les médias et les annotations.
 
-Adaptez `-U parenthese` et le nom de base si vous avez changé `POSTGRES_USER` ou `POSTGRES_DB`. Pour restaurer la base : `docker compose exec -T db pg_restore -U parenthese -d parenthese --clean < parenthese-db-AAAA-MM-JJ.dump`, puis décompressez l'archive des médias dans le volume avec la même commande `docker run`, `tar -xzf` à la place de `-czf`.
+Adaptez `-U parenthese` et le nom de base si vous avez changé `POSTGRES_USER` ou `POSTGRES_DB`. Pour restaurer la base : `docker compose exec -T db pg_restore -U parenthese -d parenthese --clean --if-exists < parenthese-db-AAAA-MM-JJ.dump`, puis décompressez l'archive des médias dans le volume avec la même commande `docker run`, `tar -xzf` à la place de `-czf`.
 
 Le script `deploy/backup.sh` fait la même chose (dump PostgreSQL, archive des médias, sommes de contrôle, rotation, envoi S3 optionnel) pour une installation sans Docker : il lit `backend/.env` et a besoin de `pg_dump` sur la machine. Ses réglages passent par les variables `BACKUP_ROOT`, `BACKUP_RETENTION_DAYS` et `BACKUP_S3_BUCKET`.
 
@@ -111,7 +111,7 @@ docker compose pull && docker compose up -d
 
 `latest` suit la branche main. Pour rester sur une version, renseignez `PARENTHESE_VERSION` dans `.env` (par exemple `1.0`). Depuis un clone, `git pull && docker compose up -d --build` reconstruit depuis les sources.
 
-Les migrations de base de données s'appliquent toutes seules au démarrage de l'API. Faites une sauvegarde avant, par habitude.
+Les migrations de base de données s'appliquent toutes seules au démarrage de l'API, et une migration ne se défait pas. Lancez les deux commandes de sauvegarde ci-dessus avant chaque mise à jour. L'image tout-en-un le fait seule : avant d'appliquer une migration, elle copie la base dans `/data/backups` et garde les cinq dernières copies.
 
 ## Développer
 

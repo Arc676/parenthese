@@ -182,6 +182,13 @@ jobs:
       - name: Test de fumée par le port web
         run: bash tools/docker-smoke.sh http://localhost:8080
 
+      # Les commandes de sauvegarde et de restauration du README, jouées pour de vrai
+      - name: Sauvegarde puis restauration
+        run: |
+          set -euo pipefail
+          bash tools/docker-restore-check.sh
+          bash tools/docker-smoke.sh http://localhost:8080
+
       # Un second front qui joint l'API par le nom de son conteneur (API_UPSTREAM), comme sur Umbrel.
       - name: Front avec une autre adresse d'API
         run: |
@@ -233,6 +240,9 @@ jobs:
           docker restart aio
           bash tools/docker-smoke.sh http://localhost:8080
           docker logs aio 2>&1 | grep -c "première installation" | grep -qx 1
+          # Base à jour au redémarrage : pas de sauvegarde avant migration, mais pg_dump marche dans l'image
+          [ -z "$(docker exec aio ls -A /data/backups 2>/dev/null)" ]
+          [ "$(docker exec aio runuser -u postgres -- pg_dump -Fc parenthese | wc -c)" -gt 1000 ]
 
       - name: Journaux en cas d'échec
         if: failure()
