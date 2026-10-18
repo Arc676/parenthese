@@ -780,14 +780,13 @@ function Header({ t, onCta, loginHref, elevated }) {
           {t.nav.privacy && <a href={t.privacyHref}>{t.nav.privacy}</a>}
         </nav>
         <div className="nav-cta">
-          {/* Icône « connexion » de Lucide (ISC), tracée à la main : la landing n'embarque pas la bibliothèque */}
-          <a href={loginHref} className="btn s sm nav-login">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-              <polyline points="10 17 15 12 10 7" />
-              <line x1="15" x2="3" y1="12" y2="12" />
+          <a href={loginHref} className="btn s sm nav-login" aria-label={t.nav.login}>
+            {/* Silhouette de profil, icône « user » de Lucide (ISC), tracée à la main : la landing n'embarque pas la bibliothèque */}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="7" r="4" />
+              <path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" />
             </svg>
-            {t.nav.login}
+            <span className="nav-login-text">{t.nav.login}</span>
           </a>
           <button type="button" onClick={onCta} className="btn p sm">{t.cta}</button>
         </div>
