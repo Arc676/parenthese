@@ -160,6 +160,13 @@ function ContextualNavbar({
   const isFamily = (navbarType === 'contributor_anon' || navbarType === 'contributor_auth') && Boolean(onAddSouvenirClick)
   const renderFamilyButtons = () => (
     <>
+      {/* Le même crayon que le propriétaire : proposer des changements sans passer par « Plus » */}
+      <NavButton
+        icon={<Edit3 size={20} strokeWidth={2} />}
+        label={t('Proposer des changements')}
+        onClick={onEditClick}
+        active={editModeActive}
+      />
       <button type="button" className="nav-family-btn nav-family-btn--primary" onClick={onAddSouvenirClick}>
         <ImagePlus size={20} strokeWidth={2} aria-hidden="true" />
         <span>{t('Ajouter un souvenir')}</span>
@@ -239,7 +246,7 @@ function ContextualNavbar({
           <>
             <NavButton
               icon={<Edit3 size={20} strokeWidth={2} />}
-              label={t('Contribuer')}
+              label={t('Proposer des changements')}
               onClick={onEditClick}
               active={editModeActive}
             />
@@ -258,7 +265,7 @@ function ContextualNavbar({
           <>
             <NavButton
               icon={<Edit3 size={20} strokeWidth={2} />}
-              label={t("Contribuer à l'arbre")}
+              label={t('Proposer des changements')}
               onClick={onEditClick}
               active={editModeActive}
             />

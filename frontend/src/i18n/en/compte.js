@@ -190,8 +190,6 @@ export default {
   "Le mode d'emploi": "User guide",
   "Modifier l'arbre": "Edit the tree",
   "Contributions": "Contributions",
-  "Contribuer": "Contribute",
-  "Contribuer à l'arbre": "Contribute to the tree",
   "Contribuer (mot de passe contribution requis)": "Contribute (contribution password required)",
   "Modifier la démo": "Edit the demo",
   "Quitter l'édition": "Exit edit mode",

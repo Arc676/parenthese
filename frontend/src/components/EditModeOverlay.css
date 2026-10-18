@@ -48,14 +48,20 @@
 .edit-mode-submit { flex: none; }
 .edit-mode-toast-close { width: 36px; min-height: 36px; flex: none; }
 
+/* Invité : la phrase complète sur ordinateur, « Vous proposez » sur téléphone, toujours sur une ligne */
+.edit-mode-toast-short { display: none; }
+
 @media (max-width: 768px) {
   .edit-mode-toast { top: 68px; max-width: calc(100vw - 24px); }
   .edit-mode-toast-text { font-size: 13px; }
+  .edit-mode-toast--contrib .edit-mode-toast-long { display: none; }
+  .edit-mode-toast--contrib .edit-mode-toast-short { display: inline; }
 }
 
-/* Téléphone : le texte se coupait en « Vous modifi… » à côté du bouton, qui suffit à lui seul */
+/* Téléphone : le texte de l'éditeur se coupait en « Vous modifi… » à côté du bouton, qui suffit à lui seul.
+   L'invité garde son texte court, qui tient sur une ligne. */
 @media (max-width: 480px) {
-  .edit-mode-toast--with-submit .edit-mode-toast-text { display: none; }
+  .edit-mode-toast--with-submit:not(.edit-mode-toast--contrib) .edit-mode-toast-text { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
