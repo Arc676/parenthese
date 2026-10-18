@@ -4,6 +4,7 @@ import Galaxy from './components/Galaxy'
 import PersonCard from './components/PersonCard.jsx'
 import { FamilyWelcome, SouvenirPicker } from './components/FamilyOnboarding.jsx'
 import { HELP_URL } from './utils/siteLinks.js'
+import { firstNameLabel } from './utils/personName.js'
 import { hasSeenFamilyWelcome, markFamilyWelcomeSeen } from './utils/familyWelcome'
 import MediaViewer from './components/MediaViewer'
 import MediaManagerPanel from './components/MediaManagerPanel'
@@ -563,6 +564,10 @@ function App() {
   const [familyWelcomeVisible, setFamilyWelcomeVisible] = useState(false)
   const [souvenirPickerVisible, setSouvenirPickerVisible] = useState(false)
   const [pendingMediaPersonId, setPendingMediaPersonId] = useState(null)
+  // Message bref (toast) : enregistrement automatique d'une fiche, erreurs d'ordre des fratries
+  const [draftNotice, setDraftNotice] = useState('')
+  // Fiche en modification : elle enregistre ses changements avant qu'on la quitte (PersonCard, saveOnLeaveRef)
+  const personSaveOnLeaveRef = useRef(null)
 
   useEffect(() => {
     if (isFamilyVisitor && tree.bootState === 'ready' && !hasSeenFamilyWelcome(tree.treeContext.treeId)) {
@@ -811,29 +816,55 @@ function App() {
     updateDraft: editMode.updateDraft,
   })
 
-  const handlePersonSelect = useCallback((personLike) => {
+  // Quitter la fiche (changer de personne, la fermer, sortir du mode modification, envoyer, ouvrir un
+  // souvenir) : ses changements sont enregistrés d'abord. Faux si ça échoue : la fiche reste ouverte
+  // avec le message d'erreur, la saisie n'est pas jetée. En démo rien n'est persisté : on ne sauvegarde pas.
+  const leaveSelectedPerson = useCallback(async () => {
+    const current = tree.selectedPerson
+    const saveOnLeave = personSaveOnLeaveRef.current
+    if (!current || !saveOnLeave || isDemoMode) return true
+    const outcome = await saveOnLeave()
+    if (outcome === 'saved') setDraftNotice(t('Modifications de {name} enregistrées', { name: firstNameLabel(current) }))
+    return outcome !== 'blocked'
+  }, [tree.selectedPerson, isDemoMode])
+
+  const chooseSelectedPerson = useCallback(async (next) => {
+    if (!(await leaveSelectedPerson())) return false
+    tree.setSelectedPerson(next)
+    return true
+  }, [leaveSelectedPerson, tree.setSelectedPerson])
+
+  const deactivateEditMode = useCallback(async () => {
+    if (!(await leaveSelectedPerson())) return
+    editMode.deactivate()
+  }, [leaveSelectedPerson, editMode.deactivate])
+
+  const handlePersonSelect = useCallback(async (personLike) => {
     const personId = personLike && typeof personLike === 'object' ? personLike.id : personLike
     if (personId === null || personId === undefined) {
-      tree.setSelectedPerson(null)
+      await chooseSelectedPerson(null)
       return
     }
+
+    const freshPerson = persons.find((candidate) => String(candidate.id) === String(personId)) || personLike || null
+    if (!(await leaveSelectedPerson())) return
 
     // Cliquer une personne pendant un ajout ferme le panneau d'ajout (il passe au-dessus de la fiche) ;
     // sa saisie reste en mémoire et reprend quand on rouvre « Ajouter »
     setAddPersonPanelVisible(false)
 
-    const freshPerson = persons.find((candidate) => String(candidate.id) === String(personId)) || personLike || null
     tree.setSelectedPerson(freshPerson)
     trackTreeInteraction('text')
     trackDemoInteraction('person')
-  }, [tree.setSelectedPerson, trackTreeInteraction, trackDemoInteraction]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chooseSelectedPerson, leaveSelectedPerson, tree.setSelectedPerson, trackTreeInteraction, trackDemoInteraction]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleMediaSelectFresh = useCallback((media, personLike) => {
+  const handleMediaSelectFresh = useCallback(async (media, personLike) => {
     const personId = personLike && typeof personLike === 'object' ? personLike.id : personLike
     const freshPerson = personId !== null && personId !== undefined
       ? persons.find((candidate) => String(candidate.id) === String(personId)) || personLike || null
       : personLike || null
 
+    if (!(await leaveSelectedPerson())) return
     tree.handleMediaSelect(media, freshPerson)
     trackTreeInteraction(toInteractionMediaType(media?.type))
     trackDemoInteraction('media')
@@ -895,22 +926,26 @@ function App() {
   const handleEditToggle = useCallback(() => {
     if (editMode.isActive && editMode.hasDraft) {
       setShowConfirmModal(true)
+    } else if (editMode.isActive) {
+      deactivateEditMode()
     } else {
-      if (!editMode.isActive) trackDemoInteraction('edit')
+      trackDemoInteraction('edit')
       editMode.toggle()
     }
-  }, [editMode.isActive, editMode.hasDraft, editMode.toggle, trackDemoInteraction]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [editMode.isActive, editMode.hasDraft, editMode.toggle, deactivateEditMode, trackDemoInteraction]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Actions de la modal de confirmation
   const handleConfirmContinue = useCallback(() => {
     setShowConfirmModal(false)
   }, [])
 
-  const handleConfirmSaveAndQuit = useCallback(() => {
+  const handleConfirmSaveAndQuit = useCallback(async () => {
+    const left = await leaveSelectedPerson()
+    setShowConfirmModal(false)
+    if (!left) return
     editMode.saveDraft()
     editMode.deactivate()
-    setShowConfirmModal(false)
-  }, [editMode.saveDraft, editMode.deactivate]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [leaveSelectedPerson, editMode.saveDraft, editMode.deactivate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleConfirmDiscard = useCallback(() => {
     editMode.clearDraft()
@@ -966,11 +1001,11 @@ function App() {
     setSouvenirPickerVisible(true)
   }, [tree.treeContext.treeId])
 
-  const handleSouvenirPick = useCallback((person) => {
+  const handleSouvenirPick = useCallback(async (person) => {
+    if (!(await chooseSelectedPerson(person))) return
     setSouvenirPickerVisible(false)
-    tree.setSelectedPerson(person)
     setPendingMediaPersonId(person.id)
-  }, [tree.setSelectedPerson]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chooseSelectedPerson]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSouvenirPickerAddPerson = useCallback(() => {
     setSouvenirPickerVisible(false)
@@ -984,6 +1019,8 @@ function App() {
 
   const handleAddPersonSubmit = useCallback(async (formData) => {
     if (!tree.treeContext.treeId && !isDemoMode) return
+    // La fiche ouverte est enregistrée avant que la nouvelle personne ne la remplace
+    if (!(await leaveSelectedPerson())) return
 
     setAddPersonLoading(true)
     setAddPersonError('')
@@ -1193,7 +1230,6 @@ function App() {
   const [contribSubmitLoading, setContribSubmitLoading] = useState(false)
   const [contribSubmitError, setContribSubmitError] = useState('')
   const [contribSuccess, setContribSuccess] = useState(false)
-  const [draftNotice, setDraftNotice] = useState('')
 
   // Ordre d'une fratrie (glisser dans l'arbre ou flèches de la fiche) : appliqué tout de suite, enregistré ensuite.
   // L'arbre a déjà glissé à la nouvelle place ; en cas d'échec il revient en arrière et on le dit.
@@ -1233,6 +1269,8 @@ function App() {
 
   // Soumission des modifications
   const handleEditSubmit = useCallback(async () => {
+    // Les changements de la fiche ouverte doivent être dans le brouillon avant l'envoi
+    if (!(await leaveSelectedPerson())) return
     if (isDemoMode) {
       // Démo: édition locale uniquement, jamais de persistance serveur.
       editMode.saveDraft()
@@ -2967,11 +3005,11 @@ function App() {
         hasResults={search.hasResults}
         onSearch={search.handleSearch}
         onClear={search.clearSearch}
-        onResultClick={(person) => {
+        onResultClick={async (person) => {
           const fullPerson = persons.find(p => p.id === person.id)
           if (!fullPerson) return
           trackDemoInteraction('search')
-          tree.setSelectedPerson(fullPerson)
+          if (!(await chooseSelectedPerson(fullPerson))) return
           galaxyZoomApiRef.current?.focusPerson?.(fullPerson.id)
         }}
       />
@@ -2988,7 +3026,7 @@ function App() {
         hasDraft={editMode.hasDraft}
         draftTimestamp={editMode.draftTimestamp}
         role={userRole.isAdmin ? 'admin' : 'contributor'}
-        onDeactivate={editMode.deactivate}
+        onDeactivate={deactivateEditMode}
         onSubmit={handleEditSubmit}
       />
       {/* Confirmation Modal (quitter mode édition avec draft) */}
@@ -3104,8 +3142,9 @@ function App() {
       {tree.selectedPerson && (
         <PersonCard
           person={tree.selectedPerson}
-          onClose={() => tree.setSelectedPerson(null)}
+          onClose={() => { chooseSelectedPerson(null) }}
           onMediaSelect={handleMediaSelectFresh}
+          saveOnLeaveRef={personSaveOnLeaveRef}
           editMode={editMode.isActive}
           canManageMedia={tree.canSubmitContribution || tree.canEditCurrentTree}
           onManageMedia={media.handleOpenMediaManager}
