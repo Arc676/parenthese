@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { env } from '../config/env.js'
 import { hashPassword, verifyPassword } from '../lib/auth.js'
 import { revokeUserToken } from '../lib/token-revocation.js'
+import { deletedAccountVisitorKey } from '../lib/tree-visits.js'
 import { deleteTreeRecords, removeTreeMediaDirectories } from '../lib/tree-purge.js'
 import type { AnyJwtPayload } from '../types/auth.js'
 
@@ -379,6 +380,12 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         await tx.contributionSession.updateMany({
           where: { submittedByUserId: userId },
           data: { submittedByLabel: 'Contributeur' },
+        })
+
+        // Ses visites des autres arbres restent comptées, sans son identifiant
+        await tx.treeVisit.updateMany({
+          where: { visitorKey: `user:${userId}` },
+          data: { visitorKey: deletedAccountVisitorKey(userId) },
         })
 
         await tx.user.delete({ where: { id: userId } })

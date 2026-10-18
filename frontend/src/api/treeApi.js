@@ -538,6 +538,8 @@ export async function importGedcom(treeId, fileContent, token) {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ content: fileContent }),
+    // Un gros arbre se crée en une transaction d'une minute au plus côté serveur
+    timeoutMs: 3 * 60_000,
   })
   return data
 }

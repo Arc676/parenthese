@@ -220,4 +220,13 @@ describe('localMediaPath', () => {
     expect(localMediaPath('C:\\Photos\\arbre.ged')).toBeNull()
     expect(localMediaPath('')).toBeNull()
   })
+
+  it('fichier piégé : sources en chaîne et niveaux trop profonds, sans débordement ni lenteur', () => {
+    const chain = Array.from({ length: 20000 }, (_, i) => [`0 @S${i}@ SOUR`, `1 SOUR @S${i + 1}@`]).flat()
+    const deep = Array.from({ length: 5000 }, (_, i) => `${i + 2} NOTE niveau`)
+    const text = ['0 @I1@ INDI', '1 NAME A /B/', '1 SOUR @S0@', '1 BIRT', ...deep, ...chain, '0 @S20000@ SOUR', '1 OBJE', '2 FILE C:/fin.jpg'].join('\n')
+    const started = Date.now()
+    expect(() => mediaOf(text)).not.toThrow()
+    expect(Date.now() - started).toBeLessThan(2000)
+  })
 })

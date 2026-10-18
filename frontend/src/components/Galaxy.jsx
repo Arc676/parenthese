@@ -70,7 +70,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   const selectedPersonIdRef = useRef(null)
   const selectedGlowScales = useRef(new Map())
   const searchGlowScales = useRef(new Map())
-  const searchHighlightIdsRef = useRef([])
+  const searchHighlightSetRef = useRef(new Set())
   const immediateRelativesRef = useRef(new Set())
   const pathEdgesRef = useRef([])
   const pathNodesRef = useRef([])
@@ -567,7 +567,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
 
   // Sync searchHighlightIds
   useEffect(() => {
-    searchHighlightIdsRef.current = searchHighlightIds
+    searchHighlightSetRef.current = new Set(searchHighlightIds.map(id => `p-${id}`))
   }, [searchHighlightIds])
 
   // Recalculer les proches immédiats
@@ -646,15 +646,6 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       if (!layoutData || !canvas) { rafId = requestAnimationFrame(animate); return }
       const { x, y, scale } = transformRef.current
 
-      // Positions animées
-      const posMap = new Map()
-      layoutData.children.forEach(node => {
-        posMap.set(node.id, getAnimatedPos(node, timestamp))
-      })
-
-      const nodeMap = new Map()
-      layoutData.children.forEach(n => nodeMap.set(n.id, n))
-
       // Lissage hover states
       const hoverEasing = 0.12
       layoutData.children.forEach(node => {
@@ -667,11 +658,10 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
         const pMedias = getPersonMedias(node._data.id)
         const orbitSlots = rd?.orbitSlots || []
         const orbitCount = Math.min(pMedias.length, MAX_ORBIT_MEDIAS)
-        const pos = posMap.get(node.id)
         for (let i = 0; i < orbitCount; i++) {
           const key = `${node.id}:${i}`
           const slot = orbitSlots[i]
-          if (!slot || !pos) continue
+          if (!slot) continue
           const isHovered = hoveredMediaKey.current === key
           const prevMh = mediaHoverState.current.get(key) || { scale: 0, dx: 0, dy: 0 }
           const dirX = Math.cos(slot.angle)
@@ -717,7 +707,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
 
       // Animation search highlight glow
       const searchEasing = 0.12
-      const searchHighlightSet = new Set(searchHighlightIdsRef.current.map(id => `p-${id}`))
+      const searchHighlightSet = searchHighlightSetRef.current
       layoutData.children.forEach(node => {
         if (node._type !== 'person') return
         const targetSearchGlow = searchHighlightSet.has(node.id) ? 1.2 : 0
@@ -752,8 +742,6 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       const PATH_EDGE_DURATION = 300
       const pathElapsed = pathStartTime.current > 0 ? timestamp - pathStartTime.current : -1
       const pathEasing = 0.12
-      const activePathEdges = new Set(pathEdgesRef.current.map(e => e.id))
-      const activePathNodes = new Set(pathNodesRef.current)
 
       for (let i = 0; i < pathEdgesRef.current.length; i++) {
         const e = pathEdgesRef.current[i]
@@ -771,12 +759,17 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
         if (pathProgressRef.current.get(n) !== staggeredTarget) { dirty = true; pathProgressRef.current.set(n, staggeredTarget) }
       }
 
-      for (const [key, val] of pathProgressRef.current) {
-        if (!activePathEdges.has(key) && !activePathNodes.has(key)) {
-          dirty = true
-          const next = val + (0 - val) * pathEasing
-          if (Math.abs(next) < 0.001) pathProgressRef.current.delete(key)
-          else pathProgressRef.current.set(key, next)
+      // Au repos, rien à éteindre : pas d'ensembles reconstruits à chaque frame
+      if (pathProgressRef.current.size > 0) {
+        const activePathEdges = new Set(pathEdgesRef.current.map(e => e.id))
+        const activePathNodes = new Set(pathNodesRef.current)
+        for (const [key, val] of pathProgressRef.current) {
+          if (!activePathEdges.has(key) && !activePathNodes.has(key)) {
+            dirty = true
+            const next = val + (0 - val) * pathEasing
+            if (Math.abs(next) < 0.001) pathProgressRef.current.delete(key)
+            else pathProgressRef.current.set(key, next)
+          }
         }
       }
 
@@ -795,6 +788,15 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
 
       // Rien n'a changé : on ne redessine pas
       if (!dirty) { rafId = requestAnimationFrame(animate); return }
+
+      // Positions animées, calculées seulement quand on redessine
+      const posMap = new Map()
+      layoutData.children.forEach(node => {
+        posMap.set(node.id, getAnimatedPos(node, timestamp))
+      })
+
+      const nodeMap = new Map()
+      layoutData.children.forEach(n => nodeMap.set(n.id, n))
 
       // === RENDU ===
       const ctx = canvas.getContext('2d')

@@ -78,6 +78,22 @@ stop_all() {
 trap 'stop_all; exit 0' TERM INT
 
 cd /app
+# Migration en attente sur une base existante : copie de la base dans /data/backups avant de l'appliquer
+# (une migration ne se défait pas). Les 5 dernières sont gardées. Si la copie échoue, le conteneur s'arrête.
+if [ "$FIRST_START" = 0 ] && ! runuser -u node -- env PATH="$PATH" prisma migrate status >/dev/null 2>&1; then
+  mkdir -p "$DATA_DIR/backups"
+  chmod 700 "$DATA_DIR/backups"
+  dump="$DATA_DIR/backups/parenthese-avant-migration-$(date -u +%Y%m%dT%H%M%SZ).dump"
+  log "migration en attente : sauvegarde de la base dans $dump"
+  if ! (umask 077 && runuser -u postgres -- pg_dump -Fc "$DB_NAME" > "$dump"); then
+    rm -f "$dump"
+    log "la sauvegarde a échoué, migration annulée (place sur le disque ?)"
+    stop_all
+    exit 1
+  fi
+  ls -1t "$DATA_DIR"/backups/parenthese-avant-migration-*.dump | tail -n +6 | xargs -r rm -f
+fi
+
 log "migrations"
 runuser -u node -- env PATH="$PATH" prisma migrate deploy
 

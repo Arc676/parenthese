@@ -6,8 +6,11 @@ import { env } from '../config/env.js'
 // Une ouverture d'arbre = une visite. Les rechargements du même visiteur dans cette fenêtre
 // (graphe rechargé après une modification, onglet rouvert) ne comptent qu'une fois.
 export const VISIT_DEDUP_WINDOW_MS = 30 * 60 * 1000
-// Au-delà, les visites sont effacées (lecture de l'onglet Visites)
+// Au-delà, les visites sont effacées : à l'enregistrement d'une visite (au plus une fois par heure,
+// pour tous les arbres) et à la lecture de l'onglet Visites
 export const VISIT_RETENTION_DAYS = 365
+const PURGE_INTERVAL_MS = 60 * 60 * 1000
+let lastPurgeAt = 0
 
 export type VisitAccessKind = 'share' | 'member' | 'shared_account'
 
@@ -32,6 +35,18 @@ export function visitorNameFromHeader(value: unknown): string | null {
 
 export function visitorKeyOf(treeId: string, ip: string, userAgent: string): string {
   return createHash('sha256').update(`${env.JWT_SECRET}|${treeId}|${ip}|${userAgent}`).digest('hex').slice(0, 32)
+}
+
+// Compte supprimé : ses visites restent comptées, sans son identifiant
+export function deletedAccountVisitorKey(userId: string): string {
+  return createHash('sha256').update(`${env.JWT_SECRET}|deleted|${userId}`).digest('hex').slice(0, 32)
+}
+
+async function purgeExpiredVisits(app: FastifyInstance): Promise<void> {
+  const now = Date.now()
+  if (now - lastPurgeAt < PURGE_INTERVAL_MS) return
+  lastPurgeAt = now
+  await app.prisma.treeVisit.deleteMany({ where: { createdAt: { lt: new Date(now - VISIT_RETENTION_DAYS * 24 * 60 * 60 * 1000) } } })
 }
 
 // N'échoue jamais : un journal qui casse ne doit pas empêcher d'ouvrir l'arbre
@@ -69,6 +84,7 @@ export async function recordTreeVisit(
         device: deviceFromUserAgent(userAgent),
       },
     })
+    await purgeExpiredVisits(app)
   } catch (error) {
     request.log.warn({ err: error, treeId }, 'tree_visit_record_failed')
   }
