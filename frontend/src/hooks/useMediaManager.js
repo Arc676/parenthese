@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { uploadPersonMedia, reorderPersonMedia, deletePersonMedia } from '../api/treeApi'
+import { uploadPersonMedia, reorderPersonMedia, deletePersonMedia, updatePersonMedia, fetchPersonLife } from '../api/treeApi'
 import { getPersonMedias } from '../data/mockData'
 import { fileToBase64, getAccountErrorMessage } from '../utils/errorMessages'
 import { getUploadMimeType, resolveUploadMediaType, validateMediaFile } from '../utils/mediaUpload'
@@ -273,6 +273,18 @@ export function useMediaManager({
     }
   }
 
+  // Modifier un souvenir (visionneuse) : le serveur refuse tout autre rôle que l'administrateur
+  const handleUpdatePersonMedia = async (personId, mediaId, payload) => {
+    if (!canEditCurrentTree || !treeContext.treeId || !treeContext.accessToken) {
+      throw new Error('forbidden')
+    }
+
+    await updatePersonMedia(treeContext.treeId, personId, mediaId, payload, treeContext.accessToken)
+    await refreshAfterMediaMutation(personId)
+  }
+
+  const loadPersonLifeEvents = (personId) => fetchPersonLife(treeContext.treeId, personId, treeContext.accessToken)
+
   const resetMediaManager = () => {
     setMediaManagerState({ visible: false, loading: false, error: '' })
   }
@@ -287,6 +299,8 @@ export function useMediaManager({
     uploadMomentFile,
     refreshMomentMedia,
     handleDeletePersonMedia,
+    handleUpdatePersonMedia,
+    loadPersonLifeEvents,
     resetMediaManager,
   }
 }

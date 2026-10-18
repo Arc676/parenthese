@@ -441,6 +441,22 @@ export async function deletePersonMedia(treeId, personId, mediaId, token) {
   return data
 }
 
+// Modifier un souvenir (titre, moment de vie, texte de citation) : administrateurs seulement
+export async function updatePersonMedia(treeId, personId, mediaId, payload, token) {
+  const data = await apiRequest(
+    `/trees/${encodeURIComponent(treeId)}/persons/${encodeURIComponent(personId)}/media/${encodeURIComponent(mediaId)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    },
+  )
+
+  return data
+}
+
 export async function uploadPersonAvatar(treeId, personId, payload, token) {
   const data = await apiRequest(`/trees/${encodeURIComponent(treeId)}/persons/${encodeURIComponent(personId)}/avatar`, {
     method: 'POST',
