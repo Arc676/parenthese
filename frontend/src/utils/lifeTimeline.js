@@ -107,7 +107,7 @@ const siblingWord = (p) => {
 
 /**
  * @param person   personne de la fiche (birthDate, deathDate, birthPlace, birthYear, deathYear)
- * @param family   { parents, children, siblings, unions: [{ id, partner, startYear, endYear, unionType }] }
+ * @param family   { parents, children, siblings, unions: [{ id, partner, startYear, endYear, unionType, childIds }] }
  * @param life     réponse de GET /trees/:id/persons/:personId/life, ou null tant qu'elle n'est pas là
  * @returns entrées triées { key, year, kind: 'mile' | 'minor' | 'fam', title, meta, note, sources, mediaIds,
  *          event (moment modifiable), milestone ({ type, unionId } d'une naissance, d'un mariage, d'un décès) }
@@ -144,10 +144,18 @@ export function buildLifeTimeline(person, family = {}, life = null) {
     const partnerName = union.partner ? fullName(union.partner) : t('Conjoint inconnu')
     const place = formatPlace(detail.startPlace || '')
     const extra = sourcesOf('marriage', union.id)
+    // Union sans date : à sa place logique, juste avant le premier enfant du couple, sinon avant la fin de
+    // l'union ou le décès du conjoint. Aucune année n'est inventée, la colonne reste vide.
+    const childIds = new Set((union.childIds || []).map(String))
+    const childYears = (family.children || []).filter((c) => childIds.has(String(c.id))).map((c) => yearOf(c.birthDate) ?? c.birthYear).filter(within)
+    const partnerDeath = union.partner ? yearOf(union.partner.deathDate) ?? union.partner.deathYear : null
+    const anchor = year ? null : (childYears.length ? Math.min(...childYears) : null) ?? union.endYear ?? (within(partnerDeath) ? partnerDeath : null)
     out.push({
-      key: `union-${union.id}`, year, order: 2, kind: 'mile',
+      key: `union-${union.id}`, year, sortYear: anchor, order: year ? 2 : 1, kind: 'mile',
       title: union.unionType === 'union' ? t('Union avec {name}', { name: partnerName }) : t('Épouse {name}', { name: partnerName }),
-      meta: joinMeta(place, detail.startDatePrecision ? describeDate(detail.startDate, null, detail.startDatePrecision) : '', ageAt(birthYear, year)),
+      meta: year
+        ? joinMeta(place, detail.startDatePrecision ? describeDate(detail.startDate, null, detail.startDatePrecision) : '', ageAt(birthYear, year))
+        : joinMeta(place, t('date inconnue')),
       note: extra?.notes || '', sources: extra?.sources || '',
       ...milestoneFields(extra, { type: 'marriage', unionId: union.id }),
     })
@@ -171,7 +179,7 @@ export function buildLifeTimeline(person, family = {}, life = null) {
     }
     out.push({
       key: `event-${event.id}`, year, order: 1, kind: 'minor', title,
-      meta: joinMeta(formatPlace(event.place || ''), describeDate(event.date, event.dateEnd, event.datePrecision), ageAt(birthYear, year)),
+      meta: joinMeta(formatPlace(event.place || ''), year ? describeDate(event.date, event.dateEnd, event.datePrecision) : t('date inconnue'), ageAt(birthYear, year)),
       note: event.notes || '', sources: event.sources || '',
       mediaIds: event.mediaIds || [],
       // Seuls les moments propres à la personne se modifient depuis l'onglet (pas ceux d'une union)
@@ -206,9 +214,9 @@ export function buildLifeTimeline(person, family = {}, life = null) {
     })
   }
 
-  // Les entrées sans date restent en bas, dans l'ordre où elles sont arrivées
+  // Une union sans date se range à sa place logique (sortYear) ; le reste sans date va en bas, dans l'ordre d'arrivée
   return out
     .map((entry, index) => ({ ...entry, index }))
-    .sort((a, b) => (a.year ?? Infinity) - (b.year ?? Infinity) || a.order - b.order || a.index - b.index)
-    .map(({ order, index, ...entry }) => entry) // eslint-disable-line no-unused-vars
+    .sort((a, b) => (a.year ?? a.sortYear ?? Infinity) - (b.year ?? b.sortYear ?? Infinity) || a.order - b.order || a.index - b.index)
+    .map(({ order, index, sortYear, ...entry }) => entry) // eslint-disable-line no-unused-vars
 }
