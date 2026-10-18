@@ -773,7 +773,11 @@ function Header({ t, onCta, loginHref, elevated }) {
   return (
     <header className={`site-nav${elevated ? ' is-elevated' : ''}`}>
       <div className="wrap nav-in">
-        <a href={t.home} aria-label={t.logoHome}><LogoLockup height={22} /></a>
+        <a href={t.home} aria-label={t.logoHome} className="site-logo">
+          {/* Sur téléphone, le symbole seul : le nom « Parenthèse » reste dans le nom accessible du lien */}
+          <LogoLockup height={22} className="lg lk lk-full" decorative />
+          <LogoLockup height={24} mark className="lg lk lk-mark" decorative />
+        </a>
         <nav aria-label="Sections">
           <a href="#comment">{t.nav.how}</a>
           <a href="#demo">{t.nav.demo}</a>

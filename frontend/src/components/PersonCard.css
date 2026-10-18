@@ -57,6 +57,11 @@
 /* Menu du choix de source du portrait : au-dessus de la fiche (z-index 1000), sous la modale Immich (2200) */
 .pc-source-backdrop { position: fixed; inset: 0; z-index: 1100; }
 .pc-source-menu { position: fixed; z-index: 1150; min-width: 220px; }
+/* Mode modification : le portrait prend la hauteur des deux champs Prénom et Nom (écart compris) et reste carré */
+.person-card--edit-mode .pc-id { padding-top: 0; }
+.person-card--edit-mode .pc-photo-wrap { align-self: stretch; display: block; }
+.person-card--edit-mode .pc-photo-wrap > .pc-photo { width: auto; height: 100%; aspect-ratio: 1 / 1; }
+
 .pc-photo-badge {
   position: absolute; right: -6px; bottom: -6px; z-index: 1;
   width: 30px; height: 30px; display: grid; place-items: center; padding: 0;
