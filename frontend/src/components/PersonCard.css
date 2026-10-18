@@ -35,7 +35,7 @@
 .pc-hidden-input { display: none; }
 
 /* ── En-tête ── */
-.pc-head { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px 16px; align-items: start; padding-right: 36px; }
+.pc-head { --pc-name-h: 42px; --pc-name-gap: 6px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px 16px; align-items: start; padding-right: 36px; }
 .pc-photo-wrap { position: relative; display: grid; gap: 8px; justify-items: center; flex: none; }
 .pc-photo {
   position: relative; width: 84px; height: 84px; border-radius: 24%; overflow: hidden;
@@ -59,8 +59,9 @@
 .pc-source-menu { position: fixed; z-index: 1150; min-width: 220px; }
 /* Mode modification : le portrait prend la hauteur des deux champs Prénom et Nom (écart compris) et reste carré */
 .person-card--edit-mode .pc-id { padding-top: 0; }
-.person-card--edit-mode .pc-photo-wrap { align-self: stretch; display: block; }
-.person-card--edit-mode .pc-photo-wrap > .pc-photo { width: auto; height: 100%; aspect-ratio: 1 / 1; }
+.person-card--edit-mode .pc-photo-wrap { display: block; }
+/* Taille fixée par les champs, pas par le contenu : une vraie photo a une taille propre qui faisait grandir le portrait */
+.person-card--edit-mode .pc-photo-wrap > .pc-photo { --pc-photo-edit: calc(var(--pc-name-h) * 2 + var(--pc-name-gap)); width: var(--pc-photo-edit); height: var(--pc-photo-edit); }
 
 .pc-photo-badge {
   position: absolute; right: -6px; bottom: -6px; z-index: 1;
@@ -101,7 +102,7 @@
   .pc-order-btn:hover:not(:disabled) { background: var(--pz-line-soft); color: var(--pz-ink); }
 }
 @media (pointer: coarse) { .pc-order-btn { width: 32px; height: 32px; } }
-.pc-name-edit { display: grid; gap: 6px; }
+.pc-name-edit { display: grid; gap: var(--pc-name-gap); }
 
 /* ── Champs d'édition ── */
 .pc-input {
@@ -112,7 +113,7 @@
 }
 .pc-input:focus { outline: none; border-color: var(--pz-a500); box-shadow: 0 0 0 3px var(--pz-a100); }
 .pc-input::placeholder { color: var(--pz-faint); }
-.pc-input--name { font: 400 20px/1.2 var(--pz-serif); min-height: 42px; }
+.pc-input--name { font: 400 20px/1.2 var(--pz-serif); min-height: var(--pc-name-h); }
 .pc-input--last { font-style: italic; }
 .pc-note-input { min-height: 88px; resize: vertical; }
 
@@ -269,3 +270,19 @@
 .pc-unknown-first { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin: -4px 0 0; font: 400 12.5px var(--pz-sans); color: var(--pz-ink-2); cursor: pointer; white-space: nowrap; }
 .pc-unknown-first input { width: 15px; height: 15px; accent-color: var(--pz-a500); }
 .pc-name-error { margin: 6px 0 0; font: 500 12.5px var(--pz-sans); color: var(--pz-danger); }
+
+/* Modification de l'onglet Infos : pastilles des champs vides (DA terracotta, sans nouvelle couleur) */
+.pc-fill-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.pc-fill-chip { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px dashed var(--pz-a300); background: var(--pz-a50); color: var(--pz-a700); font: 500 13px var(--pz-sans); cursor: pointer; }
+@media (hover: hover) and (pointer: fine) { .pc-fill-chip:hover { background: var(--pz-a100); border-color: var(--pz-a500); } }
+.pc-fill-chip:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 2px; }
+
+/* Liens : parents adoptifs, réglage de la filiation */
+.pc-section-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+.pc-adopt-tag { font: 500 12px var(--pz-sans); color: var(--pz-a700); background: var(--pz-a50); border: 1px solid var(--pz-a300); border-radius: 999px; padding: 1px 9px; }
+.pc-parentage { display: grid; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--pz-line-soft); }
+.pc-seg { width: 100%; }
+.pc-seg .pz-tab { flex: 1; }
+
+/* Titres de section de l'onglet Infos et Liens : casse normale, Newsreader 15 px, comme la maquette (.sec) */
+.pc-infos .pz-eyebrow { text-transform: none; letter-spacing: 0; font: 400 15px/1.3 var(--pz-serif); color: var(--pz-ink); }

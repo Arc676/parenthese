@@ -76,6 +76,7 @@ const PERSON_FIELD_LABELS = {
   nickname: t('Surnom'),
   birthDate: t('Date de naissance'),
   deathDate: t('Date de décès'),
+  deathPlace: t('Lieu de décès'),
   birthPlace: t('Lieu de naissance'),
   profession: t('Métier'),
   nationality: t('Nationalité'),
