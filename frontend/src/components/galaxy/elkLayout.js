@@ -3,7 +3,7 @@ import {
   PERSON_W, PERSON_H, UNION_W, UNION_H,
   UNKNOWN_W, UNKNOWN_H, COMPACT_W, COMPACT_JOIN_GAP,
   JITTER_RADIUS, FLOAT_AMPLITUDE, FLOAT_SPEED,
-  ANGLE_VARIATION, MAX_ORBIT_MEDIAS, ORBIT_RADIUS,
+  ANGLE_VARIATION, MAX_ORBIT_MEDIAS, ORBIT_RADIUS, SEPARATED_PAIR_PREFIX,
 } from './constants'
 
 // ============================================================
@@ -38,6 +38,38 @@ function makePairKey(a, b) {
   const left = String(a)
   const right = String(b)
   return left < right ? `${left}|${right}` : `${right}|${left}`
+}
+
+// Deux parents d'un même enfant sans couple enregistré (séparés, jamais mariés) : un couple « séparé »
+// propre au dessin les relie en pointillés, au lieu d'un « Inconnu » à côté de chacun. Rien en base.
+
+export function separatedPairUnions(filiations = [], unions = []) {
+  const coupled = new Set(unions.filter(u => u.partner1Id && u.partner2Id).map(u => makePairKey(u.partner1Id, u.partner2Id)))
+  const unionPartners = new Map(unions.map(u => [u.id, [u.partner1Id, u.partner2Id]]))
+  const byChild = new Map()
+  filiations.forEach((f) => {
+    if (!f.childId) return
+    if (!byChild.has(f.childId)) byChild.set(f.childId, { direct: new Set(), viaUnion: new Set() })
+    const entry = byChild.get(f.childId)
+    if (f.unionId) (unionPartners.get(f.unionId) || []).forEach(id => id != null && entry.viaUnion.add(String(id)))
+    else if (f.parentId) entry.direct.add(String(f.parentId))
+  })
+  const pairs = new Map()
+  byChild.forEach(({ direct, viaUnion }) => {
+    const parents = [...direct].filter(id => !viaUnion.has(id)).sort()
+    if (parents.length < 2) return
+    const key = makePairKey(parents[0], parents[1])
+    if (coupled.has(key) || pairs.has(key)) return
+    const original = (id) => filiations.find(f => String(f.parentId) === id)?.parentId ?? id
+    pairs.set(key, {
+      id: `${SEPARATED_PAIR_PREFIX}${parents[0]}:${parents[1]}`,
+      partner1Id: original(parents[0]),
+      partner2Id: original(parents[1]),
+      separated: true,
+      displayOrder: Number.MAX_SAFE_INTEGER,
+    })
+  })
+  return [...pairs.values()]
 }
 
 // ============================================================
@@ -170,8 +202,9 @@ const CLUSTER_SPREAD_FACTOR = 6
 
 export function computeLayout(graphData = null) {
   const persons = graphData?.persons || globalPersons
-  const unions = graphData?.unions || globalUnions
   const filiations = graphData?.filiations || globalFiliations
+  const savedUnions = graphData?.unions || globalUnions
+  const unions = [...savedUnions, ...separatedPairUnions(filiations, savedUnions)]
 
   const normalizedFiliations = normalizeFiliationsForLayout(filiations, unions)
 
@@ -330,7 +363,7 @@ export function computeLayout(graphData = null) {
   // Entrées d'union unifiées (réelles + virtuelles)
   const allUnionEntries = [
     ...unions.map(u => ({
-      elkId: `u-${u.id}`, p1Key: `p-${u.partner1Id}`, p2Key: `p-${u.partner2Id}`, virtual: false,
+      elkId: `u-${u.id}`, p1Key: `p-${u.partner1Id}`, p2Key: `p-${u.partner2Id}`, virtual: Boolean(u.separated),
     })),
     ...virtualUnions.map(vu => ({
       elkId: vu.elkId, p1Key: `p-${vu.parentId}`, p2Key: vu.unknownElkId, virtual: true,

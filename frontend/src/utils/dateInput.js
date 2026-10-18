@@ -13,6 +13,13 @@ export function dateToInputText(value) {
   return year ? year[1] : raw
 }
 
+// Chiffres seuls au-delà d'une année (5 à 8 chiffres) : on pose les barres, « 12031950 » → « 12/03/1950 »
+export function formatDigitsAsDate(text) {
+  const raw = String(text ?? '')
+  if (!/^\d{5,8}$/.test(raw)) return raw
+  return `${raw.slice(0, 2)}/${raw.slice(2, 4)}/${raw.slice(4)}`
+}
+
 // Texte du champ vers la valeur stockée : '' si vide, « AAAA-MM-JJ » si valable, undefined si on ne comprend pas
 export function parseDateInput(text) {
   const raw = String(text ?? '').trim()

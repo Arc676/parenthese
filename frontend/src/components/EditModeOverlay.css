@@ -53,6 +53,11 @@
   .edit-mode-toast-text { font-size: 13px; }
 }
 
+/* Téléphone : le texte se coupait en « Vous modifi… » à côté du bouton, qui suffit à lui seul */
+@media (max-width: 480px) {
+  .edit-mode-toast--with-submit .edit-mode-toast-text { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .edit-mode-toast { animation: pz-fade 160ms ease both; }
 }

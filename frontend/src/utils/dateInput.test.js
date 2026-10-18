@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dateToInputText, isYearOnly, parseDateInput } from './dateInput.js'
+import { dateToInputText, formatDigitsAsDate, isYearOnly, parseDateInput } from './dateInput.js'
 
 describe('saisie d’une date (issue #77)', () => {
   it('une année seule ou une date complète', () => {
@@ -22,5 +22,19 @@ describe('saisie d’une date (issue #77)', () => {
     expect(dateToInputText(null)).toBe('')
     expect(isYearOnly('1950-01-01')).toBe(true)
     expect(isYearOnly('1950-03-12')).toBe(false)
+  })
+})
+
+describe('formatDigitsAsDate', () => {
+  it('pose les barres au-delà de quatre chiffres, pour le clavier numérique du téléphone', () => {
+    expect(formatDigitsAsDate('1950')).toBe('1950')
+    expect(formatDigitsAsDate('12031')).toBe('12/03/1')
+    expect(formatDigitsAsDate('12031950')).toBe('12/03/1950')
+    expect(parseDateInput(formatDigitsAsDate('12031950'))).toBe('1950-03-12')
+  })
+
+  it('laisse tel quel ce qui contient déjà un séparateur', () => {
+    expect(formatDigitsAsDate('12/03/19')).toBe('12/03/19')
+    expect(formatDigitsAsDate('1/3/1950')).toBe('1/3/1950')
   })
 })

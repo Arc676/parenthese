@@ -146,8 +146,6 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
     })
   }
 
-  const isValid = firstName.trim().length > 0
-
   const relationTypeLabels = {
     parent: t('Parent de'),
     child: t('Enfant de'),
@@ -191,7 +189,6 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
                 className={touched.firstName && !firstName.trim() ? 'apn-input--error' : ''}
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-                onBlur={() => setTouched((prev) => ({ ...prev, firstName: true }))}
                 placeholder={t('Marie')}
                 autoComplete="off"
                 aria-invalid={touched.firstName && !firstName.trim()}
@@ -325,7 +322,9 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
           <button type="button" className="pz-btn pz-btn--ghost" onClick={onClose}>
             {t('Annuler')}
           </button>
-          <button type="submit" className="pz-btn pz-btn--primary" disabled={!isValid || loading}>
+          {/* Toujours actif : sans prénom, l'appui le dit et ramène au champ (le dire dès qu'on quittait le prénom
+              affichait une erreur avant même d'avoir rempli la fiche) */}
+          <button type="submit" className="pz-btn pz-btn--primary" disabled={loading}>
             <UserPlus size={16} strokeWidth={2} />
             <PzBusy busy={loading} busyLabel={t('Ajout en cours')}>{t('Ajouter cette personne')}</PzBusy>
           </button>

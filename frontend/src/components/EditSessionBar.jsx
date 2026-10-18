@@ -22,7 +22,7 @@ function EditSessionBar({ active, hasDraft, role = 'contributor', onDeactivate, 
     <>
       <div className={borderClass} aria-hidden="true" />
 
-      <div className={`edit-mode-toast ${isAdmin ? 'edit-mode-toast--admin' : ''}`} role="status" aria-live="polite">
+      <div className={`edit-mode-toast${isAdmin ? ' edit-mode-toast--admin' : ''}${showSubmit ? ' edit-mode-toast--with-submit' : ''}`} role="status" aria-live="polite">
         <span className="edit-mode-toast-dot" aria-hidden="true" />
         <span className="edit-mode-toast-text">{toastLabel}</span>
 

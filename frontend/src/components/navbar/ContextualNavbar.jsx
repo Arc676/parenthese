@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   Edit3, Share2, User, UserPlus,
-  X, MousePointer2, Pencil, Type, Star, Trash2, Image, ImagePlus, MoreHorizontal, HelpCircle, Globe,
+  X, MousePointer2, Pencil, Type, Star, Trash2, Image, ImagePlus, MoreHorizontal, HelpCircle, Globe, ArrowLeft,
 } from 'lucide-react'
 import NavButton from './NavButton'
 import AvatarMenu from './AvatarMenu'
@@ -19,6 +19,14 @@ const ANNOT_TOOLS = [
   { id: 'text', label: t('Texte'), Icon: Type },
   { id: 'sticker', label: t('Sticker'), Icon: Star },
   { id: 'photo', label: t('Photo'), Icon: Image },
+]
+
+// Mobile : les outils de dessin attendent dans « Plus », la barre ne montre que l'essentiel
+const ANNOT_MENU = [
+  { id: 'drawing', label: t('Dessiner'), Icon: Pencil },
+  { id: 'text', label: t('Écrire un texte'), Icon: Type },
+  { id: 'sticker', label: t('Poser un sticker'), Icon: Star },
+  { id: 'photo', label: t('Poser une photo'), Icon: Image },
 ]
 
 function ContextualNavbar({
@@ -47,6 +55,7 @@ function ContextualNavbar({
 }) {
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
   const [annotPanel, setAnnotPanel] = useState(null)
+  const [annotMode, setAnnotMode] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const moreRef = useRef(null)
   const [isMobile, setIsMobile] = useState(() =>
@@ -102,7 +111,10 @@ function ContextualNavbar({
   }, [])
 
   useEffect(() => {
-    if (!editModeActive) setAnnotPanel(null)
+    if (!editModeActive) {
+      setAnnotPanel(null)
+      setAnnotMode(false)
+    }
   }, [editModeActive])
 
   const { navbarType, authenticated } = userRole
@@ -130,6 +142,19 @@ function ContextualNavbar({
       setAnnotPanel(null)
     }
   }
+
+  // Corbeille des annotations : visible seulement quand il y a quelque chose à effacer
+  const renderAnnotTrash = () => (
+    <button
+      className={`nav-annot-btn nav-annot-btn--trash${annotationTools.isDragging ? ' nav-annot-btn--drag-target' : ''}${annotationTools.isOverTrash ? ' nav-annot-btn--drag-over' : ''}`}
+      onClick={annotationTools.onDelete}
+      aria-label={t('Supprimer')}
+      title={t('Supprimer')}
+      data-annotation-trash=""
+    >
+      <Trash2 size={annotationTools.isOverTrash ? 22 : 18} strokeWidth={2} />
+    </button>
+  )
 
   // Famille arrivée par le lien : les deux gestes utiles écrits en toutes lettres, le reste dans « Plus »
   const isFamily = (navbarType === 'contributor_anon' || navbarType === 'contributor_auth') && Boolean(onAddSouvenirClick)
@@ -345,7 +370,7 @@ function ContextualNavbar({
       )}
 
       <div className={`navbar-content${showMobileAnnot ? ' navbar-content--annot' : ''}`}>
-        {showMobileAnnot ? (
+        {showMobileAnnot && !annotMode ? (
           <>
             <button
               className="nav-annot-exit"
@@ -354,6 +379,61 @@ function ContextualNavbar({
               title={t("Quitter l'édition")}
             >
               <X size={18} strokeWidth={2.5} />
+            </button>
+
+            {/* Libellé court : la barre doit tenir à droite du bouton de zoom */}
+            <button type="button" className="nav-family-btn nav-family-btn--primary" onClick={onAddPersonClick} aria-label={t('Ajouter une personne')}>
+              <UserPlus size={20} strokeWidth={2} aria-hidden="true" />
+              <span>{t('Ajouter')}</span>
+            </button>
+
+            <div ref={moreRef} className="nav-more-wrapper">
+              <button
+                type="button"
+                className={`nav-family-btn nav-family-btn--more${moreOpen ? ' is-open' : ''}`}
+                onClick={() => setMoreOpen((v) => !v)}
+                aria-expanded={moreOpen}
+                aria-haspopup="menu"
+              >
+                <MoreHorizontal size={20} strokeWidth={2} aria-hidden="true" />
+                <span>{t('Plus')}</span>
+              </button>
+              {moreOpen && (
+                <div className="nav-more-menu" role="menu">
+                  {ANNOT_MENU.map((tool) => (
+                    <button
+                      key={tool.id}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMoreOpen(false)
+                        setAnnotMode(true)
+                        handleAnnotToolClick(tool.id)
+                      }}
+                    >
+                      <tool.Icon size={18} strokeWidth={2} aria-hidden="true" />
+                      {tool.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {(annotationTools.selectedAnnotationId || annotationTools.isDragging) && renderAnnotTrash()}
+          </>
+        ) : showMobileAnnot ? (
+          <>
+            <button
+              className="nav-annot-btn"
+              onClick={() => {
+                setAnnotPanel(null)
+                setAnnotMode(false)
+                annotationTools.onToolChange('pointer')
+              }}
+              aria-label={t('Terminé')}
+              title={t('Terminé')}
+            >
+              <ArrowLeft size={18} strokeWidth={2.5} />
             </button>
 
             <div className="nav-annot-sep" />
@@ -370,27 +450,12 @@ function ContextualNavbar({
               </button>
             ))}
 
-            <div className="nav-annot-sep" />
-
-            <button
-              className={`nav-annot-btn nav-annot-btn--trash${annotationTools.isDragging ? ' nav-annot-btn--drag-target' : ''}${annotationTools.isOverTrash ? ' nav-annot-btn--drag-over' : ''}`}
-              onClick={annotationTools.onDelete}
-              disabled={!annotationTools.selectedAnnotationId && !annotationTools.isDragging}
-              aria-label={t('Supprimer')}
-              title={t('Supprimer')}
-              data-annotation-trash=""
-            >
-              <Trash2 size={annotationTools.isOverTrash ? 22 : 18} strokeWidth={2} />
-            </button>
-
-            <button
-              className="nav-annot-btn nav-annot-btn--add"
-              onClick={onAddPersonClick}
-              aria-label={t('Ajouter une personne')}
-              title={t('Ajouter une personne')}
-            >
-              <UserPlus size={18} strokeWidth={2} />
-            </button>
+            {(annotationTools.selectedAnnotationId || annotationTools.isDragging) && (
+              <>
+                <div className="nav-annot-sep" />
+                {renderAnnotTrash()}
+              </>
+            )}
           </>
         ) : (
           <>

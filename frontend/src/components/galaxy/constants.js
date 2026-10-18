@@ -1,3 +1,6 @@
+// Identifiant des couples « séparés » créés par le placement (deux parents sans union enregistrée)
+export const SEPARATED_PAIR_PREFIX = 'pair:'
+
 // --- Constantes visuelles ---
 export const PERSON_W = 120
 export const PERSON_H = 120

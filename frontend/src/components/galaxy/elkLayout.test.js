@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeLayout, normalizeFiliationsForLayout } from './elkLayout'
+import { computeLayout, normalizeFiliationsForLayout, separatedPairUnions, coupleBarMeta } from './elkLayout'
 import { PERSON_W } from './constants'
 
 describe('normalizeFiliationsForLayout', () => {
@@ -237,5 +237,33 @@ describe('computeLayout', () => {
       expect(ax < bXs[0] || ax > bXs[1]).toBe(true)
     }
     expect(cX < bXs[0] || cX > bXs[1]).toBe(true)
+  })
+})
+
+describe('separated parents', () => {
+  // Philippe et Marie, parents d'Anaïs, sans couple enregistré (séparés)
+  const persons = [{ id: 'phil' }, { id: 'marie' }, { id: 'anais' }]
+  const filiations = [
+    { id: 'f1', childId: 'anais', parentId: 'phil', unionId: null, parentageType: 'biologique', displayOrder: 1 },
+    { id: 'f2', childId: 'anais', parentId: 'marie', unionId: null, parentageType: 'biologique', displayOrder: 2 },
+  ]
+
+  it('links the two parents with a dashed couple instead of two unknowns', () => {
+    const result = computeLayout({ persons, unions: [], filiations })
+    const ids = result.children.map((node) => node.id)
+    expect(ids.some((id) => id.startsWith('unknown-'))).toBe(false)
+    const pair = coupleBarMeta.find((entry) => entry.elkId.startsWith('u-pair:'))
+    expect(pair).toMatchObject({ virtual: true })
+    expect([pair.p1Key, pair.p2Key].sort()).toEqual(['p-marie', 'p-phil'])
+    expect(result.edges.some((edge) => edge.sources[0] === pair.elkId && edge.targets[0] === 'p-anais')).toBe(true)
+  })
+
+  it('does not add a pair when the parents already have a union', () => {
+    const unions = [{ id: 'u1', partner1Id: 'phil', partner2Id: 'marie', displayOrder: 1 }]
+    expect(separatedPairUnions(filiations, unions)).toEqual([])
+  })
+
+  it('keeps a lone parent with an unknown partner', () => {
+    expect(separatedPairUnions([filiations[0]], [])).toEqual([])
   })
 })
