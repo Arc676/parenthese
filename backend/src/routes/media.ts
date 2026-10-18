@@ -795,35 +795,38 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: 'invalid_media_order_payload' })
     }
 
-    for (let index = 0; index < orderedIds.length; index += 1) {
-      await app.prisma.mediaItem.updateMany({
-        where: {
-          id: orderedIds[index],
-          treeId: params.data.id,
-          personId: params.data.personId,
-          deletedAt: null,
-        },
+    const actorId = request.actor.userId
+    await app.prisma.$transaction(async (tx) => {
+      for (let index = 0; index < orderedIds.length; index += 1) {
+        await tx.mediaItem.updateMany({
+          where: {
+            id: orderedIds[index],
+            treeId: params.data.id,
+            personId: params.data.personId,
+            deletedAt: null,
+          },
+          data: {
+            displayOrder: index + 1,
+          },
+        })
+      }
+
+      await syncPersonMediaOrder(tx, params.data.id, params.data.personId)
+
+      await tx.auditLog.create({
         data: {
-          displayOrder: index + 1,
+          treeId: params.data.id,
+          actorType: 'user',
+          actorId,
+          action: 'media_reordered',
+          entityType: 'media_item',
+          entityId: params.data.personId,
+          payloadJson: {
+            personId: params.data.personId,
+            orderedMediaIds: payload.data.orderedMediaIds,
+          },
         },
       })
-    }
-
-    await syncPersonMediaOrder(app.prisma, params.data.id, params.data.personId)
-
-    await app.prisma.auditLog.create({
-      data: {
-        treeId: params.data.id,
-        actorType: 'user',
-        actorId: request.actor.userId,
-        action: 'media_reordered',
-        entityType: 'media_item',
-        entityId: params.data.personId,
-        payloadJson: {
-          personId: params.data.personId,
-          orderedMediaIds: payload.data.orderedMediaIds,
-        },
-      },
     })
 
     return reply.send({ ok: true })

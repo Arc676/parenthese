@@ -306,64 +306,67 @@ export const annotationRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: 'invalid_annotation_photo_path' })
     }
 
-    // Creates
-    for (const [index, item] of payload.data.create.entries()) {
-      await app.prisma.annotation.create({
+    // Créations, modifications, suppressions et trace : tout ou rien, un nouvel essai ne double rien
+    await app.prisma.$transaction(async (tx) => {
+      // Creates
+      for (const [index, item] of payload.data.create.entries()) {
+        await tx.annotation.create({
+          data: {
+            treeId,
+            type: item.type,
+            x: item.x,
+            y: item.y,
+            content: createContents[index] as string,
+            style: (item.style ?? {}) as Prisma.InputJsonValue,
+            zIndex: item.zIndex ?? 0,
+            createdBy: user.userId,
+          },
+        })
+        results.created++
+      }
+
+      // Updates
+      for (const [index, item] of payload.data.update.entries()) {
+        const data: Record<string, unknown> = {}
+        if (item.x !== undefined) data.x = item.x
+        if (item.y !== undefined) data.y = item.y
+        if (item.content !== undefined) data.content = updateContents[index]
+        if (item.style !== undefined) data.style = item.style
+        if (item.zIndex !== undefined) data.zIndex = item.zIndex
+
+        if (Object.keys(data).length > 0) {
+          const updated = await tx.annotation.updateMany({
+            where: { id: item.id, treeId, deletedAt: null },
+            data,
+          })
+          if (updated.count > 0) results.updated++
+        }
+      }
+
+      // Deletes
+      if (payload.data.delete.length > 0) {
+        const deleted = await tx.annotation.updateMany({
+          where: {
+            id: { in: payload.data.delete },
+            treeId,
+            deletedAt: null,
+          },
+          data: { deletedAt: new Date() },
+        })
+        results.deleted = deleted.count
+      }
+
+      await tx.auditLog.create({
         data: {
           treeId,
-          type: item.type,
-          x: item.x,
-          y: item.y,
-          content: createContents[index] as string,
-          style: (item.style ?? {}) as Prisma.InputJsonValue,
-          zIndex: item.zIndex ?? 0,
-          createdBy: user.userId,
+          actorType: 'user',
+          actorId: user.userId,
+          action: 'annotations_batch',
+          entityType: 'annotation',
+          entityId: treeId,
+          payloadJson: results,
         },
       })
-      results.created++
-    }
-
-    // Updates
-    for (const [index, item] of payload.data.update.entries()) {
-      const data: Record<string, unknown> = {}
-      if (item.x !== undefined) data.x = item.x
-      if (item.y !== undefined) data.y = item.y
-      if (item.content !== undefined) data.content = updateContents[index]
-      if (item.style !== undefined) data.style = item.style
-      if (item.zIndex !== undefined) data.zIndex = item.zIndex
-
-      if (Object.keys(data).length > 0) {
-        const updated = await app.prisma.annotation.updateMany({
-          where: { id: item.id, treeId, deletedAt: null },
-          data,
-        })
-        if (updated.count > 0) results.updated++
-      }
-    }
-
-    // Deletes
-    if (payload.data.delete.length > 0) {
-      const deleted = await app.prisma.annotation.updateMany({
-        where: {
-          id: { in: payload.data.delete },
-          treeId,
-          deletedAt: null,
-        },
-        data: { deletedAt: new Date() },
-      })
-      results.deleted = deleted.count
-    }
-
-    await app.prisma.auditLog.create({
-      data: {
-        treeId,
-        actorType: 'user',
-        actorId: user.userId,
-        action: 'annotations_batch',
-        entityType: 'annotation',
-        entityId: treeId,
-        payloadJson: results,
-      },
     })
 
     return reply.send({ ok: true, ...results })

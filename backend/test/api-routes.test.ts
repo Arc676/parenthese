@@ -80,6 +80,9 @@ const { prismaMock } = vi.hoisted(() => ({
     },
     annotation: {
       findMany: vi.fn(),
+      count: vi.fn().mockResolvedValue(0),
+      create: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     contributionSession: {
       create: vi.fn(),
@@ -749,6 +752,107 @@ describe('Moments de l’onglet Vie', () => {
     prismaMock.union.findFirst.mockResolvedValue(null)
     expect((await post({ type: 'marriage', unionId: 'u-x', sources: 'x' })).statusCode).toBe(400)
     expect(prismaMock.lifeEvent.create).not.toHaveBeenCalled()
+    await app.close()
+  })
+})
+
+describe('Écritures en plusieurs temps : tout passe par une transaction', () => {
+  // Le client de la transaction est un autre objet que app.prisma : une écriture faite hors transaction se voit
+  const txClient = () => ({
+    annotation: { create: vi.fn().mockResolvedValue({ id: 'a' }), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    mediaItem: { updateMany: vi.fn().mockResolvedValue({ count: 1 }), findMany: vi.fn().mockResolvedValue([]), update: vi.fn() },
+    lifeEvent: { create: vi.fn().mockResolvedValue({ id: 'e-1', status: 'approved' }), update: vi.fn(), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    contributionSession: { create: vi.fn() },
+    contributionChange: { create: vi.fn() },
+    auditLog: { create: vi.fn() },
+  })
+
+  it('lot d’annotations : créations, modifications, suppressions et trace dans la même transaction', async () => {
+    const app = createApp()
+    const auth = { authorization: `Bearer ${await createUserToken(app)}` }
+    const tx = txClient()
+    prismaMock.$transaction.mockImplementationOnce(async (callback: (client: unknown) => Promise<unknown>) => callback(tx))
+
+    const response = await app.inject({
+      method: 'POST', url: '/trees/tree-1/annotations/batch', headers: auth,
+      payload: { create: [{ type: 'text', x: 0, y: 0, content: 'Été 1952' }, { type: 'text', x: 1, y: 1, content: 'Noël' }], update: [{ id: 'a-1', x: 5 }], delete: ['a-2'] },
+    })
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({ ok: true, created: 2, updated: 1, deleted: 1 })
+    expect(tx.annotation.create).toHaveBeenCalledTimes(2)
+    expect(tx.annotation.updateMany).toHaveBeenCalledTimes(2)
+    expect(tx.auditLog.create).toHaveBeenCalledTimes(1)
+    expect(prismaMock.annotation.create).not.toHaveBeenCalled()
+    expect(prismaMock.annotation.updateMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('lot d’annotations : une erreur au milieu fait échouer toute la transaction', async () => {
+    const app = createApp()
+    const auth = { authorization: `Bearer ${await createUserToken(app)}` }
+    const tx = txClient()
+    tx.annotation.create.mockResolvedValueOnce({ id: 'a' }).mockRejectedValueOnce(new Error('base indisponible'))
+    prismaMock.$transaction.mockImplementationOnce(async (callback: (client: unknown) => Promise<unknown>) => callback(tx))
+
+    const response = await app.inject({
+      method: 'POST', url: '/trees/tree-1/annotations/batch', headers: auth,
+      payload: { create: [{ type: 'text', x: 0, y: 0, content: 'a' }, { type: 'text', x: 1, y: 1, content: 'b' }] },
+    })
+    expect(response.statusCode).toBe(500)
+    expect(tx.auditLog.create).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('réordonner les souvenirs : positions, renumérotation et trace dans la même transaction', async () => {
+    const app = createApp()
+    const auth = { authorization: `Bearer ${await createUserToken(app)}` }
+    const tx = txClient()
+    prismaMock.mediaItem.findMany.mockResolvedValueOnce([{ id: 'm-1' }, { id: 'm-2' }])
+    prismaMock.$transaction.mockImplementationOnce(async (callback: (client: unknown) => Promise<unknown>) => callback(tx))
+
+    const response = await app.inject({
+      method: 'PATCH', url: '/trees/tree-1/persons/person-1/media/reorder', headers: auth,
+      payload: { orderedMediaIds: ['m-2', 'm-1'] },
+    })
+    expect(response.statusCode).toBe(200)
+    expect(tx.mediaItem.updateMany).toHaveBeenCalledTimes(2)
+    expect(tx.auditLog.create).toHaveBeenCalledTimes(1)
+    expect(prismaMock.mediaItem.updateMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('moment : création et rattachement des souvenirs dans la même transaction', async () => {
+    const app = createApp()
+    const auth = { authorization: `Bearer ${await createUserToken(app)}` }
+    const tx = txClient()
+    prismaMock.mediaItem.count.mockResolvedValue(1)
+    prismaMock.$transaction.mockImplementationOnce(async (callback: (client: unknown) => Promise<unknown>) => callback(tx))
+
+    const response = await app.inject({
+      method: 'POST', url: '/trees/tree-1/persons/person-1/life/events', headers: auth,
+      payload: { label: 'Départ pour Paris', mediaIds: ['m-1'] },
+    })
+    expect(response.statusCode).toBe(201)
+    expect(tx.lifeEvent.create).toHaveBeenCalledTimes(1)
+    expect(tx.mediaItem.updateMany).toHaveBeenCalledWith({ where: { treeId: 'tree-1', id: { in: ['m-1'] } }, data: { lifeEventId: 'e-1' } })
+    expect(prismaMock.lifeEvent.create).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('la famille ne prend que des souvenirs libres, l’administrateur peut déplacer un souvenir d’un moment à l’autre', async () => {
+    const app = createApp()
+    const auth = { authorization: `Bearer ${await createUserToken(app)}` }
+    const post = () => app.inject({ method: 'POST', url: '/trees/tree-1/persons/person-1/life/events', headers: auth, payload: { label: 'Communion', mediaIds: ['m-1'] } })
+    prismaMock.mediaItem.count.mockResolvedValue(1)
+    prismaMock.lifeEvent.create.mockResolvedValue({ id: 'e-1', status: 'approved' })
+
+    expect((await post()).statusCode).toBe(201)
+    expect(prismaMock.mediaItem.count.mock.calls.at(-1)[0].where).not.toHaveProperty('lifeEventId')
+
+    prismaMock.treeMembership.findUnique.mockResolvedValue({ role: 'member', tree: { deletedAt: null, settings: null } })
+    prismaMock.contributionSession.create.mockResolvedValue({ id: 's-1' })
+    expect((await post()).statusCode).toBe(201)
+    expect(prismaMock.mediaItem.count.mock.calls.at(-1)[0].where).toMatchObject({ lifeEventId: null })
     await app.close()
   })
 })
