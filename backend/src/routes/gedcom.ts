@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { UPLOAD_BODY_LIMIT } from '../config/env.js'
 import { parseGedcomDate } from '../lib/gedcom-dates.js'
 import { adoptedFamilies, FAMILY_EVENT_TYPES, familyExtras, PERSON_EVENT_TYPES, personExtras } from '../lib/gedcom-events.js'
-import { indexGedcomRecords, mediaRefsForPerson, photoPathForPerson, plainNoteText } from '../lib/gedcom-photos.js'
+import { indexGedcomRecords, mediaRefsForPerson, noteText, photoPathForPerson } from '../lib/gedcom-photos.js'
 import type { GedcomRecords } from '../lib/gedcom-photos.js'
 import type { MembershipRole } from '../types/auth.js'
 import { nextSiblingOrder } from '../lib/sibling-order.js'
@@ -20,6 +20,7 @@ const importBodySchema = z.object({
 // Un fichier GEDCOM vient de l'extérieur : longueur des lignes, nombre de fiches et taille des champs
 // plafonnés comme partout ailleurs (sinon un seul fichier bloque l'API ou remplit la base)
 const MAX_LINE_LENGTH = 4096
+const MAX_GEDCOM_LEVEL = 99
 const MAX_IMPORTED_PERSONS = 20000
 const MAX_IMPORTED_FAMILIES = 20000
 // Le parseur construit un objet par ligne : 10 Mo de lignes courtes montaient à 370 Mo de mémoire, et le
@@ -94,6 +95,8 @@ export function parseGedcom(text: string): GedcomNode[] {
     if (!match) continue
 
     const level = parseInt(match[1], 10)
+    // La norme s'arrête à 99 niveaux : au-delà, la lecture récursive de l'import déborderait la pile
+    if (level > MAX_GEDCOM_LEVEL) continue
     const xref = match[2] ? match[2].slice(1, -1) : undefined
     const tag = match[3]
     const rawValue = match[4] ?? ''
@@ -137,19 +140,7 @@ function gedcomDateToIso(value: string): string | null {
 // Notes d'une personne : écrites sous elle ou partagées (« 1 NOTE @N1@ »), lignes recollées (CONT, CONC),
 // RTF de Heredis Mac nettoyé. Plusieurs notes sont séparées par une ligne vide.
 export function personNotes(indi: GedcomNode, records: GedcomRecords): string | null {
-  const texts: string[] = []
-  for (const note of findAllChildren(indi, 'NOTE')) {
-    const pointer = note.value.match(/^@([^@]+)@$/)?.[1]
-    const source = pointer ? records.note.get(pointer) : note
-    if (!source) continue
-    let text = (pointer ? source.rawValue ?? source.value : note.rawValue ?? note.value)
-    for (const part of source.children) {
-      if (part.tag === 'CONT') text += `\n${part.rawValue ?? part.value}`
-      else if (part.tag === 'CONC') text += part.rawValue ?? part.value
-    }
-    const clean = plainNoteText(text)
-    if (clean) texts.push(clean)
-  }
+  const texts = findAllChildren(indi, 'NOTE').map((note) => noteText(note, records)).filter(Boolean)
   return texts.length ? texts.join('\n\n') : null
 }
 
@@ -675,8 +666,6 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
 
         const profession = clip(findChild(indi, 'OCCU')?.value ?? null, 200)
 
-        const notes = clip(personNotes(indi, records), 2000)
-
         // Prénom absent du fichier : chaîne vide, comme un prénom inconnu dans l'arbre
         const personFirstName = (firstName || '').slice(0, 120)
         const personLastName = (lastName || '').slice(0, 120)
@@ -693,6 +682,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
           continue
         }
 
+        const notes = clip(personNotes(indi, records), 2000)
         const { events, ...extras } = personExtras(indi, records)
         const person = await tx.person.create({
           data: {
@@ -720,7 +710,8 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
         xrefToPersonId.set(indi.xref!, person.id)
         personsCreated++
         if (photoPath) photoRefs.push({ personId: person.id, file: photoPath })
-        for (const ref of mediaRefsForPerson(indi, records, photoPath)) {
+        const personMedia = mediaRefs.length < MAX_IMPORTED_MEDIA_REFS ? mediaRefsForPerson(indi, records, photoPath) : []
+        for (const ref of personMedia) {
           if (mediaRefs.length >= MAX_IMPORTED_MEDIA_REFS) break
           mediaRefs.push({ personId: person.id, ...ref })
         }
