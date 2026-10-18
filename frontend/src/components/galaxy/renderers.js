@@ -101,9 +101,10 @@ function computeCouplePoints(p1Pos, p2Pos, unionPos, p1R, p2R, nodeRandomData, s
 export const FIL = { color: '#E3A590', width: 1.1, dot: '#D2694A', dotR: 2.6 }
 // Ligne de la fratrie : sous les prénoms et années des parents, au-dessus des enfants
 const BUS_DY = 100
-// Accolade : coins arrondis de rayon fixe (forme A, choisie par Patch), écart minimal en dessous duquel l'enfant descend droit
+// Accolade : coins arrondis de rayon fixe (forme A, choisie par Patch). En dessous de deux rayons d'écart,
+// deux coins ne tiennent pas sans faire une marche : l'enfant est relié par un trait droit depuis l'union.
 const SIB_R = 24
-const SIB_STRAIGHT_DX = 12
+const SIB_STRAIGHT_DX = SIB_R * 2
 
 function busY(sourceId, sy) {
   let h = 0
@@ -123,7 +124,14 @@ export function traceSibship(ctx, sourceId, sourcePos, items) {
   for (const { cx: ex, cy: ey } of items) {
     const dx = ex - sx
     ctx.moveTo(sx, sy)
-    if (Math.abs(dx) < SIB_STRAIGHT_DX) { ctx.lineTo(sx, by); ctx.lineTo(ex, by); ctx.lineTo(ex, ey); continue }
+    if (Math.abs(dx) < SIB_STRAIGHT_DX) {
+      // Le tronc descend jusqu'à la barre, puis un S doux, vertical au départ et à l'arrivée, rejoint l'enfant :
+      // il se sépare là où se séparent les autres enfants, pas sous l'union
+      const h = ey - by
+      ctx.lineTo(sx, by)
+      ctx.bezierCurveTo(sx, by + h * 0.55, ex, ey - h * 0.45, ex, ey)
+      continue
+    }
     const dir = Math.sign(dx)
     const k = Math.min(rr, Math.abs(dx) / 2)
     ctx.lineTo(sx, by - k)

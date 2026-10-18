@@ -16,6 +16,9 @@ import { firstNameLabel, fullNameLabel, isFirstNameUnknown } from '../utils/pers
 import { isYearOnly } from '../utils/dateInput.js'
 import DateField from './DateField.jsx'
 
+// Aucune modification en cours (référence stable)
+const NO_EDITS = Object.freeze({})
+
 const TYPE_LABELS = {
   photo: t('Photo'),
   video: t('Vidéo'),
@@ -93,13 +96,17 @@ const PersonCard = ({
     }
   }, [tab, person.id, treeId, immichToken, lifeRevision])
 
-  // État local pour les modifications en mode édition
-  const [edits, setEdits] = useState({})
+  // Modifications en cours, rattachées à la personne qu'elles concernent. Au changement de fiche,
+  // le premier rendu ne doit pas voir celles de la personne d'avant : un champ qui s'initialise à
+  // ce moment-là (DateField) les garderait, et la date d'une personne passait sur une autre.
+  const [editState, setEditState] = useState(() => ({ personId: person.id, values: {}, changed: false }))
+  const ownEdits = editState.personId === person.id
+  const edits = ownEdits ? editState.values : NO_EDITS
+  const hasChanges = ownEdits && editState.changed
   // Prénom inconnu (case cochée) et saisie de prénom vide sans case : le prénom est demandé avant l'enregistrement
   const [unknownFirstName, setUnknownFirstName] = useState(() => isFirstNameUnknown(person))
   const [firstNameMissing, setFirstNameMissing] = useState(false)
   const [lastNameMissing, setLastNameMissing] = useState(false)
-  const [hasChanges, setHasChanges] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -120,11 +127,10 @@ const PersonCard = ({
 
   // Reset edits quand la personne change
   useEffect(() => {
-    setEdits({})
+    setEditState({ personId: person.id, values: {}, changed: false })
     setUnknownFirstName(isFirstNameUnknown(person))
     setFirstNameMissing(false)
     setLastNameMissing(false)
-    setHasChanges(false)
     setShowDeleteConfirm(false)
     setActiveRelationSearch(null)
     setRelationSearchQuery('')
@@ -201,8 +207,12 @@ const PersonCard = ({
   }
 
   const handleFieldChange = (field, value) => {
-    setEdits(prev => ({ ...prev, [field]: value }))
-    setHasChanges(true)
+    const personId = person.id
+    setEditState(prev => ({
+      personId,
+      values: { ...(prev.personId === personId ? prev.values : {}), [field]: value },
+      changed: true,
+    }))
   }
 
   const handleSave = async () => {
@@ -218,8 +228,9 @@ const PersonCard = ({
     }
     setSaving(true)
     try {
-      await onSave(person.id, edits)
-      setHasChanges(false)
+      const savedFor = person.id
+      await onSave(savedFor, edits)
+      setEditState(prev => (prev.personId === savedFor ? { ...prev, changed: false } : prev))
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 2000)
     } finally {
