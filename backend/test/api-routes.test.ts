@@ -857,6 +857,40 @@ describe('Écritures en plusieurs temps : tout passe par une transaction', () =>
   })
 })
 
+describe('Import GEDCOM', () => {
+  it('une personne des deux côtés d’une union garde un seul partenaire, une boucle parent-enfant est refusée', async () => {
+    const app = createApp()
+    const auth = { authorization: `Bearer ${await createUserToken(app)}` }
+    prismaMock.person.findMany.mockResolvedValue([])
+    prismaMock.union.findMany.mockResolvedValue([])
+    prismaMock.parentChildLink.findMany.mockResolvedValue([])
+    prismaMock.parentChildLink.findFirst.mockResolvedValue(null)
+    prismaMock.person.create.mockImplementation(async ({ data }: { data: { firstName: string } }) => ({ id: `p-${data.firstName}` }))
+    let unionCount = 0
+    prismaMock.union.create.mockImplementation(async () => ({ id: `u-${++unionCount}` }))
+
+    const content = [
+      '0 HEAD',
+      '0 @I1@ INDI', '1 NAME Jean /Martin/',
+      '0 @I2@ INDI', '1 NAME Paul /Martin/',
+      // Jean marié à lui-même (fichier abîmé)
+      '0 @F1@ FAM', '1 HUSB @I1@', '1 WIFE @I1@',
+      // Paul enfant de Jean, puis Jean enfant de Paul : la seconde famille ferait une boucle
+      '0 @F2@ FAM', '1 HUSB @I1@', '1 CHIL @I2@',
+      '0 @F3@ FAM', '1 HUSB @I2@', '1 CHIL @I1@',
+      '0 TRLR',
+    ].join('\n')
+    const response = await app.inject({ method: 'POST', url: '/trees/tree-1/import/gedcom', headers: auth, payload: { content } })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toMatchObject({ personsCreated: 2, linksCreated: 1, relationsSkipped: 2 })
+    expect(prismaMock.union.create.mock.calls[0][0].data).toMatchObject({ partner1PersonId: 'p-Jean', partner2PersonId: null })
+    expect(prismaMock.parentChildLink.create).toHaveBeenCalledTimes(1)
+    expect(prismaMock.parentChildLink.create.mock.calls[0][0].data).toMatchObject({ parentPersonId: 'p-Jean', childPersonId: 'p-Paul' })
+    await app.close()
+  })
+})
+
 describe('Visit log', () => {
   it('refuses the visit log to a non-admin member', async () => {
     const app = createApp()

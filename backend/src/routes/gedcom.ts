@@ -21,6 +21,8 @@ const importBodySchema = z.object({
 // plafonnés comme partout ailleurs (sinon un seul fichier bloque l'API ou remplit la base)
 const MAX_LINE_LENGTH = 4096
 const MAX_GEDCOM_LEVEL = 99
+// Remontées d'ascendance permises sur tout l'import : au-delà, les liens ne sont plus contrôlés (fichier hors norme)
+const MAX_ANCESTRY_STEPS = 5_000_000
 const MAX_IMPORTED_PERSONS = 20000
 const MAX_IMPORTED_FAMILIES = 20000
 // Le parseur construit un objet par ligne : 10 Mo de lignes courtes montaient à 370 Mo de mémoire, et le
@@ -636,12 +638,30 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
     }
     const unionByPair = new Map(existingUnions.map((u) => [pairKey(u.partner1PersonId, u.partner2PersonId), u.id]))
     const linkKeys = new Set(existingLinks.map((l) => `${l.parentPersonId}:${l.childPersonId}`))
+    // Parents de chaque personne, pour refuser un lien qui ferait de quelqu'un son propre ancêtre
+    // (les validateurs de l'API relisent tout l'arbre à chaque lien : trop lent pour un import)
+    const parentsOf = new Map<string, string[]>()
+    for (const link of existingLinks) parentsOf.set(link.childPersonId, [...(parentsOf.get(link.childPersonId) ?? []), link.parentPersonId])
+    let ancestryBudget = MAX_ANCESTRY_STEPS
+    const isAncestorOf = (candidate: string, personId: string): boolean => {
+      const seen = new Set<string>()
+      const stack = [personId]
+      while (stack.length) {
+        const current = stack.pop()!
+        if (current === candidate) return true
+        if (seen.has(current) || --ancestryBudget < 0) continue
+        seen.add(current)
+        stack.push(...(parentsOf.get(current) ?? []))
+      }
+      return false
+    }
 
     let personsCreated = 0
     let personsReused = 0
     let unionsCreated = 0
     let linksCreated = 0
     let eventsCreated = 0
+    let relationsSkipped = 0
     // Adoptions déclarées sous l'enfant (« 2 PEDI adopted ») : enfant → familles où il est adopté
     const adoptedByChild = new Map(indiNodes.map((indi) => [indi.xref!, adoptedFamilies(indi)]))
 
@@ -722,7 +742,12 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
         const wifeXref = findChild(fam, 'WIFE')?.value?.replace(/@/g, '').trim()
 
         const partner1Id = husbXref ? xrefToPersonId.get(husbXref) : undefined
-        const partner2Id = wifeXref ? xrefToPersonId.get(wifeXref) : undefined
+        let partner2Id = wifeXref ? xrefToPersonId.get(wifeXref) : undefined
+        // Une même personne des deux côtés d'une union : un seul partenaire
+        if (partner2Id && partner2Id === partner1Id) {
+          partner2Id = undefined
+          relationsSkipped++
+        }
 
         if (!partner1Id && !partner2Id) continue
 
@@ -768,6 +793,10 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
           for (const parentId of parentIds) {
             const linkKey = `${parentId}:${childId}`
             if (linkKeys.has(linkKey)) continue
+            if (parentId === childId || isAncestorOf(childId, parentId)) {
+              relationsSkipped++
+              continue
+            }
             await tx.parentChildLink.create({
               data: {
                 treeId,
@@ -779,6 +808,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
               },
             })
             linkKeys.add(linkKey)
+            parentsOf.set(childId, [...(parentsOf.get(childId) ?? []), parentId])
             linksCreated++
           }
         }
@@ -792,7 +822,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
           action: 'gedcom_imported',
           entityType: 'tree',
           entityId: treeId,
-          payloadJson: { personsCreated, personsReused, unionsCreated, linksCreated, eventsCreated, photoRefs: photoRefs.length, mediaRefs: mediaRefs.length },
+          payloadJson: { personsCreated, personsReused, unionsCreated, linksCreated, eventsCreated, relationsSkipped, photoRefs: photoRefs.length, mediaRefs: mediaRefs.length },
         },
       })
     }, { timeout: 60000 })
@@ -802,6 +832,6 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
 
     // photoRefs : chemin de la photo que le logiciel d'origine associait à chaque personne ; mediaRefs : les
     // autres fichiers cités, avec leur titre et leur source (rien n'est gardé en base)
-    return reply.send({ personsCreated, personsReused, unionsCreated, linksCreated, eventsCreated, photoRefs, mediaRefs })
+    return reply.send({ personsCreated, personsReused, unionsCreated, linksCreated, eventsCreated, relationsSkipped, photoRefs, mediaRefs })
   })
 }
