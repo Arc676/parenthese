@@ -35,4 +35,17 @@ describe('traceSibship (accolade franche)', () => {
     traceSibship(ctx, 'u-1', src, [{ cx: 505, cy: 480 }])
     expect(count('arcTo')).toBe(0)
   })
+
+  it('un enfant à moins de deux rayons de l\'aplomb est relié par un seul S, sans marche', () => {
+    const { ctx, calls } = recorder()
+    traceSibship(ctx, 'u-1', src, [{ cx: 515, cy: 480 }])
+    expect(calls.filter(c => c[0] === 'arcTo').length).toBe(0)
+    // Tronc vertical jusqu'à la barre, puis le S
+    expect(calls.filter(c => c[0] === 'lineTo').map(c => c[1])).toEqual([500])
+    const [curve] = calls.filter(c => c[0] === 'bezierCurveTo')
+    // Départ vertical sous l'union, arrivée verticale sur l'enfant
+    expect(curve[1]).toBe(500)
+    expect(curve[3]).toBe(515)
+    expect(curve.slice(5)).toEqual([515, 480])
+  })
 })
