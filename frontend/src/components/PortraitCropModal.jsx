@@ -168,7 +168,6 @@ const PortraitCropModal = ({ src, frameType, name, mode = 'recrop', initialCrop 
     <div className="pz-overlay pcrop-overlay" onClick={(event) => { if (event.target === event.currentTarget && !saving) onClose?.() }}>
       <div className="pz-modal pcrop-modal" role="dialog" aria-modal="true" aria-labelledby="pcropTitle">
         <div className="pz-modal-head">
-          <p className="pz-eyebrow">{t('Portrait')}</p>
           <h1 id="pcropTitle" className="pz-title">{t('Recadrer la photo')}</h1>
           {name && <p className="pz-sub">{name}</p>}
         </div>

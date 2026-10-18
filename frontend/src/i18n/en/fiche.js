@@ -410,7 +410,6 @@ export default {
   'Je ne connais pas son prénom': "I don't know their first name",
   'Il faut au moins un nom si le prénom est inconnu.': 'A last name is required when the first name is unknown.',
   // Recadrage du portrait (PortraitCropModal, menu du badge, App)
-  'Portrait': 'Portrait',
   'Recadrer la photo': 'Crop photo',
   'Recadrer': 'Crop',
   'Options du portrait': 'Portrait options',
