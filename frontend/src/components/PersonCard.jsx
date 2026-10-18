@@ -436,6 +436,8 @@ const PersonCard = ({
     unions: personUnions.map((union) => ({
       ...union,
       partner: persons.find((p) => p.id === (union.partner1Id === person.id ? union.partner2Id : union.partner1Id)) || null,
+      // Enfants du couple : placent dans la frise une union dont la date manque
+      childIds: filiations.filter((f) => f.unionId && String(f.unionId) === String(union.id)).map((f) => f.childId),
     })),
   }
 
