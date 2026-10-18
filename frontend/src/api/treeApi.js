@@ -235,6 +235,19 @@ export async function reorderSiblings(treeId, order, token) {
   })
 }
 
+// Lien parent-enfant modifié (type de filiation : naissance ou adoption)
+export async function updateParentChildLink(treeId, linkId, payload, token) {
+  const data = await apiRequest(`/trees/${encodeURIComponent(treeId)}/links/${encodeURIComponent(linkId)}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  return data.link
+}
+
 export async function deleteParentChildLink(treeId, linkId, token) {
   const data = await apiRequest(`/trees/${encodeURIComponent(treeId)}/links/${encodeURIComponent(linkId)}`, {
     method: 'DELETE',
@@ -435,6 +448,22 @@ export async function deletePersonMedia(treeId, personId, mediaId, token) {
       headers: {
         Authorization: `Bearer ${token}`,
       },
+    },
+  )
+
+  return data
+}
+
+// Modifier un souvenir (titre, moment de vie, texte de citation) : administrateurs seulement
+export async function updatePersonMedia(treeId, personId, mediaId, payload, token) {
+  const data = await apiRequest(
+    `/trees/${encodeURIComponent(treeId)}/persons/${encodeURIComponent(personId)}/media/${encodeURIComponent(mediaId)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
     },
   )
 

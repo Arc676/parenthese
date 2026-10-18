@@ -42,6 +42,8 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
   const [deathDate, setDeathDate] = useState('')
   // Décédé(e) sans date connue (issue #77)
   const [isDeceased, setIsDeceased] = useState(false)
+  // Lien d'enfant ou de parent : la personne qui est l'enfant du lien a été adoptée
+  const [adopted, setAdopted] = useState(false)
   // Les champs de date gardent leur texte : on les recrée après chaque ajout
   const [dateFieldsKey, setDateFieldsKey] = useState(0)
   const [relations, setRelations] = useState([])
@@ -157,7 +159,8 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
       birthDate: birthDate || null,
       deathDate: deathDate || null,
       isDeceased: !deathDate && isDeceased,
-      relations,
+      // Adopté(e) : s'applique aux liens d'enfant ou de parent de cette fiche
+      relations: relations.map((rel) => ({ ...rel, adopted: adopted && (rel.type === 'child' || rel.type === 'parent') })),
     })
   }
 
@@ -340,6 +343,13 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
                 </ul>
               )}
             </div>
+
+            {(selectedRelationType === 'child' || selectedRelationType === 'parent') && (
+              <label className="apn-deceased">
+                <input type="checkbox" checked={adopted} onChange={(e) => setAdopted(e.target.checked)} />
+                {t('Adopté(e)')}
+              </label>
+            )}
 
             {relations.length > 0 && (
               <div className="apn-links">

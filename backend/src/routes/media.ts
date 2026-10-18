@@ -94,6 +94,13 @@ const reorderMediaSchema = z.object({
   orderedMediaIds: z.array(z.string().min(1)).min(1),
 })
 
+const MAX_CAPTION_LENGTH = 280
+const MAX_CITATION_LENGTH = 2000
+const updateMediaSchema = z.object({
+  caption: z.string().trim().min(1).max(MAX_CITATION_LENGTH),
+  lifeEventId: z.string().min(1).max(64).nullable().optional(),
+})
+
 function hasAdminRight(role: MembershipRole): boolean {
   return role === 'owner' || role === 'admin'
 }
@@ -751,6 +758,113 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
     })
 
     return reply.send({ ok: true })
+  })
+
+  // Modifier un souvenir : titre (caption) et moment de vie. Pour une citation, caption est aussi le texte
+  // du fichier citation.txt, réécrit ici pour que la lecture et le téléchargement restent identiques.
+  app.patch('/trees/:id/persons/:personId/media/:mediaId', async (request, reply) => {
+    if (!request.actor || request.actor.kind !== 'user') {
+      return reply.code(401).send({ error: 'authentication_required' })
+    }
+
+    const params = z
+      .object({
+        id: z.string().min(1),
+        personId: z.string().min(1),
+        mediaId: z.string().min(1),
+      })
+      .safeParse(request.params)
+
+    if (!params.success) {
+      return reply.code(400).send({ error: 'invalid_params' })
+    }
+
+    const membership = await requireAdminMembership(app, request.actor.userId, params.data.id)
+    if (!membership) {
+      return reply.code(403).send({ error: 'forbidden' })
+    }
+
+    const payload = updateMediaSchema.safeParse(request.body)
+    if (!payload.success) {
+      return reply.code(400).send({ error: 'invalid_payload' })
+    }
+
+    const existingMedia = await app.prisma.mediaItem.findFirst({
+      where: { id: params.data.mediaId, treeId: params.data.id, personId: params.data.personId, deletedAt: null },
+      select: { id: true, type: true, filePath: true },
+    })
+    if (!existingMedia) {
+      return reply.code(404).send({ error: 'media_not_found' })
+    }
+
+    const isCitation = existingMedia.type === 'citation'
+    if (!isCitation && payload.data.caption.length > MAX_CAPTION_LENGTH) {
+      return reply.code(400).send({ error: 'caption_too_long' })
+    }
+
+    const lifeEventId = payload.data.lifeEventId
+    if (lifeEventId) {
+      const event = await app.prisma.lifeEvent.findFirst({
+        where: { id: lifeEventId, treeId: params.data.id, deletedAt: null },
+        select: { personId: true, unionId: true, status: true },
+      })
+      let ownsEvent = event?.personId === params.data.personId
+      if (event && !ownsEvent && event.unionId) {
+        const union = await app.prisma.union.findFirst({
+          where: { id: event.unionId, treeId: params.data.id },
+          select: { partner1PersonId: true, partner2PersonId: true },
+        })
+        ownsEvent = union?.partner1PersonId === params.data.personId || union?.partner2PersonId === params.data.personId
+      }
+      if (!event || !ownsEvent || event.status !== 'approved') {
+        return reply.code(400).send({ error: 'invalid_life_event_reference' })
+      }
+    }
+
+    const data: { caption: string; lifeEventId?: string | null; sizeBytes?: number } = {
+      caption: payload.data.caption,
+    }
+    if (lifeEventId !== undefined) data.lifeEventId = lifeEventId
+
+    if (isCitation) {
+      const buffer = Buffer.from(payload.data.caption, 'utf8')
+      const storageRoot = getStorageRoot()
+      const absolutePath = path.resolve(storageRoot, existingMedia.filePath)
+      if (!absolutePath.startsWith(storageRoot + path.sep)) {
+        return reply.code(400).send({ error: 'invalid_media_path' })
+      }
+      await writeFile(absolutePath, buffer)
+      data.sizeBytes = buffer.length
+    }
+
+    await app.prisma.mediaItem.updateMany({
+      where: { id: params.data.mediaId, treeId: params.data.id, personId: params.data.personId, deletedAt: null },
+      data,
+    })
+
+    await app.prisma.auditLog.create({
+      data: {
+        treeId: params.data.id,
+        actorType: 'user',
+        actorId: request.actor.userId,
+        action: 'media_updated',
+        entityType: 'media_item',
+        entityId: params.data.mediaId,
+        payloadJson: {
+          personId: params.data.personId,
+          lifeEventChanged: lifeEventId !== undefined,
+        },
+      },
+    })
+
+    return reply.send({
+      ok: true,
+      media: {
+        id: params.data.mediaId,
+        caption: payload.data.caption,
+        lifeEventId,
+      },
+    })
   })
 
   app.delete('/trees/:id/persons/:personId/media/:mediaId', async (request, reply) => {

@@ -115,6 +115,7 @@ function mapRemotePersonToLocal(person, current = null) {
     frameType: current?.frameType || pickFrameType(person?.id),
     note: person?.notes || null,
     birthPlace: person?.birthPlace || null,
+    deathPlace: person?.deathPlace || null,
     region: person?.region || null,
     profession: person?.profession || null,
     nationality: person?.nationality || null,

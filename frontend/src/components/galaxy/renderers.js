@@ -297,10 +297,8 @@ export function drawFiliations(ctx, edges, posMap, nodeMap, nodeRandomData, entr
   })
 
   for (const { sourceId, sourcePos, pType, items, progress } of sibships.values()) {
-    if (pType === 'adoption') {
-      ctx.setLineDash([8, 5])
-      ctx.strokeStyle = FIL.color
-    } else if (pType === 'inconnu') {
+    // Adoption : trait plein comme une filiation de naissance (le mode d'adoption se dit dans la fiche)
+    if (pType === 'inconnu') {
       ctx.setLineDash([3, 3])
       ctx.strokeStyle = COLORS.linkUnknown
     } else {
