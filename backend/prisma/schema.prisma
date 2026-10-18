@@ -81,6 +81,7 @@ enum SharedAccessRole {
 model User {
   id                            String                @id @default(cuid())
   email                         String                @unique
+  firstName                     String?
   passwordHash                  String
   lastOpenedTreeId              String?
   lastOpenedAccessMode          String?

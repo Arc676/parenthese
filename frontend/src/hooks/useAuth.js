@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
   deleteAccount,
+  fetchAccountProfile,
   fetchLastOpenedTree,
   loginUser,
   logoutUser,
@@ -49,8 +50,21 @@ export function useAuth() {
 
   const authenticated = Boolean(userAuth.token)
 
+  // Prénom du compte : lu sur le serveur, gardé dans le profil local pour le bandeau de la porte
+  const refreshAccountProfile = async (token) => {
+    try {
+      const response = await fetchAccountProfile(token)
+      if (!response?.user) return
+      const merged = { ...(loadUserProfile() || {}), ...response.user }
+      saveUserProfile(merged)
+      setUserAuth((current) => (current.token === token ? { ...current, user: merged } : current))
+    } catch {
+      // Profil non lu : le bandeau reste neutre, la session n'est pas touchée
+    }
+  }
+
   const loadAccountTrees = async (token) => {
-    const response = await listTrees(token)
+    const [response] = await Promise.all([listTrees(token), refreshAccountProfile(token)])
     const trees = Array.isArray(response?.trees) ? response.trees : []
     const lastTree = response?.lastOpenedTree || null
     setAccountTrees(trees)

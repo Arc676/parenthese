@@ -41,6 +41,18 @@ export async function deleteAccount(token, password) {
   return data
 }
 
+// Profil du compte connecté (prénom compris), pour une session restaurée sur un autre appareil
+export async function fetchAccountProfile(token) {
+  const data = await apiRequest('/auth/me', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  return data
+}
+
 export async function fetchLastOpenedTree(token) {
   const data = await apiRequest('/auth/me/last-tree', {
     method: 'GET',

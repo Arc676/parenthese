@@ -20,6 +20,16 @@ const credentialsSchema = z.object({
   password: z.string().min(8).max(128),
 })
 
+// Prénom du compte, facultatif : seulement à l'inscription (la connexion ne le demande pas)
+const registerSchema = credentialsSchema.extend({
+  firstName: z.string().max(60).optional().nullable(),
+})
+
+function trimmedFirstName(value: string | null | undefined): string | null {
+  const trimmed = (value ?? '').trim()
+  return trimmed ? trimmed : null
+}
+
 const deleteAccountSchema = z.object({
   password: z.string().min(1).max(128),
 })
@@ -94,7 +104,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      const parsed = credentialsSchema.safeParse(request.body)
+      const parsed = registerSchema.safeParse(request.body)
       if (!parsed.success) {
         return reply.code(400).send({ error: 'invalid_payload', details: parsed.error.flatten() })
       }
@@ -110,10 +120,12 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         data: {
           email,
           passwordHash,
+          firstName: trimmedFirstName(parsed.data.firstName),
         },
         select: {
           id: true,
           email: true,
+          firstName: true,
         },
       })
 
@@ -154,6 +166,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         select: {
           id: true,
           email: true,
+          firstName: true,
           passwordHash: true,
         },
       })
@@ -185,10 +198,28 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         user: {
           id: user.id,
           email: user.email,
+          firstName: user.firstName,
         },
       })
     },
   )
+
+  // Profil du compte connecté (prénom compris) : la session restaurée sur un autre appareil le retrouve
+  app.get('/me', async (request, reply) => {
+    if (!request.actor || request.actor.kind !== 'user') {
+      return reply.code(401).send({ error: 'authentication_required' })
+    }
+
+    const user = await app.prisma.user.findUnique({
+      where: { id: request.actor.userId },
+      select: { id: true, email: true, firstName: true },
+    })
+    if (!user) {
+      return reply.code(401).send({ error: 'authentication_required' })
+    }
+
+    return reply.send({ user })
+  })
 
   app.get('/me/last-tree', async (request, reply) => {
     if (!request.actor || request.actor.kind !== 'user') {
