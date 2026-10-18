@@ -773,14 +773,27 @@ function Header({ t, onCta, loginHref, elevated }) {
   return (
     <header className={`site-nav${elevated ? ' is-elevated' : ''}`}>
       <div className="wrap nav-in">
-        <a href={t.home} aria-label={t.logoHome}><LogoLockup height={22} /></a>
+        <a href={t.home} aria-label={t.logoHome} className="site-logo">
+          {/* Sur téléphone, le symbole seul : le nom « Parenthèse » reste dans le nom accessible du lien */}
+          <LogoLockup height={22} className="lg lk lk-full" decorative />
+          <LogoLockup height={24} mark className="lg lk lk-mark" decorative />
+        </a>
         <nav aria-label="Sections">
           <a href="#comment">{t.nav.how}</a>
           <a href="#demo">{t.nav.demo}</a>
           {t.nav.privacy && <a href={t.privacyHref}>{t.nav.privacy}</a>}
-          <a href={loginHref}>{t.nav.login}</a>
         </nav>
-        <button type="button" onClick={onCta} className="btn p sm">{t.cta}</button>
+        <div className="nav-cta">
+          <a href={loginHref} className="btn s sm nav-login" aria-label={t.nav.login}>
+            {/* Silhouette de profil, icône « user » de Lucide (ISC), tracée à la main : la landing n'embarque pas la bibliothèque */}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="7" r="4" />
+              <path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" />
+            </svg>
+            <span className="nav-login-text">{t.nav.login}</span>
+          </a>
+          <button type="button" onClick={onCta} className="btn p sm">{t.cta}</button>
+        </div>
       </div>
     </header>
   )

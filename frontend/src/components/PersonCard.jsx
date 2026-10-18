@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useRef, forwardRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Save, Trash2, Plus, X, Search, Check, Play, ImagePlus, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Save, Trash2, Plus, X, Search, Check, Play, ImagePlus, Camera, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react'
 import { getParents, getChildren, getPersonUnions, getPersonMedias, getDemoLife, filiations, persons, unions } from '../data/mockData'
 import { fetchPersonLife } from '../api/treeApi.js'
 import LifeTimeline from './LifeTimeline.jsx'
@@ -508,6 +508,12 @@ const PersonCard = ({
     return parts.join(' – ')
   })()
   const ageLabel = age === null ? null : person.isAlive ? t('{age} ans', { age }) : t('{age} ans au décès', { age })
+  // Une seule ligne sous le nom : surnom, repères de vie, âge, séparés par un point médian
+  const metaItems = [
+    person.nickname && { key: 'nick', node: <em className="pc-nick">{person.nickname}</em>, nowrap: true },
+    lifeLine && { key: 'life', node: lifeLine },
+    ageLabel && { key: 'age', node: ageLabel, nowrap: true },
+  ].filter(Boolean)
 
   const renderRelationRow = (target, relationType, meta) => (
     <div key={`${relationType}-${target?.id}`} className="pc-rel-row">
@@ -574,9 +580,10 @@ const PersonCard = ({
               className="pc-photo pc-photo--add"
               onClick={() => avatarInputRef.current?.click()}
               disabled={avatarActionLoading}
+              aria-label={t('Ajouter une photo')}
+              title={t('Ajouter une photo')}
             >
               <ImagePlus size={22} strokeWidth={1.8} aria-hidden="true" />
-              <span>{avatarActionLoading ? t('Envoi') : t('Ajouter une photo')}</span>
             </button>
           ) : (
             <div className="pc-photo">
@@ -586,29 +593,29 @@ const PersonCard = ({
             </div>
           )}
           {editMode && onAvatarUpload && (
-            <div className="pc-photo-actions">
-              <button
-                ref={sourceBtnRef}
-                type="button"
-                className="pc-photo-btn"
-                onClick={openAvatarPicker}
-                disabled={avatarActionLoading}
-                aria-haspopup="menu"
-                aria-expanded={showSourceMenu}
-              >
-                {person.photo ? t('Changer') : t('Ajouter une photo')}
-              </button>
-              {person.photo && (
-                <button
-                  type="button"
-                  className="pc-photo-btn pc-photo-btn--danger"
-                  onClick={() => onAvatarDelete?.(person.id, person.avatarFromImmich)}
-                  disabled={avatarActionLoading}
-                >
-                  {t('Retirer')}
-                </button>
-              )}
-            </div>
+            <button
+              ref={sourceBtnRef}
+              type="button"
+              className="pc-photo-badge"
+              onClick={openAvatarPicker}
+              disabled={avatarActionLoading}
+              aria-label={t('Changer la photo')}
+              title={t('Changer la photo')}
+              aria-haspopup="menu"
+              aria-expanded={showSourceMenu}
+            >
+              <Camera size={14} strokeWidth={2} aria-hidden="true" />
+            </button>
+          )}
+          {editMode && onAvatarUpload && person.photo && (
+            <button
+              type="button"
+              className="pc-photo-btn pc-photo-btn--danger"
+              onClick={() => onAvatarDelete?.(person.id, person.avatarFromImmich)}
+              disabled={avatarActionLoading}
+            >
+              {t('Retirer')}
+            </button>
           )}
         </div>
 
@@ -639,22 +646,6 @@ const PersonCard = ({
                 placeholder={t('Nom')}
                 aria-label={t('Nom')}
               />
-              {/* Visible tant que le prénom est vide, et tant qu'elle est cochée (pour pouvoir la décocher) */}
-              {(unknownFirstName || !String(getEditValue('firstName', person.firstName) ?? '').trim()) && (
-                <label className="pc-unknown-first">
-                  <input
-                    type="checkbox"
-                    checked={unknownFirstName}
-                    onChange={(e) => {
-                      setUnknownFirstName(e.target.checked)
-                      setFirstNameMissing(false)
-                      setLastNameMissing(false)
-                      handleFieldChange('firstName', '')
-                    }}
-                  />
-                  {t('Je ne connais pas son prénom')}
-                </label>
-              )}
               {firstNameMissing && <p className="pc-name-error">{t('Il faut au moins un prénom.')}</p>}
               {lastNameMissing && <p className="pc-name-error">{t('Il faut au moins un nom si le prénom est inconnu.')}</p>}
             </div>
@@ -664,10 +655,17 @@ const PersonCard = ({
               {person.lastName && <>{' '}<em>{person.lastName}</em></>}
             </h2>
           )}
-          {!editMode && person.nickname && <p className="pc-nick">{person.nickname}</p>}
-          {!editMode && lifeLine && <p className="pc-life">{lifeLine}</p>}
+          {!editMode && metaItems.length > 0 && (
+            <p className="pc-meta">
+              {metaItems.map((item, i) => (
+                <span key={item.key} className={`pc-meta-item${item.nowrap ? ' pc-meta-item--nowrap' : ''}`}>
+                  {item.node}
+                  {i < metaItems.length - 1 && <span className="pc-meta-sep" aria-hidden="true">·</span>}
+                </span>
+              ))}
+            </p>
+          )}
           <div className="pc-chips">
-            {editMode && <span className="pz-tag pz-tag--accent pz-tag--dot">{t('Édition')}</span>}
             {editMode && siblingPlace && (
               <span className="pz-tag pc-order" role="group" aria-label={t('Place {n} sur {total} parmi les frères et sœurs', { n: siblingPlace.index + 1, total: siblingPlace.count })}>
                 <button type="button" className="pc-order-btn" onClick={() => onMoveSibling?.(-1)} disabled={siblingPlace.index === 0} aria-label={t('Déplacer à gauche')} title={t('Déplacer à gauche')}>
@@ -679,10 +677,24 @@ const PersonCard = ({
                 </button>
               </span>
             )}
-            {!editMode && ageLabel && <span className="pz-tag">{ageLabel}</span>}
             {!editMode && person.profession && <span className="pz-tag">{person.profession}</span>}
           </div>
         </div>
+        {editMode && ((unknownFirstName || !String(getEditValue('firstName', person.firstName) ?? '').trim())) && (
+          <label className="pc-unknown-first">
+            <input
+              type="checkbox"
+              checked={unknownFirstName}
+              onChange={(e) => {
+                setUnknownFirstName(e.target.checked)
+                setFirstNameMissing(false)
+                setLastNameMissing(false)
+                handleFieldChange('firstName', '')
+              }}
+            />
+            {t('Je ne connais pas son prénom')}
+          </label>
+        )}
       </header>
 
       {avatarActionError && <div className="pz-error pc-inline-msg">{avatarActionError}</div>}

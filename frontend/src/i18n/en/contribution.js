@@ -52,7 +52,6 @@ export default {
   // ─── Panneau de relecture ───
   'Copie indisponible': 'Copy unavailable',
   'Minimum 8 caractères.': 'At least 8 characters.',
-  'Partager et relire': 'Share and review',
   'La famille {em}': 'The family {em}',
   'participe': 'joins in',
   'Fermer': 'Close',
@@ -82,7 +81,9 @@ export default {
     'Changing the password means everyone who has already opened the tree will need to enter the new one.',
   'Le message à envoyer': 'The message to send',
   'Message copié': 'Message copied',
-  'Copier le message': 'Copy message',
+  "Copier le message d'invitation": 'Copy invitation message',
+  'Voir ou modifier le message': 'View or edit the message',
+  'Masquer le message': 'Hide the message',
   'Propositions à relire': 'Suggestions to review',
   'Acceptez ou refusez chaque modification, puis appliquez vos choix.': 'Accept or decline each change, then apply your choices.',
   'Actualiser': 'Refresh',

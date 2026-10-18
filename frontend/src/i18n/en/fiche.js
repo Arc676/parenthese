@@ -19,6 +19,7 @@ export default {
   'Fermer la fiche': 'Close profile',
   'Changer': 'Change',
   'Ajouter une photo': 'Add a photo',
+  'Changer la photo': 'Change photo',
   'Retirer': 'Remove',
   'Prénom': 'First name',
   'Nom': 'Last name',

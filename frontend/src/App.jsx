@@ -2898,7 +2898,7 @@ function App() {
         <div className="tree-created-prompt" role="status">
           <strong>{t('Votre arbre est créé.')}</strong>
           {t("Ajoutez un proche pour commencer, comme votre mère, votre père ou un frère. Il suffit d'un prénom.")}
-          <button type="button" onClick={() => setTreeWelcomeVisible(false)} aria-label={t('Fermer')}>
+          <button type="button" className="pz-btn pz-btn--secondary" onClick={() => setTreeWelcomeVisible(false)} aria-label={t('Fermer')}>
             {t('Fermer')}
           </button>
         </div>
@@ -2908,7 +2908,7 @@ function App() {
           <strong>{t("Votre arbre est créé, mais l'import n'a pas abouti.")}</strong>
           {` ${treeImportError} `}
           {t("Vous pouvez réessayer depuis les paramètres de l'arbre.")}
-          <button type="button" onClick={() => setTreeImportError('')} aria-label={t('Fermer')}>
+          <button type="button" className="pz-btn pz-btn--secondary" onClick={() => setTreeImportError('')} aria-label={t('Fermer')}>
             {t('Fermer')}
           </button>
         </div>

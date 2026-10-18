@@ -238,6 +238,8 @@ const ContributionPanel = ({
   const [newPassword, setNewPassword] = useState('')
   const [inviteLocalError, setInviteLocalError] = useState('')
   const [copyFeedback, setCopyFeedback] = useState('')
+  // Le message d'invitation reste replié : une ligne, le texte ne s'ouvre que sur demande
+  const [showInviteMessage, setShowInviteMessage] = useState(false)
 
   // Load persisted decisions from localStorage
   useEffect(() => {
@@ -366,7 +368,6 @@ const ContributionPanel = ({
         aria-labelledby="contribPanelTitle"
       >
         <div className="pz-modal-head">
-          <p className="pz-eyebrow">{t('Partager et relire')}</p>
           <h1 id="contribPanelTitle" className="pz-title">{familyTitleBefore}<em>{t('participe')}</em>{familyTitleAfter}</h1>
         </div>
         <button type="button" className="pz-btn pz-btn--ghost pz-btn--icon pz-modal-close" onClick={onClose} aria-label={t('Fermer')}>
@@ -412,11 +413,18 @@ const ContributionPanel = ({
               </div>
               {defaultInviteText && (
                 <div className="contrib-invite-message">
-                  <label className="contrib-invite-title" htmlFor="contrib-invite-text">{t('Le message à envoyer')}</label>
-                  <textarea id="contrib-invite-text" className="contrib-invite-textarea" rows={9} value={inviteText} onChange={(e) => setInviteText(e.target.value)} />
-                  <div className="contrib-invite-message-actions">
-                    <button type="button" className="pz-btn pz-btn--primary pz-btn--sm" onClick={() => handleCopy(inviteText, t('Message copié'))}><Copy size={14} strokeWidth={2} />{t('Copier le message')}</button>
+                  <div className="contrib-invite-message-row">
+                    <button type="button" className="contrib-pill-btn contrib-pill-btn--edit" onClick={() => handleCopy(inviteText, t('Message copié'))}><Copy size={14} strokeWidth={2} />{t("Copier le message d'invitation")}</button>
+                    <button type="button" className="contrib-link-btn" aria-expanded={showInviteMessage} aria-controls="contrib-invite-text" onClick={() => setShowInviteMessage((v) => !v)}>
+                      {showInviteMessage ? t('Masquer le message') : t('Voir ou modifier le message')}
+                    </button>
                   </div>
+                  {showInviteMessage && (
+                    <>
+                      <label className="contrib-invite-message-label" htmlFor="contrib-invite-text">{t('Le message à envoyer')}</label>
+                      <textarea id="contrib-invite-text" className="contrib-invite-textarea" rows={6} value={inviteText} onChange={(e) => setInviteText(e.target.value)} />
+                    </>
+                  )}
                 </div>
               )}
               {(inviteLocalError || inviteError) && <div className="contrib-error">{inviteLocalError || inviteError}</div>}
