@@ -87,6 +87,7 @@ const createPersonSchema = z.object({
   firstName: z.string().min(1).max(120),
   lastName: z.string().min(1).max(120),
   birthName: z.string().max(120).optional().nullable(),
+  nickname: z.string().max(120).optional().nullable(),
   birthDate: z.string().regex(isoDateRegex).optional().nullable(),
   deathDate: z.string().regex(isoDateRegex).optional().nullable(),
   isDeceased: z.boolean().optional(),
@@ -103,6 +104,7 @@ const patchPersonSchema = z
     firstName: z.string().min(1).max(120).optional(),
     lastName: z.string().min(1).max(120).optional(),
     birthName: z.string().max(120).optional().nullable(),
+    nickname: z.string().max(120).optional().nullable(),
     birthDate: z.string().regex(isoDateRegex).optional().nullable(),
     deathDate: z.string().regex(isoDateRegex).optional().nullable(),
     isDeceased: z.boolean().optional(),
@@ -1310,6 +1312,7 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
         firstName: payload.data.firstName.trim(),
         lastName: payload.data.lastName.trim(),
         birthName: toTrimmedStringOrNull(payload.data.birthName),
+        nickname: toTrimmedStringOrNull(payload.data.nickname),
         birthDate: toDateOrNull(payload.data.birthDate),
         deathDate: toDateOrNull(payload.data.deathDate),
         // Une date de décès dit déjà que la personne est décédée : le drapeau ne sert que sans date
@@ -1368,6 +1371,7 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
       firstName?: string
       lastName?: string
       birthName?: string | null
+      nickname?: string | null
       birthDate?: Date | null
       deathDate?: Date | null
       isDeceased?: boolean
@@ -1390,6 +1394,10 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
 
     if (payload.data.birthName !== undefined) {
       data.birthName = toTrimmedStringOrNull(payload.data.birthName)
+    }
+
+    if (payload.data.nickname !== undefined) {
+      data.nickname = toTrimmedStringOrNull(payload.data.nickname)
     }
 
     if (payload.data.birthDate !== undefined) {

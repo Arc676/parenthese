@@ -9,8 +9,8 @@ import { buildMediaUrl } from '../utils/mediaToken.js'
 // Démo : noms et lieux restent français, les textes descriptifs sont traduits.
 export let persons = [
   { id: 1, firstName: 'Jean', sex: 'male', lastName: 'Dupont', birthYear: 1890, deathYear: 1965, isAlive: false, photo: '/demo/jean.webp', frameType: 'polaroid', birthPlace: 'Limoges', region: 'Haute-Vienne', profession: t('Menuisier'), nationality: t('Française'), note: t('Patriarche de la famille') },
-  { id: 2, firstName: 'Marie', sex: 'female', lastName: 'Martin', birthYear: 1895, deathYear: 1970, isAlive: false, photo: '/demo/marie.webp', frameType: 'round', birthPlace: 'Brive-la-Gaillarde', region: 'Corrèze', profession: t('Couturière'), note: t('Atelier de couture rue du Commerce') },
-  { id: 3, firstName: 'Robert', sex: 'male', lastName: 'Dupont', birthYear: 1920, deathYear: 1995, isAlive: false, photo: '/demo/robert.webp', frameType: 'rect', birthPlace: 'Limoges', region: 'Haute-Vienne', profession: t('Instituteur'), note: t("A enseigné 35 ans à l'école communale") },
+  { id: 2, firstName: 'Marie', sex: 'female', lastName: 'Martin', nickname: 'Mamie Mimi', birthYear: 1895, deathYear: 1970, isAlive: false, photo: '/demo/marie.webp', frameType: 'round', birthPlace: 'Brive-la-Gaillarde', region: 'Corrèze', profession: t('Couturière'), note: t('Atelier de couture rue du Commerce') },
+  { id: 3, firstName: 'Robert', sex: 'male', lastName: 'Dupont', nickname: 'Loulou', birthYear: 1920, deathYear: 1995, isAlive: false, photo: '/demo/robert.webp', frameType: 'rect', birthPlace: 'Limoges', region: 'Haute-Vienne', profession: t('Instituteur'), note: t("A enseigné 35 ans à l'école communale") },
   { id: 4, firstName: 'André', sex: 'male', lastName: 'Dupont', birthYear: 1923, deathYear: 2000, isAlive: false, photo: '/demo/andre.webp', frameType: 'polaroid', birthPlace: 'Limoges', region: 'Haute-Vienne', profession: t('Charpentier') },
   { id: 5, firstName: 'Simone', sex: 'female', lastName: 'Petit', birthYear: 1925, deathYear: 2010, isAlive: false, photo: '/demo/simone.webp', frameType: 'round', birthPlace: 'Guéret', region: 'Creuse', profession: t('Infirmière') },
   { id: 9, firstName: 'Isabelle', sex: 'female', lastName: 'Bernard', birthYear: 1928, isAlive: true, photo: '/demo/isabelle.webp', frameType: 'rect', birthPlace: 'Fort-de-France', region: 'Martinique', profession: t('Sage-femme'), note: t('Doyenne de la famille, vit à Brive') },
@@ -103,6 +103,7 @@ function mapRemotePersonToLocal(person, current = null) {
     firstName: person?.firstName || current?.firstName || t('Inconnu'),
     lastName: person?.lastName || current?.lastName || '',
     birthName: person?.birthName ?? current?.birthName ?? null,
+    nickname: person?.nickname ?? null,
     birthYear,
     birthDate: person?.birthDate || current?.birthDate || null,
     deathDate: person?.deathDate || current?.deathDate || null,

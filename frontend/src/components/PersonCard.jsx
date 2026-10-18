@@ -544,6 +544,7 @@ const PersonCard = ({
               {person.firstName} <em>{person.lastName}</em>
             </h2>
           )}
+          {!editMode && person.nickname && <p className="pc-nick">{person.nickname}</p>}
           {!editMode && lifeLine && <p className="pc-life">{lifeLine}</p>}
           <div className="pc-chips">
             {editMode && <span className="pz-tag pz-tag--accent pz-tag--dot">{t('Édition')}</span>}
@@ -695,6 +696,12 @@ const PersonCard = ({
                   <div className="pc-row">
                     <span className="pc-label">{t('Nom de naissance')}</span>
                     {renderEditableValue({ field: 'birthName', value: person.birthName || '', placeholder: t('Nom de naissance') })}
+                  </div>
+                )}
+                {(person.nickname || editMode) && (
+                  <div className="pc-row">
+                    <span className="pc-label">{t('Surnom')}</span>
+                    {renderEditableValue({ field: 'nickname', value: person.nickname || '', placeholder: t('Surnom') })}
                   </div>
                 )}
                 {editMode && (

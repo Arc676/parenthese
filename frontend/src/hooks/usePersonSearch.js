@@ -11,6 +11,7 @@ const SCORE_WEIGHTS = {
 
   // Poids 80 : Très pertinent
   NAME_STARTS_WITH: 80,
+  NICKNAME_STARTS_WITH: 80,
   FIRSTNAME_STARTS_WITH: 80,
   LASTNAME_STARTS_WITH: 80,
   PROFESSION_EXACT: 80,
@@ -22,6 +23,7 @@ const SCORE_WEIGHTS = {
   BIRTH_YEAR_MATCH: 50,
   DEATH_YEAR_MATCH: 50,
   REGION_MATCH: 50,
+  NICKNAME_CONTAINS: 50,
 
   // Poids 20 : Peu pertinent
   NOTE_CONTAINS: 20,
@@ -52,6 +54,7 @@ function calculateScore(query, person) {
   const birthPlace = (person.birthPlace || '').toLowerCase()
   const region = (person.region || '').toLowerCase()
   const note = (person.note || '').toLowerCase()
+  const nickname = (person.nickname || '').toLowerCase()
   const birthYear = person.birthYear?.toString() || ''
   const deathYear = person.deathYear?.toString() || ''
 
@@ -100,6 +103,12 @@ function calculateScore(query, person) {
     } else if (profession.includes(q)) {
       score += SCORE_WEIGHTS.PROFESSION_CONTAINS
     }
+  }
+
+  // === SURNOM ===
+
+  if (nickname && nickname.includes(q)) {
+    score += nickname.startsWith(q) ? SCORE_WEIGHTS.NICKNAME_STARTS_WITH : SCORE_WEIGHTS.NICKNAME_CONTAINS
   }
 
   // === LIEUX ===
@@ -154,6 +163,10 @@ function getMatchReason(query, person) {
     return 'Nom'
   }
 
+  if ((person.nickname || '').toLowerCase().includes(q)) {
+    return 'Surnom'
+  }
+
   if (profession && profession.includes(q)) {
     return 'Profession'
   }
@@ -194,6 +207,10 @@ function getMatchDetail(query, person) {
 
   if (fullNameNorm.includes(q) || firstNameNorm.includes(q) || lastNameNorm.includes(q)) {
     return fullName
+  }
+
+  if ((person.nickname || '').toLowerCase().includes(q)) {
+    return person.nickname
   }
 
   if (profession.toLowerCase().includes(q)) {
@@ -300,3 +317,5 @@ export function usePersonSearch(persons = []) {
     deactivate,
   }
 }
+
+export { calculateScore, getMatchReason, MIN_SCORE_THRESHOLD }

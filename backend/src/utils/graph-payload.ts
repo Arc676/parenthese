@@ -9,6 +9,7 @@ export type GraphPayload = {
     firstName: string
     lastName: string
     birthName: string | null
+    nickname: string | null
     birthDate: string | null
     deathDate: string | null
     isDeceased: boolean
@@ -84,6 +85,7 @@ export function buildGraphPayload(
         firstName: person.firstName,
         lastName: person.lastName,
         birthName: person.birthName,
+        nickname: person.nickname,
         birthDate: formatDate(person.birthDate),
         deathDate: formatDate(person.deathDate),
         isDeceased: Boolean(person.isDeceased) && !person.deathDate,

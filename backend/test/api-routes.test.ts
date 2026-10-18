@@ -985,3 +985,26 @@ describe('Relationship guardrails', () => {
     await app.close()
   })
 })
+
+describe('Surnom (nickname) en écriture directe', () => {
+  it('PATCH accepte le surnom, le coupe, et vide = null', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    const patch = (payload: object) => app.inject({ method: 'PATCH', url: '/trees/tree-1/persons/person-1', headers: { authorization: `Bearer ${token}` }, payload })
+
+    expect((await patch({ nickname: '  Loulou  ' })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ nickname: 'Loulou' })
+
+    expect((await patch({ nickname: '   ' })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ nickname: null })
+    await app.close()
+  })
+
+  it('refuse un surnom de plus de 120 caractères', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    const res = await app.inject({ method: 'PATCH', url: '/trees/tree-1/persons/person-1', headers: { authorization: `Bearer ${token}` }, payload: { nickname: 'x'.repeat(121) } })
+    expect(res.statusCode).toBe(400)
+    await app.close()
+  })
+})

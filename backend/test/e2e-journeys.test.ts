@@ -734,3 +734,75 @@ describe('Journey 4 — Admin reviews a contribution session', () => {
     await app.close()
   })
 })
+
+describe('Surnom (nickname) proposé par un contributeur', () => {
+  it('soumis en attente, puis appliqué par le propriétaire avec la valeur nettoyée', async () => {
+    const app = createApp()
+    await app.ready()
+
+    const contributorToken = (app as any).jwt.sign({
+      kind: 'tree_access',
+      sub: 'tree:tree-1:contributor',
+      treeId: 'tree-1',
+      role: 'contributor',
+      accessVersion: new Date('2026-02-11T10:00:00.000Z').getTime(),
+    })
+    prismaMock.tree.findFirst.mockResolvedValue({ id: 'tree-1', deletedAt: null, settings: { contributorPolicy: 'pending' } })
+
+    const submitRes = await app.inject({
+      method: 'POST',
+      url: '/trees/tree-1/contributions/sessions',
+      headers: { authorization: `Bearer ${contributorToken}` },
+      payload: {
+        title: 'Surnom de Robert',
+        submittedByLabel: 'Jeanette Martin',
+        changes: [
+          {
+            entityType: 'person',
+            action: 'update',
+            entityId: 'person-1',
+            before: { nickname: null },
+            after: { nickname: '  Loulou  ' },
+          },
+        ],
+      },
+    })
+    expect(submitRes.statusCode).toBe(201)
+    expect(submitRes.json().session.status).toBe('pending')
+
+    const adminToken = (app as any).jwt.sign(
+      { kind: 'user', sub: 'user-1', jti: randomUUID(), userId: 'user-1', email: 'owner@example.com' },
+      { expiresIn: '1h' },
+    )
+    prismaMock.contributionSession.findFirst.mockResolvedValue({
+      id: 'session-n',
+      treeId: 'tree-1',
+      status: 'pending',
+      title: 'Surnom de Robert',
+      changes: [
+        {
+          id: 'change-n',
+          entityType: 'person',
+          action: 'update',
+          entityId: 'person-1',
+          beforeJson: { nickname: null },
+          afterJson: { nickname: '  Loulou  ' },
+          conflictState: 'none',
+        },
+      ],
+    })
+    prismaMock.person.findFirst.mockResolvedValue({ id: 'person-1', treeId: 'tree-1', firstName: 'Robert', lastName: 'Dupont', nickname: null, deletedAt: null })
+
+    const reviewRes = await app.inject({
+      method: 'POST',
+      url: '/trees/tree-1/contributions/sessions/session-n/review',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { decision: 'approved' },
+    })
+    expect(reviewRes.statusCode).toBe(200)
+    expect(reviewRes.json().approvedCount).toBe(1)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ nickname: 'Loulou' })
+
+    await app.close()
+  })
+})

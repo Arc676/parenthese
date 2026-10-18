@@ -34,6 +34,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [birthName, setBirthName] = useState('')
+  const [nickname, setNickname] = useState('')
   const [birthDate, setBirthDate] = useState('')
   const [deathDate, setDeathDate] = useState('')
   // Décédé(e) sans date connue (issue #77)
@@ -91,6 +92,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
       setFirstName('')
       setLastName('')
       setBirthName('')
+      setNickname('')
       setBirthDate('')
       setDeathDate('')
       setIsDeceased(false)
@@ -139,6 +141,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       birthName: birthName.trim() || null,
+      nickname: nickname.trim() || null,
       birthDate: birthDate || null,
       deathDate: deathDate || null,
       isDeceased: !deathDate && isDeceased,
@@ -219,6 +222,19 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
               onChange={(e) => setBirthName(e.target.value)}
               placeholder={t('Martin')}
               autoComplete="off"
+            />
+          </div>
+
+          <div className="pz-field">
+            <label htmlFor="ap-nickname">{t('Surnom')} <span className="apn-optional">{t('facultatif')}</span></label>
+            <input
+              id="ap-nickname"
+              type="text"
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              placeholder={t('Loulou')}
+              autoComplete="off"
+              maxLength={120}
             />
           </div>
 
