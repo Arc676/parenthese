@@ -228,7 +228,8 @@ function buildContributionChangesFromDraft(draft = {}) {
   for (const person of addedPersons) {
     if (!person || typeof person !== 'object') continue
     // Prénom inconnu (chaîne vide) : la personne part quand même, nom de famille obligatoire comme avant
-    if (!person.lastName) continue
+    // Nom de famille facultatif : seule une personne sans aucun nom est ignorée
+    if (!person.firstName && !person.lastName) continue
 
     // Identifiant provisoire : le serveur le remplace par le vrai id pour créer les liens
     const ref = typeof person.ref === 'string' && person.ref.startsWith('tmp:') ? person.ref : null

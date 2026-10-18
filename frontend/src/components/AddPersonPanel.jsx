@@ -49,6 +49,8 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
   const [relationDropdownOpen, setRelationDropdownOpen] = useState(false)
   const [selectedRelationType, setSelectedRelationType] = useState('parent')
   const [touched, setTouched] = useState({})
+  // Prénom inconnu sans nom de famille : la personne n'aurait aucun nom
+  const [lastNameMissing, setLastNameMissing] = useState(false)
   const [justAdded, setJustAdded] = useState(false)
 
   const firstNameRef = useRef(null)
@@ -103,6 +105,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
       setDateFieldsKey((k) => k + 1)
       setRelations([])
       setTouched({})
+      setLastNameMissing(false)
       setJustAdded(false)
       firstNameRef.current?.focus()
     }
@@ -136,6 +139,11 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
     if (!unknownFirstName && !firstName.trim()) {
       setTouched({ firstName: true })
       firstNameRef.current?.focus()
+      return
+    }
+
+    if (unknownFirstName && !lastName.trim()) {
+      setLastNameMissing(true)
       return
     }
 
@@ -176,7 +184,6 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
     >
       <div className="apn-head">
         <div className="pz-modal-head">
-          <p className="pz-eyebrow">{t('Nouvelle fiche')}</p>
           <h2 id="addPersonTitle" className="pz-title">{withEmphasis(t("Ajouter <em>quelqu'un</em>"))}</h2>
         </div>
         <button type="button" className="pz-btn pz-btn--ghost pz-btn--icon apn-close" onClick={onClose} aria-label={t('Fermer')}>
@@ -201,6 +208,20 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
                 disabled={unknownFirstName}
                 aria-invalid={touched.firstName && !unknownFirstName && !firstName.trim()}
               />
+              {/* Visible tant que le prénom est vide, et tant qu'elle est cochée (pour pouvoir la décocher) */}
+              {(!firstName.trim() || unknownFirstName) && (
+                <label className="apn-deceased">
+                  <input
+                    type="checkbox"
+                    checked={unknownFirstName}
+                    onChange={(e) => {
+                      setUnknownFirstName(e.target.checked)
+                      setTouched({})
+                    }}
+                  />
+                  {t('Je ne connais pas son prénom')}
+                </label>
+              )}
             </div>
             <div className="pz-field">
               <label htmlFor="ap-lastName">{t('Nom')}</label>
@@ -208,26 +229,19 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
                 id="ap-lastName"
                 type="text"
                 value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
+                onChange={(e) => {
+                  setLastName(e.target.value)
+                  setLastNameMissing(false)
+                }}
                 placeholder={t('Dupont')}
                 autoComplete="off"
               />
             </div>
           </div>
-          <label className="apn-deceased">
-            <input
-              type="checkbox"
-              checked={unknownFirstName}
-              onChange={(e) => {
-                setUnknownFirstName(e.target.checked)
-                setTouched({})
-              }}
-            />
-            {t('Je ne connais pas son prénom')}
-          </label>
           {touched.firstName && !unknownFirstName && !firstName.trim() && (
             <p className="apn-error-text">{t('Il faut au moins un prénom.')}</p>
           )}
+          {lastNameMissing && <p className="apn-error-text">{t('Il faut au moins un nom si le prénom est inconnu.')}</p>}
 
           <div className="pz-field">
             <label htmlFor="ap-birthName">{t('Nom de naissance')} <span className="apn-optional">{t('si différent')}</span></label>
@@ -272,7 +286,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
           </div>
 
           <section className="apn-section">
-            <h3 className="pz-eyebrow">{t('Place dans la famille')}</h3>
+            <h3 className="apn-section-title">{t('Place dans la famille')}</h3>
 
             <div className="pz-tabs apn-types" role="radiogroup" aria-label={t('Type de lien')}>
               {Object.entries(relationTypeTabs).map(([type, label]) => (

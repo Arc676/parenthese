@@ -102,7 +102,7 @@ function mapRemotePersonToLocal(person, current = null) {
     id: person?.id ?? current?.id,
     // Prénom inconnu = chaîne vide renvoyée par l'API (pas de repli sur l'ancien nom lors d'un rafraîchissement)
     firstName: person ? (person.firstName ?? '') : (current?.firstName ?? ''),
-    lastName: person?.lastName || current?.lastName || '',
+    lastName: person ? (person.lastName ?? '') : (current?.lastName ?? ''),
     birthName: person?.birthName ?? current?.birthName ?? null,
     nickname: person?.nickname ?? null,
     birthYear,

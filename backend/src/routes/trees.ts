@@ -16,6 +16,7 @@ import { reserveTreeUnlockAttempt, serializePasswordCheck } from '../lib/unlock-
 import type { MembershipRole } from '../types/auth.js'
 import { findParentChildValidationError, findUnionValidationError } from '../utils/relationship-guards.js'
 import { personPrecisionResets, unionPrecisionResets } from '../lib/date-precision.js'
+import { hasAnyName } from '../lib/person-names.js'
 import { ContributionRouteError, resolveSubmissionContext } from './contributions.js'
 
 const MAX_TREES_PER_ACCOUNT = 10
@@ -85,7 +86,7 @@ const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/
 
 const createPersonSchema = z.object({
   firstName: z.string().trim().max(120),
-  lastName: z.string().min(1).max(120),
+  lastName: z.string().trim().max(120),
   birthName: z.string().max(120).optional().nullable(),
   nickname: z.string().max(120).optional().nullable(),
   birthDate: z.string().regex(isoDateRegex).optional().nullable(),
@@ -97,12 +98,12 @@ const createPersonSchema = z.object({
   nationality: z.string().max(120).optional().nullable(),
   sex: z.string().max(20).optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
-})
+}).refine((value) => hasAnyName(value.firstName, value.lastName), { message: 'name_required', path: ['lastName'] })
 
 const patchPersonSchema = z
   .object({
     firstName: z.string().trim().max(120).optional(),
-    lastName: z.string().min(1).max(120).optional(),
+    lastName: z.string().trim().max(120).optional(),
     birthName: z.string().max(120).optional().nullable(),
     nickname: z.string().max(120).optional().nullable(),
     birthDate: z.string().regex(isoDateRegex).optional().nullable(),
@@ -1365,6 +1366,17 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
     const membership = await getAdminMembership(app, user.userId, params.data.id)
     if (!hasActiveAdminMembership(membership)) {
       return reply.code(403).send({ error: 'forbidden' })
+    }
+
+    // Au moins un nom : on regarde le résultat de la modification, pas seulement ce qu'elle envoie
+    if (payload.data.firstName !== undefined || payload.data.lastName !== undefined) {
+      const before = await app.prisma.person.findFirst({
+        where: { id: params.data.personId, treeId: params.data.id, deletedAt: null },
+        select: { firstName: true, lastName: true },
+      })
+      if (before && !hasAnyName(payload.data.firstName ?? before.firstName, payload.data.lastName ?? before.lastName)) {
+        return reply.code(400).send({ error: 'invalid_payload', details: 'name_required' })
+      }
     }
 
     const data: {

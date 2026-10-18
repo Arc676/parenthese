@@ -98,6 +98,7 @@ const PersonCard = ({
   // Prénom inconnu (case cochée) et saisie de prénom vide sans case : le prénom est demandé avant l'enregistrement
   const [unknownFirstName, setUnknownFirstName] = useState(() => isFirstNameUnknown(person))
   const [firstNameMissing, setFirstNameMissing] = useState(false)
+  const [lastNameMissing, setLastNameMissing] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -122,6 +123,7 @@ const PersonCard = ({
     setEdits({})
     setUnknownFirstName(isFirstNameUnknown(person))
     setFirstNameMissing(false)
+    setLastNameMissing(false)
     setHasChanges(false)
     setShowDeleteConfirm(false)
     setActiveRelationSearch(null)
@@ -207,6 +209,11 @@ const PersonCard = ({
     if (!hasChanges || !onSave) return
     if (!unknownFirstName && 'firstName' in edits && !String(edits.firstName).trim()) {
       setFirstNameMissing(true)
+      return
+    }
+    // Prénom inconnu : il faut alors un nom de famille
+    if (unknownFirstName && !String(getEditValue('lastName', person.lastName) ?? '').trim()) {
+      setLastNameMissing(true)
       return
     }
     setSaving(true)
@@ -556,27 +563,36 @@ const PersonCard = ({
                 type="text"
                 className="pc-input pc-input--name pc-input--last"
                 value={getEditValue('lastName', person.lastName)}
-                onChange={(e) => handleFieldChange('lastName', e.target.value)}
+                onChange={(e) => {
+                  setLastNameMissing(false)
+                  handleFieldChange('lastName', e.target.value)
+                }}
                 placeholder={t('Nom')}
                 aria-label={t('Nom')}
               />
-              <label className="pc-unknown-first">
-                <input
-                  type="checkbox"
-                  checked={unknownFirstName}
-                  onChange={(e) => {
-                    setUnknownFirstName(e.target.checked)
-                    setFirstNameMissing(false)
-                    handleFieldChange('firstName', '')
-                  }}
-                />
-                {t('Je ne connais pas son prénom')}
-              </label>
+              {/* Visible tant que le prénom est vide, et tant qu'elle est cochée (pour pouvoir la décocher) */}
+              {(unknownFirstName || !String(getEditValue('firstName', person.firstName) ?? '').trim()) && (
+                <label className="pc-unknown-first">
+                  <input
+                    type="checkbox"
+                    checked={unknownFirstName}
+                    onChange={(e) => {
+                      setUnknownFirstName(e.target.checked)
+                      setFirstNameMissing(false)
+                      setLastNameMissing(false)
+                      handleFieldChange('firstName', '')
+                    }}
+                  />
+                  {t('Je ne connais pas son prénom')}
+                </label>
+              )}
               {firstNameMissing && <p className="pc-name-error">{t('Il faut au moins un prénom.')}</p>}
+              {lastNameMissing && <p className="pc-name-error">{t('Il faut au moins un nom si le prénom est inconnu.')}</p>}
             </div>
           ) : (
             <h2 className="pc-name">
-              {isFirstNameUnknown(person) ? <span className="pc-name-unknown">{firstNameLabel(person)}</span> : person.firstName} <em>{person.lastName}</em>
+              {isFirstNameUnknown(person) ? <span className="pc-name-unknown">{firstNameLabel(person)}</span> : person.firstName}
+              {person.lastName && <>{' '}<em>{person.lastName}</em></>}
             </h2>
           )}
           {!editMode && metaItems.length > 0 && (
