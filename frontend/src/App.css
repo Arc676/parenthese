@@ -544,31 +544,28 @@
   left: 20px;
   z-index: 1200;
   max-width: 340px;
-  padding: 12px 14px;
+  padding: 18px 20px 20px;
   display: grid;
-  gap: 8px;
-  border-radius: 14px;
-  border: 1px solid rgba(42, 38, 34, 0.14);
-  background: rgba(242, 239, 234, 0.95);
-  box-shadow: 0 6px 24px rgba(52, 48, 44, 0.18);
-  color: #2a2622;
-  font-size: 13px;
-  line-height: 1.45;
+  gap: 10px;
+  border-radius: var(--pz-r-l);
+  border: 1px solid var(--pz-line);
+  background: var(--pz-surface);
+  box-shadow: var(--pz-shadow);
+  color: var(--pz-ink-2);
+  font: 400 14px/1.5 var(--pz-sans);
 }
 
 .tree-created-prompt strong {
-  color: #2A2622;
-  font-size: 14px;
+  color: var(--pz-ink);
+  font: 400 21px/1.15 var(--pz-serif);
+  letter-spacing: -.01em;
 }
 
-.tree-created-prompt button {
+.tree-created-prompt .pz-btn {
   justify-self: start;
-  border: 1px solid #efc7b8;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #2a2622;
-  padding: 6px 10px;
-  cursor: pointer;
+  min-height: 38px;
+  padding: 0 18px;
+  font-size: 14px;
 }
 
 .settings-card {

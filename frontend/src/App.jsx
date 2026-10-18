@@ -43,6 +43,7 @@ import {
   fetchSharePassword,
   rememberSharePassword,
   resolveTreeBySlug,
+  saveAvatarCrop,
   uploadPersonAvatar,
   updatePerson,
   uploadAnnotationPhoto,
@@ -1617,8 +1618,33 @@ function App() {
       trackAppEvent('portrait_added', { via: 'card' })
       await refreshTreeAndKeepSelection(personId, { relayout: true })
       setAvatarActionState({ loading: false, error: '' })
+      // Aperçu de la photo envoyée, pour la fenêtre de recadrage qui s'ouvre tout de suite
+      return { previewUrl: URL.createObjectURL(prepared) }
     } catch (error) {
       setAvatarActionState({ loading: false, error: getAccountErrorMessage(error) })
+      return null
+    }
+  }, [auth.userAuth.token, tree.treeContext.accessToken, tree.treeContext.treeId, refreshTreeAndKeepSelection])
+
+  // Recadrage du portrait enregistré : true si c'est fait, la fenêtre se ferme alors
+  const handlePersonAvatarCrop = useCallback(async (personId, crop) => {
+    const accessToken = tree.treeContext.accessToken || auth.userAuth.token
+    if (!accessToken || !tree.treeContext.treeId) return false
+
+    setAvatarActionState({ loading: true, error: '' })
+    try {
+      await saveAvatarCrop(tree.treeContext.treeId, personId, crop, accessToken)
+      await refreshTreeAndKeepSelection(personId, { relayout: false, avatarCacheBust: Date.now() })
+      setAvatarActionState({ loading: false, error: '' })
+      return true
+    } catch (error) {
+      setAvatarActionState({
+        loading: false,
+        error: error?.payload?.error === 'avatar_from_immich'
+          ? t('Les photos venues d’Immich ne se recadrent pas pour l’instant.')
+          : getAccountErrorMessage(error),
+      })
+      return false
     }
   }, [auth.userAuth.token, tree.treeContext.accessToken, tree.treeContext.treeId, refreshTreeAndKeepSelection])
 
@@ -2898,7 +2924,7 @@ function App() {
         <div className="tree-created-prompt" role="status">
           <strong>{t('Votre arbre est créé.')}</strong>
           {t("Ajoutez un proche pour commencer, comme votre mère, votre père ou un frère. Il suffit d'un prénom.")}
-          <button type="button" onClick={() => setTreeWelcomeVisible(false)} aria-label={t('Fermer')}>
+          <button type="button" className="pz-btn pz-btn--secondary" onClick={() => setTreeWelcomeVisible(false)} aria-label={t('Fermer')}>
             {t('Fermer')}
           </button>
         </div>
@@ -2908,7 +2934,7 @@ function App() {
           <strong>{t("Votre arbre est créé, mais l'import n'a pas abouti.")}</strong>
           {` ${treeImportError} `}
           {t("Vous pouvez réessayer depuis les paramètres de l'arbre.")}
-          <button type="button" onClick={() => setTreeImportError('')} aria-label={t('Fermer')}>
+          <button type="button" className="pz-btn pz-btn--secondary" onClick={() => setTreeImportError('')} aria-label={t('Fermer')}>
             {t('Fermer')}
           </button>
         </div>
@@ -3085,6 +3111,7 @@ function App() {
           onManageMedia={media.handleOpenMediaManager}
           onAvatarUpload={tree.canEditCurrentTree ? handlePersonAvatarUpload : undefined}
           onAvatarDelete={tree.canEditCurrentTree ? handlePersonAvatarDelete : undefined}
+          onAvatarCrop={tree.canEditCurrentTree ? handlePersonAvatarCrop : undefined}
           treeId={tree.treeContext.treeId || null}
           immichToken={tree.treeContext.accessToken || auth.userAuth.token}
           onImmichChange={tree.canEditCurrentTree ? handleImmichChange : undefined}
