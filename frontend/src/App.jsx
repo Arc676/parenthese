@@ -1821,6 +1821,10 @@ function App() {
     }
   }, [auth.userAuth.token, tree.canEditCurrentTree, tree.treeContext.accessToken, tree.treeContext.treeId, refreshTreeAndKeepSelection, isDemoMode, makeLocalId]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Choix en attente d'un contributeur (brouillon), affiché sur la fiche avant l'envoi
+  const [pendingParentage, setPendingParentage] = useState({})
+  useEffect(() => { if (!editMode.isActive) setPendingParentage({}) }, [editMode.isActive]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Lien avec ses parents : naissance ou adoption, pour tous les liens parent de la personne
   const handleSetParentage = useCallback(async (childPersonId, parentageType) => {
     const childLinks = filiations.filter((candidate) => String(candidate.childId) === String(childPersonId))
@@ -1837,6 +1841,7 @@ function App() {
       const draft = editMode.restoreDraft()
       const parentageChanges = { ...(draft.parentageChanges || {}), [String(childPersonId)]: parentageType }
       editMode.updateDraft({ parentageChanges })
+      setPendingParentage((prev) => ({ ...prev, [String(childPersonId)]: parentageType }))
       setRelationFeedback({ loading: false, success: t('Modification ajoutée à la contribution'), error: '' })
       return
     }
@@ -3090,6 +3095,7 @@ function App() {
           onAddRelation={handleAddRelation}
           onRemoveRelation={handleRemoveRelation}
           onSetParentage={handleSetParentage}
+          pendingParentage={pendingParentage[String(tree.selectedPerson.id)] ?? null}
           relationActionLoading={relationFeedback.loading}
           relationActionSuccess={relationFeedback.success}
           relationActionError={relationFeedback.error}

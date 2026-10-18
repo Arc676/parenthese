@@ -59,6 +59,7 @@ const PersonCard = ({
   onAddRelation,
   onRemoveRelation,
   onSetParentage,
+  pendingParentage = null,
   relationActionLoading = false,
   relationActionSuccess = '',
   relationActionError = '',
@@ -353,7 +354,8 @@ const PersonCard = ({
     && f.parentageType === 'adoption'
     && (String(f.parentId) === String(parentId) || (f.unionId && personUnions.some((u) => String(u.id) === String(f.unionId))))
   ))
-  const parentsAdopted = filiations.some((f) => String(f.childId) === String(person.id) && f.parentageType === 'adoption')
+  // Un contributeur voit son choix en attente avant l'envoi ; sinon le lien enregistré
+  const parentsAdopted = pendingParentage ? pendingParentage === 'adoption' : filiations.some((f) => String(f.childId) === String(person.id) && f.parentageType === 'adoption')
   const adoptedChildLabel = (child) => {
     if (!parentageAdopted(child.id, person.id)) return null
     return child.sex === 'female' ? t('adoptée') : t('adopté')
