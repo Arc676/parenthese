@@ -256,3 +256,19 @@
 .pc-unknown-first { display: inline-flex; align-items: center; gap: 7px; margin-top: 6px; font: 400 13px var(--pz-sans); color: var(--pz-ink-2); cursor: pointer; }
 .pc-unknown-first input { width: 15px; height: 15px; accent-color: var(--pz-a500); }
 .pc-name-error { margin: 6px 0 0; font: 500 12.5px var(--pz-sans); color: var(--pz-danger); }
+
+/* Modification de l'onglet Infos : pastilles des champs vides (DA terracotta, sans nouvelle couleur) */
+.pc-fill-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.pc-fill-chip { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px dashed var(--pz-a300); background: var(--pz-a50); color: var(--pz-a700); font: 500 13px var(--pz-sans); cursor: pointer; }
+@media (hover: hover) and (pointer: fine) { .pc-fill-chip:hover { background: var(--pz-a100); border-color: var(--pz-a500); } }
+.pc-fill-chip:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 2px; }
+
+/* Liens : parents adoptifs, réglage de la filiation */
+.pc-section-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+.pc-adopt-tag { font: 500 12px var(--pz-sans); color: var(--pz-a700); background: var(--pz-a50); border: 1px solid var(--pz-a300); border-radius: 999px; padding: 1px 9px; }
+.pc-parentage { display: grid; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--pz-line-soft); }
+.pc-seg { width: 100%; }
+.pc-seg .pz-tab { flex: 1; }
+
+/* Titres de section de l'onglet Infos et Liens : casse normale, Newsreader 15 px, comme la maquette (.sec) */
+.pc-infos .pz-eyebrow { text-transform: none; letter-spacing: 0; font: 400 15px/1.3 var(--pz-serif); color: var(--pz-ink); }

@@ -1008,3 +1008,29 @@ describe('Surnom (nickname) en écriture directe', () => {
     await app.close()
   })
 })
+
+describe('Lieu de décès et filiation adoptive (écriture)', () => {
+  it('PATCH accepte le lieu de décès, le coupe, et vide = null', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    const patch = (payload: object) => app.inject({ method: 'PATCH', url: '/trees/tree-1/persons/person-1', headers: { authorization: `Bearer ${token}` }, payload })
+
+    expect((await patch({ deathPlace: '  Nantes, France  ' })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ deathPlace: 'Nantes, France' })
+
+    expect((await patch({ deathPlace: '   ' })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ deathPlace: null })
+    await app.close()
+  })
+
+  it('PATCH d’un lien accepte le type de filiation (naissance ou adoption)', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    prismaMock.parentChildLink.findFirst.mockResolvedValue({ id: 'link-1', parentPersonId: 'person-2', childPersonId: 'person-1', viaUnionId: null, parentageType: 'biologique' })
+    prismaMock.parentChildLink.updateMany.mockResolvedValueOnce({ count: 1 })
+    const res = await app.inject({ method: 'PATCH', url: '/trees/tree-1/links/link-1', headers: { authorization: `Bearer ${token}` }, payload: { parentageType: 'adoption' } })
+    expect(res.statusCode).toBe(200)
+    expect(prismaMock.parentChildLink.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ parentageType: 'adoption' })
+    await app.close()
+  })
+})

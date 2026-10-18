@@ -93,6 +93,7 @@ const createPersonSchema = z.object({
   deathDate: z.string().regex(isoDateRegex).optional().nullable(),
   isDeceased: z.boolean().optional(),
   birthPlace: z.string().max(200).optional().nullable(),
+  deathPlace: z.string().max(200).optional().nullable(),
   profession: z.string().max(200).optional().nullable(),
   region: z.string().max(120).optional().nullable(),
   nationality: z.string().max(120).optional().nullable(),
@@ -110,6 +111,7 @@ const patchPersonSchema = z
     deathDate: z.string().regex(isoDateRegex).optional().nullable(),
     isDeceased: z.boolean().optional(),
     birthPlace: z.string().max(200).optional().nullable(),
+    deathPlace: z.string().max(200).optional().nullable(),
     profession: z.string().max(200).optional().nullable(),
     region: z.string().max(120).optional().nullable(),
     nationality: z.string().max(120).optional().nullable(),
@@ -1319,6 +1321,7 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
         // Une date de décès dit déjà que la personne est décédée : le drapeau ne sert que sans date
         isDeceased: !payload.data.deathDate && Boolean(payload.data.isDeceased),
         birthPlace: toTrimmedStringOrNull(payload.data.birthPlace),
+        deathPlace: toTrimmedStringOrNull(payload.data.deathPlace),
         profession: toTrimmedStringOrNull(payload.data.profession),
         region: toTrimmedStringOrNull(payload.data.region),
         nationality: toTrimmedStringOrNull(payload.data.nationality),
@@ -1388,6 +1391,7 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
       deathDate?: Date | null
       isDeceased?: boolean
       birthPlace?: string | null
+      deathPlace?: string | null
       profession?: string | null
       region?: string | null
       nationality?: string | null
@@ -1430,6 +1434,10 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
 
     if (payload.data.birthPlace !== undefined) {
       data.birthPlace = toTrimmedStringOrNull(payload.data.birthPlace)
+    }
+
+    if (payload.data.deathPlace !== undefined) {
+      data.deathPlace = toTrimmedStringOrNull(payload.data.deathPlace)
     }
 
     if (payload.data.profession !== undefined) {
