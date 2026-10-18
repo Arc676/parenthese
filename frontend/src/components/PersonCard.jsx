@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect, useRef, forwardRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Save, Trash2, Plus, X, Search, Check, Play, ImagePlus, Camera, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react'
-import { getParents, getChildren, getPersonUnions, getPersonMedias, getDemoLife, filiations, persons, unions } from '../data/mockData'
+import { Save, Trash2, Plus, X, Search, Check, Play, ImagePlus, Camera, Crop, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react'
+import { getParents, getChildren, getPersonUnions, getPersonMedias, getDemoLife, getPersonById, filiations, persons, unions } from '../data/mockData'
 import { fetchPersonLife } from '../api/treeApi.js'
 import LifeTimeline from './LifeTimeline.jsx'
 import MomentSheet from './MomentSheet.jsx'
@@ -10,6 +10,8 @@ import GeoMediaThumbnail from './GeoMediaThumbnail'
 import ImmichFacePanel from './ImmichFacePanel.jsx'
 import './PersonCard.css'
 import PzBusy from './PzBusy.jsx'
+import PortraitCropModal from './PortraitCropModal.jsx'
+import { imagePlacement } from '../utils/portraitCrop.js'
 import { t, dateLocale } from '../i18n/index.js'
 import { formatPlace } from '../utils/place.js'
 import { firstNameLabel, fullNameLabel, isFirstNameUnknown } from '../utils/personName.js'
@@ -45,6 +47,7 @@ const PersonCard = ({
   onManageMedia,
   onAvatarUpload,
   onAvatarDelete,
+  onAvatarCrop,
   treeId = null,
   immichToken = null,
   onImmichChange,
@@ -111,6 +114,11 @@ const PersonCard = ({
   const [showSourceMenu, setShowSourceMenu] = useState(false)
   const [sourceMenuPos, setSourceMenuPos] = useState({ top: 0, left: 0 })
   const sourceBtnRef = useRef(null)
+  // Menu du badge appareil photo (position, ou null fermé) et fenêtre de recadrage ({ src, mode, ownsUrl }, ou null)
+  const [photoMenuPos, setPhotoMenuPos] = useState(null)
+  const [cropState, setCropState] = useState(null)
+  // Taille naturelle de la photo affichée dans la fiche, pour placer le portrait recadré
+  const [photoSize, setPhotoSize] = useState(null)
 
   // Inline relation search state
   const [activeRelationSearch, setActiveRelationSearch] = useState(null) // 'parent' | 'spouse' | 'child' | null
@@ -132,6 +140,9 @@ const PersonCard = ({
     setShowSourceMenu(false)
     setMomentSheet(null)
     setLifeNotice('')
+    setPhotoMenuPos(null)
+    setCropState(null)
+    setPhotoSize(null)
   }, [person.id])
 
   // Connexion Immich de l'arbre : métadonnées sans clé. Une erreur (rôle périmé, réseau) se
@@ -154,6 +165,39 @@ const PersonCard = ({
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [showSourceMenu])
+
+  // Escape ferme le menu du badge
+  useEffect(() => {
+    if (!photoMenuPos) return undefined
+    const onKeyDown = (event) => { if (event.key === 'Escape') setPhotoMenuPos(null) }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [photoMenuPos])
+
+  const openPhotoMenu = () => {
+    if (avatarActionLoading) return
+    const rect = sourceBtnRef.current?.getBoundingClientRect()
+    if (rect) {
+      setPhotoMenuPos({
+        top: Math.round(rect.bottom) + 6,
+        left: Math.round(Math.min(rect.left, window.innerWidth - 232)),
+      })
+    }
+  }
+
+  // Fermer la fenêtre de recadrage ; l'aperçu envoyé est libéré
+  const closeCrop = () => {
+    if (cropState?.ownsUrl) URL.revokeObjectURL(cropState.src)
+    setCropState(null)
+  }
+
+  // Placement du portrait dans la fiche (carrée), comme le canevas
+  const photoPlacement = photoSize ? imagePlacement(photoSize.w, photoSize.h, 1, person.avatarCrop) : null
+  const photoStyle = photoPlacement
+    ? { position: 'absolute', maxWidth: 'none', left: `${photoPlacement.left}%`, top: `${photoPlacement.top}%`, width: `${photoPlacement.width}%`, height: `${photoPlacement.height}%` }
+    : undefined
+  // Même forme de cadre que dans l'arbre (renderers.js)
+  const treeFrameType = getPersonById(person.id)?.frameType || person.frameType
 
   const immichUsable = isAdmin && Boolean(immichConfigured || person.avatarFromImmich)
   const openAvatarPicker = () => {
@@ -237,7 +281,9 @@ const PersonCard = ({
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file || !onAvatarUpload) return
-    await onAvatarUpload(person.id, file)
+    const result = await onAvatarUpload(person.id, file)
+    // Juste après l'envoi, la fenêtre de recadrage s'ouvre (« Garder tel quel » laisse la photo entière)
+    if (result?.previewUrl) setCropState({ src: result.previewUrl, mode: 'new', ownsUrl: true })
   }
 
   // Relation actions
@@ -512,7 +558,7 @@ const PersonCard = ({
           ) : (
             <div className="pc-photo">
               {person.photo
-                ? <img src={person.photo} alt={fullNameLabel(person)} />
+                ? <img src={person.photo} alt={fullNameLabel(person)} onLoad={(event) => setPhotoSize({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight })} style={photoStyle} />
                 : <span className="pc-photo-initials">{initials}</span>}
             </div>
           )}
@@ -521,7 +567,7 @@ const PersonCard = ({
               ref={sourceBtnRef}
               type="button"
               className="pc-photo-badge"
-              onClick={openAvatarPicker}
+              onClick={openPhotoMenu}
               disabled={avatarActionLoading}
               aria-label={t('Changer la photo')}
               title={t('Changer la photo')}
@@ -529,16 +575,6 @@ const PersonCard = ({
               aria-expanded={showSourceMenu}
             >
               <Camera size={14} strokeWidth={2} aria-hidden="true" />
-            </button>
-          )}
-          {editMode && onAvatarUpload && person.photo && (
-            <button
-              type="button"
-              className="pc-photo-btn pc-photo-btn--danger"
-              onClick={() => onAvatarDelete?.(person.id, person.avatarFromImmich)}
-              disabled={avatarActionLoading}
-            >
-              {t('Retirer')}
             </button>
           )}
         </div>
@@ -946,6 +982,49 @@ const PersonCard = ({
           </>,
           document.body,
         )
+      )}
+
+      {/* ── Menu du badge : changer, recadrer, retirer ── */}
+      {photoMenuPos && (
+        createPortal(
+          <>
+            <div className="pc-source-backdrop" onClick={() => setPhotoMenuPos(null)} />
+            <div className="pc-source-menu pz-menu" role="menu" aria-label={t('Options du portrait')} style={{ top: `${photoMenuPos.top}px`, left: `${photoMenuPos.left}px` }}>
+              <button type="button" role="menuitem" className="pz-menu-item" onClick={() => { setPhotoMenuPos(null); openAvatarPicker() }}>
+                <ImagePlus size={16} aria-hidden="true" /> {t('Changer la photo')}
+              </button>
+              {person.photo && !person.avatarFromImmich && onAvatarCrop && (
+                <button type="button" role="menuitem" className="pz-menu-item" onClick={() => { setPhotoMenuPos(null); setCropState({ src: person.photo, mode: 'recrop', ownsUrl: false }) }}>
+                  <Crop size={16} aria-hidden="true" /> {t('Recadrer')}
+                </button>
+              )}
+              {person.photo && (
+                <button type="button" role="menuitem" className="pz-menu-item pz-menu-item--danger" onClick={() => { setPhotoMenuPos(null); onAvatarDelete?.(person.id, person.avatarFromImmich) }} disabled={avatarActionLoading}>
+                  <Trash2 size={16} aria-hidden="true" /> {t('Retirer')}
+                </button>
+              )}
+            </div>
+          </>,
+          document.body,
+        )
+      )}
+
+      {/* ── Recadrage du portrait (fenêtre pz) ── */}
+      {cropState && onAvatarCrop && (
+        <PortraitCropModal
+          src={cropState.src}
+          frameType={treeFrameType}
+          name={fullNameLabel(person)}
+          mode={cropState.mode}
+          initialCrop={cropState.mode === 'new' ? null : person.avatarCrop}
+          saving={avatarActionLoading}
+          error={avatarActionError}
+          onSave={async (crop) => {
+            const saved = await onAvatarCrop(person.id, crop)
+            if (saved) closeCrop()
+          }}
+          onClose={closeCrop}
+        />
       )}
 
       {/* ── Association d'un visage Immich (modale) ── */}

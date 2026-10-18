@@ -230,6 +230,10 @@ model Person {
   nationality        String?
   avatarPath         String?
   avatarMimeType     String?
+  // Cadrage du portrait, appliqué à l'affichage sur l'original (jamais de fichier dérivé) :
+  // { "x": 0..1, "y": 0..1, "zoom": 1..4 }, centre du cadrage en proportion de l'image, zoom 1 = image entière
+  // recouvrant le cadre. Null = cadrage par défaut (centré, zoom 1).
+  avatarCrop         Json?
   sex                String?
   notes              String?
   createdBy          String?

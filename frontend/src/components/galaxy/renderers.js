@@ -1,5 +1,6 @@
 import { t } from '../../i18n/index.js'
 import { getPersonById, getPersonMedias } from '../../data/mockData'
+import { cropViewport } from '../../utils/portraitCrop.js'
 // Tracés Lucide dessinés sur le canvas : données publiques de @lucide/icons (Map renommé, il masquerait
 // le Map global utilisé plus bas)
 import { Map as mapIcon, MapPin as mapPinIcon, Route as routeIcon } from '@lucide/icons'
@@ -994,7 +995,7 @@ function drawFrame(ctx, frameType, person, img, hint = 0) {
 // ============================================================
 function drawPersonImage(ctx, img, person, x, y, w, h, hint = 0) {
   if (img) {
-    drawImageCover(ctx, img, x, y, w, h)
+    drawImageCover(ctx, img, x, y, w, h, person.avatarCrop)
     if (!person.isAlive) {
       ctx.fillStyle = 'rgba(235, 230, 223, 0.25)'
       ctx.fillRect(x, y, w, h)
@@ -1026,7 +1027,8 @@ function drawPersonImage(ctx, img, person, x, y, w, h, hint = 0) {
   }
 }
 
-function drawImageCover(ctx, img, x, y, w, h) {
+// Recadre la photo dans la zone (cover par défaut, cadrage du portrait sinon)
+function drawImageCover(ctx, img, x, y, w, h, crop = null) {
   const sourceW = img.naturalWidth || img.width
   const sourceH = img.naturalHeight || img.height
 
@@ -1034,22 +1036,7 @@ function drawImageCover(ctx, img, x, y, w, h) {
     return
   }
 
-  const sourceRatio = sourceW / sourceH
-  const targetRatio = w / h
-
-  let sx = 0
-  let sy = 0
-  let sw = sourceW
-  let sh = sourceH
-
-  if (sourceRatio > targetRatio) {
-    sw = sourceH * targetRatio
-    sx = (sourceW - sw) / 2
-  } else if (sourceRatio < targetRatio) {
-    sh = sourceW / targetRatio
-    sy = (sourceH - sh) / 2
-  }
-
+  const { sx, sy, sw, sh } = cropViewport(sourceW, sourceH, w / h, crop)
   ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h)
 }
 

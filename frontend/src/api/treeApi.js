@@ -453,6 +453,19 @@ export async function uploadPersonAvatar(treeId, personId, payload, token) {
   return data
 }
 
+// Cadrage du portrait ({ x, y, zoom }) ou null pour le cadrage par défaut
+export async function saveAvatarCrop(treeId, personId, crop, token) {
+  const data = await apiRequest(`/trees/${encodeURIComponent(treeId)}/persons/${encodeURIComponent(personId)}/avatar/crop`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ crop }),
+  })
+
+  return data
+}
+
 export async function deletePersonAvatar(treeId, personId, token) {
   const data = await apiRequest(`/trees/${encodeURIComponent(treeId)}/persons/${encodeURIComponent(personId)}/avatar`, {
     method: 'DELETE',

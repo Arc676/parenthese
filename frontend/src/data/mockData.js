@@ -121,6 +121,7 @@ function mapRemotePersonToLocal(person, current = null) {
     sex: person?.sex ?? current?.sex ?? null,
     photo: current?.photo || null,
     avatarFromImmich: person?.avatarFromImmich ?? false,
+    avatarCrop: person ? (person.avatarCrop ?? null) : (current?.avatarCrop ?? null),
   }
 }
 

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
+import { Prisma } from '@prisma/client'
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 
@@ -10,6 +11,7 @@ import {
   applyMediaResponseHeaders,
   extensionForMime,
   InvalidMediaError,
+  isImmichAvatarPath,
   isMimeAllowedForType,
   removeStoredFile,
   sanitizeImage,
@@ -17,6 +19,7 @@ import {
   sniffMimeType,
   type BinaryMediaType,
 } from '../lib/media-files.js'
+import { avatarCropInputSchema, readAvatarCrop, toStoredAvatarCrop } from '../lib/avatar-crop.js'
 import { syncPersonMediaOrder } from '../lib/media-order.js'
 import { resolveTreeMediaDirectory } from '../lib/tree-purge.js'
 import { canReadTree, canReadTreeWithMediaToken } from '../lib/tree-access.js'
@@ -593,6 +596,8 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
       data: {
         avatarPath: relativePath,
         avatarMimeType: prepared.mimeType,
+        // Nouveau portrait : le cadrage de l'ancien ne s'applique pas à celui-ci
+        avatarCrop: Prisma.DbNull,
         updatedBy: request.actor.userId,
         // Un portrait déposé à la main remplace aussi le lien Immich : sans cela, l'association
         // survivrait invisible en base (le graphe ne publie que l'origine du portrait) et ne
@@ -648,6 +653,7 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
       data: {
         avatarPath: null,
         avatarMimeType: null,
+        avatarCrop: Prisma.DbNull,
         // Retirer le portrait retire aussi le lien Immich : l'association ne survit pas au portrait.
         immichPersonId: null,
         updatedBy: request.actor.userId,
@@ -672,6 +678,69 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
     })
 
     return reply.send({ ok: true })
+  })
+
+  // Cadrage du portrait : l'original reste en place, seul le cadrage est enregistré. Même droit que changer la photo.
+  app.put('/trees/:id/persons/:personId/avatar/crop', async (request, reply) => {
+    if (!request.actor || request.actor.kind !== 'user') {
+      return reply.code(401).send({ error: 'authentication_required' })
+    }
+
+    const params = treePersonParamsSchema.safeParse(request.params)
+    if (!params.success) {
+      return reply.code(400).send({ error: 'invalid_params' })
+    }
+
+    const payload = avatarCropInputSchema.safeParse(request.body)
+    if (!payload.success) {
+      return reply.code(400).send({ error: 'invalid_payload', details: payload.error.flatten() })
+    }
+
+    const membership = await requireAdminMembership(app, request.actor.userId, params.data.id)
+    if (!membership) {
+      return reply.code(403).send({ error: 'forbidden' })
+    }
+
+    const person = await app.prisma.person.findFirst({
+      where: { id: params.data.personId, treeId: params.data.id, deletedAt: null },
+      select: { avatarPath: true },
+    })
+
+    if (!person) {
+      return reply.code(404).send({ error: 'person_not_found' })
+    }
+
+    if (!person.avatarPath) {
+      return reply.code(404).send({ error: 'avatar_not_found' })
+    }
+
+    // Hors périmètre pour l'instant : les portraits venus d'Immich ne se recadrent pas
+    if (isImmichAvatarPath(person.avatarPath)) {
+      return reply.code(409).send({ error: 'avatar_from_immich' })
+    }
+
+    const avatarCrop = toStoredAvatarCrop(payload.data.crop)
+
+    await app.prisma.person.updateMany({
+      where: { id: params.data.personId, treeId: params.data.id, deletedAt: null },
+      data: {
+        avatarCrop: avatarCrop ?? Prisma.DbNull,
+        updatedBy: request.actor.userId,
+      },
+    })
+
+    await app.prisma.auditLog.create({
+      data: {
+        treeId: params.data.id,
+        actorType: 'user',
+        actorId: request.actor.userId,
+        action: 'person_avatar_cropped',
+        entityType: 'person',
+        entityId: params.data.personId,
+      },
+    })
+
+    return reply.send({ ok: true, avatarCrop: readAvatarCrop(avatarCrop) })
   })
 
   app.patch('/trees/:id/persons/:personId/media/reorder', async (request, reply) => {

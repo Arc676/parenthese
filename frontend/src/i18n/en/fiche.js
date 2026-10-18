@@ -409,4 +409,17 @@ export default {
   'Prénom inconnu': 'Unknown first name',
   'Je ne connais pas son prénom': "I don't know their first name",
   'Il faut au moins un nom si le prénom est inconnu.': 'A last name is required when the first name is unknown.',
+  // Recadrage du portrait (PortraitCropModal, menu du badge, App)
+  'Portrait': 'Portrait',
+  'Recadrer la photo': 'Crop photo',
+  'Recadrer': 'Crop',
+  'Options du portrait': 'Portrait options',
+  'Zone de recadrage': 'Crop area',
+  'Glissez la photo, ou utilisez les flèches. Molette, pincement ou curseur pour zoomer.': 'Drag the photo, or use the arrow keys. Use the wheel, a pinch or the slider to zoom.',
+  'Zoom': 'Zoom',
+  'Recentrer': 'Re-center',
+  'Garder tel quel': 'Keep as is',
+  'Chargement de la photo': 'Loading photo',
+  'Impossible d’afficher cette photo.': 'Unable to display this photo.',
+  'Les photos venues d’Immich ne se recadrent pas pour l’instant.': 'Photos from Immich cannot be cropped for now.',
 }
