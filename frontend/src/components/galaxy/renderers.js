@@ -10,6 +10,10 @@ import {
   LOD_SHADOW_MIN_SCALE, LOD_DETAIL_MIN_SCALE, LOD_LABEL_FADE_IN, LOD_LABEL_FADE_OUT, CULL_MARGIN,
 } from './constants'
 import { getEntranceProgress, drawPartialBezier } from './utils'
+import { fitNickname } from '../../utils/nickname.js'
+
+// Largeur maximale du surnom sur le nœud (px canevas) : au-delà, coupé avec …
+const NICKNAME_MAX_W = 150
 
 // ============================================================
 // Culling : view = { x0, y0, x1, y1, scale } en coordonnées monde
@@ -611,6 +615,14 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
     ctx.fillText(nameLabel, 0, 0)
   }
 
+  // Surnom sous le nom, en italique : les dates descendent pour lui faire place
+  const hasNickname = withDetail && Boolean(person.nickname)
+  if (hasNickname) {
+    ctx.font = 'italic 300 13px "Newsreader", Georgia, serif'
+    ctx.fillStyle = COLORS.textLight
+    ctx.fillText(fitNickname(ctx, person.nickname, NICKNAME_MAX_W), 0, 15)
+  }
+
   if (withDetail) {
     ctx.font = '400 11px "DM Sans", system-ui, sans-serif'
     ctx.fillStyle = COLORS.textLight
@@ -618,7 +630,7 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
     const years = person.deathYear
       ? `${birthYearLabel}–${person.deathYear}`
       : person.isAlive === false ? `${birthYearLabel}–?` : `${birthYearLabel}`
-    ctx.fillText(years, 0, 15)
+    ctx.fillText(years, 0, hasNickname ? 31 : 15)
   }
 
   ctx.restore()

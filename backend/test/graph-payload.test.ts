@@ -13,6 +13,7 @@ describe('buildGraphPayload', () => {
           firstName: 'Zoe',
           lastName: 'Martin',
           birthName: 'Durand',
+          nickname: 'Zozo',
           birthDate: new Date('1994-06-02T00:00:00.000Z'),
           deathDate: null,
           sex: null,
@@ -115,6 +116,7 @@ describe('buildGraphPayload', () => {
     expect(graph.persons[0].id).toBe('p-2')
     expect(graph.persons[0].birthDate).toBe('1994-06-02')
     expect(graph.persons[0].birthName).toBe('Durand')
+    expect(graph.persons[0].nickname).toBe('Zozo')
     expect(graph.persons[0].avatarUrlPath).toBe('/trees/t-1/persons/p-2/avatar')
     // L'identifiant Immich ne part jamais dans le graphe : il ne sert qu'aux administrateurs.
     // Seule l'origine du portrait (fichier préfixé « immich- ») est publiée.

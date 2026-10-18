@@ -39,6 +39,8 @@ export default {
   'Lieu': 'Place',
   'Lieu de naissance': 'Birthplace',
   'Nom de naissance': 'Birth name',
+  'Surnom': 'Nickname',
+  'Loulou': 'Lulu',
   'Statut': 'Status',
   'En vie': 'Living',
   'Décédé(e)': 'Deceased',

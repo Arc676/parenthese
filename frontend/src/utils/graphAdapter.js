@@ -49,6 +49,7 @@ export function adaptGraphForGalaxy(apiGraph, _treeId) {
     firstName: p.firstName || '',
     lastName: p.lastName || '',
     birthName: p.birthName || null,
+    nickname: p.nickname || null,
     birthYear: dateToYear(p.birthDate),
     deathYear: dateToYear(p.deathDate),
     isAlive: isAlive(p.deathDate),
