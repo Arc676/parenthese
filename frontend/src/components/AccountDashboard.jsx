@@ -203,19 +203,19 @@ const AccountDashboard = ({
               disabled={loading}
             >
               <KeyRound size={16} aria-hidden="true" />
-              {t('Ouvrir un arbre partagé avec moi')}
+              {t("J'ai reçu un lien de famille")}
             </button>
           </div>
 
           <p className="pz-auth-switch pz-small">
-            {isRegister ? t('Vous avez déjà un compte ?') : t('Pas encore de compte ?')}{' '}
+            {isRegister ? t('Déjà inscrit ?') : t('Pas encore de compte ?')}{' '}
             <button
               type="button"
               className="pz-link account-signup-toggle"
               onClick={() => setMode(isRegister ? 'login' : 'register')}
               disabled={loading}
             >
-              {isRegister ? t('Me connecter') : t('Créer un compte')}
+              {isRegister ? t('Se connecter') : t('Créer un compte')}
             </button>
           </p>
 

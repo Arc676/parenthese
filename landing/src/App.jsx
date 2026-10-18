@@ -769,7 +769,7 @@ function HeroGraph({ className = '', label }) {
 
 // ─── Header ───────────────────────────────────────────────────────────────────
 
-function Header({ t, onCta, elevated }) {
+function Header({ t, onCta, loginHref, elevated }) {
   return (
     <header className={`site-nav${elevated ? ' is-elevated' : ''}`}>
       <div className="wrap nav-in">
@@ -778,6 +778,7 @@ function Header({ t, onCta, elevated }) {
           <a href="#comment">{t.nav.how}</a>
           <a href="#demo">{t.nav.demo}</a>
           {t.nav.privacy && <a href={t.privacyHref}>{t.nav.privacy}</a>}
+          <a href={loginHref}>{t.nav.login}</a>
         </nav>
         <button type="button" onClick={onCta} className="btn p sm">{t.cta}</button>
       </div>
@@ -910,6 +911,8 @@ const appSource = () => {
 
 // Les CTA mènent à la création de compte dans l'app
 const appSignupUrl = () => `https://app.parenthese.io/?account=register&source=${appSource()}`
+// Un compte déjà créé : la connexion, pas l'inscription (sans source : rendu au build, pas de window)
+const appLoginUrl = () => 'https://app.parenthese.io/?account=login'
 
 export default function App({ locale = 'fr' }) {
   const t = COPY[locale]
@@ -985,7 +988,7 @@ export default function App({ locale = 'fr' }) {
   return (
     <div className="min-h-screen">
 
-      <Header t={t} onCta={() => goToSignup('header')} elevated={headerElevated} />
+      <Header t={t} onCta={() => goToSignup('header')} loginHref={withAppQuery(appLoginUrl(), locale)} elevated={headerElevated} />
       <main>
 
       {/* ─── HERO ────────────────────────────────────────────────────── */}
@@ -1122,6 +1125,7 @@ export default function App({ locale = 'fr' }) {
         <Logo height={18} />
         <nav aria-label={t.footer.label}>
           {t.footer.guides && <a href="#guides">{t.footer.guides}</a>}
+          <a href={withAppQuery(appLoginUrl(), locale)}>{t.footer.login}</a>
           <a href={t.privacyHref}>{t.footer.privacy}</a>
           <a href="https://github.com/IliesAllali/parenthese" rel="noopener noreferrer">{t.footer.source}</a>
           <a href="https://iliesallali.design/">{t.footer.madeBy}</a>

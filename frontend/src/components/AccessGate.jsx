@@ -23,6 +23,8 @@ const AccessGate = ({
   treeNotFound = false,
   loading,
   errorMessage,
+  connected = false,
+  connectedName = '',
   onSubmit,
   onUseAccount,
 }) => {
@@ -86,6 +88,21 @@ const AccessGate = ({
 
           {!treeNotFound && (
             <div className="pz-auth-form">
+              {connected && (
+                <div className="access-gate-session" role="status">
+                  {connectedName ? (
+                    /^[aeiouyàâäéèêëîïôöùûüh]/i.test(connectedName)
+                      ? t("Vous êtes sur le compte d'{name}", { name: connectedName })
+                      : t('Vous êtes sur le compte de {name}', { name: connectedName })
+                  ) : (
+                    t('Vous êtes sur votre compte.')
+                  )}
+                  <span className="access-gate-session-step">
+                    {t("Tapez une fois le mot de passe reçu avec le lien. Ensuite, l'arbre s'ouvrira directement.")}
+                  </span>
+                </div>
+              )}
+
               {!initialTreeId && (
                 <div className="pz-field">
                   <label htmlFor="treeId">{t("Code de l'arbre")}</label>
@@ -103,7 +120,7 @@ const AccessGate = ({
               )}
 
               <div className="pz-field">
-                <label htmlFor="visitorFirstName">{t('Votre prénom')}</label>
+                <label htmlFor="visitorFirstName">{t('Votre prénom (facultatif)')}</label>
                 <input
                   id="visitorFirstName"
                   type="text"
@@ -113,11 +130,11 @@ const AccessGate = ({
                   autoComplete="given-name"
                   maxLength={60}
                 />
-                <p className="pz-hint">{t("Facultatif. Il sert à savoir qui est venu voir l'arbre.")}</p>
+                <p className="pz-hint">{t("Il sert à savoir qui est venu voir l'arbre.")}</p>
               </div>
 
               <div className="pz-field">
-                <label htmlFor="sharePassword">{t('Mot de passe de partage')}</label>
+                <label htmlFor="sharePassword">{t('Mot de passe reçu avec le lien')}</label>
                 <input
                   id="sharePassword"
                   type="password"
@@ -135,13 +152,13 @@ const AccessGate = ({
 
           {!treeNotFound && (
             <button type="submit" className="pz-btn pz-btn--primary pz-btn--block" disabled={loading}>
-              <PzBusy busy={loading} busyLabel={t("Ouverture de l'arbre")}>{t("Ouvrir l'arbre")}</PzBusy>
+              <PzBusy busy={loading} busyLabel={t("Ouverture de l'arbre")}>{t("Voir l'arbre")}</PzBusy>
             </button>
           )}
 
           {treeNotFound && onUseAccount && (
             <button type="button" className="pz-btn pz-btn--primary pz-btn--block" onClick={() => onUseAccount('register')} disabled={loading}>
-              {t('Créer mon arbre')}
+              {t('Créer mon propre arbre')}
             </button>
           )}
         </form>
@@ -149,10 +166,10 @@ const AccessGate = ({
         {onUseAccount && !treeNotFound && (
           <div className="pz-account-foot">
             <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => onUseAccount('login')} disabled={loading}>
-              {t('Se connecter avec un compte')}
+              {t("J'ai déjà un compte")}
             </button>
             <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => onUseAccount('register')} disabled={loading}>
-              {t('Créer un compte')}
+              {t("Je n'ai pas de compte")}
             </button>
           </div>
         )}
