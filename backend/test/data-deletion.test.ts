@@ -28,6 +28,9 @@ const { prismaMock } = vi.hoisted(() => ({
     contributionSession: {
       updateMany: vi.fn(),
     },
+    treeVisit: {
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
     $transaction: vi.fn(),
     $disconnect: vi.fn(),
   },
@@ -214,6 +217,10 @@ describe('DELETE /auth/me', () => {
       where: { submittedByUserId: 'user-1' },
       data: { submittedByLabel: 'Contributeur' },
     })
+    // Ses visites d'autres arbres restent comptées, sans son identifiant
+    const visitUpdate = prismaMock.treeVisit.updateMany.mock.calls[0][0]
+    expect(visitUpdate.where).toEqual({ visitorKey: 'user:user-1' })
+    expect(visitUpdate.data.visitorKey).toMatch(/^[0-9a-f]{32}$/)
     expect(prismaMock.user.delete).toHaveBeenCalledWith({ where: { id: 'user-1' } })
 
     // Les arbres doivent partir avant l'utilisateur (relation propriétaire en Restrict).
