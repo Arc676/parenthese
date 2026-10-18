@@ -26,6 +26,7 @@ import { ExpandableSearch } from './components/search'
 import { t, dateLocale } from './i18n/index.js'
 import {
   createParentChildLink,
+  updateParentChildLink,
   deleteParentChildLink,
   deletePerson,
   deleteUnion,
@@ -256,9 +257,9 @@ function buildContributionChangesFromDraft(draft = {}) {
       const relatedId = String(rel.personId)
       if (rel.type === 'child') {
         linkedParentIds.add(relatedId)
-        changes.push({ entityType: 'parent_child_link', action: 'create', after: { parentPersonId: relatedId, childPersonId: ref, parentageType: 'biologique' } })
+        changes.push({ entityType: 'parent_child_link', action: 'create', after: { parentPersonId: relatedId, childPersonId: ref, parentageType: rel.adopted ? 'adoption' : 'biologique' } })
       } else if (rel.type === 'parent') {
-        changes.push({ entityType: 'parent_child_link', action: 'create', after: { parentPersonId: ref, childPersonId: relatedId, parentageType: 'biologique' } })
+        changes.push({ entityType: 'parent_child_link', action: 'create', after: { parentPersonId: ref, childPersonId: relatedId, parentageType: rel.adopted ? 'adoption' : 'biologique' } })
       } else if (rel.type === 'spouse') {
         changes.push({ entityType: 'union', action: 'create', after: { partner1PersonId: relatedId, partner2PersonId: ref, unionType: 'mariage' } })
       }
@@ -272,6 +273,16 @@ function buildContributionChangesFromDraft(draft = {}) {
         action: 'create',
         after: { parentPersonId: String(link.parentId), childPersonId: ref, viaUnionId: link.unionId || null, parentageType: 'biologique' },
       })
+    }
+  }
+
+  // Lien avec ses parents basculé (naissance / adoption) sur un lien existant
+  const parentageChanges = draft.parentageChanges && typeof draft.parentageChanges === 'object' ? draft.parentageChanges : {}
+  for (const [childId, parentageType] of Object.entries(parentageChanges)) {
+    for (const filiation of filiations) {
+      if (String(filiation.childId) !== String(childId) || String(filiation.id).startsWith('local-')) continue
+      if ((filiation.parentageType || 'biologique') === parentageType) continue
+      changes.push({ entityType: 'parent_child_link', action: 'update', entityId: String(filiation.id), after: { parentageType } })
     }
   }
 
@@ -290,6 +301,7 @@ function buildContributionChangesFromDraft(draft = {}) {
     if (Object.prototype.hasOwnProperty.call(source, 'birthYear')) after.birthDate = yearToIsoDate(source.birthYear)
     if (Object.prototype.hasOwnProperty.call(source, 'deathYear')) after.deathDate = yearToIsoDate(source.deathYear)
     if (Object.prototype.hasOwnProperty.call(source, 'birthPlace')) after.birthPlace = (source.birthPlace || '').trim() || null
+    if (Object.prototype.hasOwnProperty.call(source, 'deathPlace')) after.deathPlace = (source.deathPlace || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(source, 'profession')) after.profession = (source.profession || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(source, 'region')) after.region = (source.region || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(source, 'nationality')) after.nationality = (source.nationality || '').trim() || null
@@ -1039,7 +1051,7 @@ function App() {
                 childId: rel.personId,
                 parentId: personId,
                 unionId: null,
-                parentageType: 'biologique',
+                parentageType: rel.adopted ? 'adoption' : 'biologique',
                 displayOrder: filiations.length + 1,
               })
             } else if (rel.type === 'child') {
@@ -1048,7 +1060,7 @@ function App() {
                 childId: personId,
                 parentId: rel.personId,
                 unionId: null,
-                parentageType: 'biologique',
+                parentageType: rel.adopted ? 'adoption' : 'biologique',
                 displayOrder: filiations.length + 1,
               })
             }
@@ -1088,7 +1100,7 @@ function App() {
             birthDate: formData.birthDate || null,
             deathDate: formData.deathDate || null,
             isDeceased: Boolean(formData.isDeceased),
-            relations: (formData.relations || []).map((rel) => ({ type: rel.type, personId: rel.personId })),
+            relations: (formData.relations || []).map((rel) => ({ type: rel.type, personId: rel.personId, adopted: Boolean(rel.adopted) })),
             siblingParentLinks,
           },
         ]
@@ -1126,13 +1138,13 @@ function App() {
           linkedParentIds.add(String(rel.personId))
           await createParentChildLink(
             tree.treeContext.treeId,
-            { parentPersonId: rel.personId, childPersonId: newPerson.id, parentageType: 'biologique', displayOrder: 1 },
+            { parentPersonId: rel.personId, childPersonId: newPerson.id, parentageType: rel.adopted ? 'adoption' : 'biologique', displayOrder: 1 },
             auth.userAuth.token
           )
         } else if (rel.type === 'parent') {
           await createParentChildLink(
             tree.treeContext.treeId,
-            { parentPersonId: newPerson.id, childPersonId: rel.personId, parentageType: 'biologique', displayOrder: 1 },
+            { parentPersonId: newPerson.id, childPersonId: rel.personId, parentageType: rel.adopted ? 'adoption' : 'biologique', displayOrder: 1 },
             auth.userAuth.token
           )
         } else if (rel.type === 'spouse') {
@@ -1245,6 +1257,7 @@ function App() {
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'birthYear')) payload.birthDate = yearToIsoDate(rawChanges.birthYear)
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'deathYear')) payload.deathDate = yearToIsoDate(rawChanges.deathYear)
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'birthPlace')) payload.birthPlace = (rawChanges.birthPlace || '').trim() || null
+          if (Object.prototype.hasOwnProperty.call(rawChanges, 'deathPlace')) payload.deathPlace = (rawChanges.deathPlace || '').trim() || null
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'profession')) payload.profession = (rawChanges.profession || '').trim() || null
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'region')) payload.region = (rawChanges.region || '').trim() || null
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'nationality')) payload.nationality = (rawChanges.nationality || '').trim() || null
@@ -1528,6 +1541,7 @@ function App() {
           localPerson.deathYear = iso ? Number(iso.slice(0, 4)) : null
         }
         if (Object.prototype.hasOwnProperty.call(changes, 'birthPlace')) localPerson.birthPlace = changes.birthPlace || null
+        if (Object.prototype.hasOwnProperty.call(changes, 'deathPlace')) localPerson.deathPlace = changes.deathPlace || null
         if (Object.prototype.hasOwnProperty.call(changes, 'profession')) localPerson.profession = changes.profession || null
         if (Object.prototype.hasOwnProperty.call(changes, 'region')) localPerson.region = changes.region || null
         if (Object.prototype.hasOwnProperty.call(changes, 'nationality')) localPerson.nationality = changes.nationality || null
@@ -1557,6 +1571,7 @@ function App() {
     if (Object.prototype.hasOwnProperty.call(changes, 'birthYear')) payload.birthDate = yearToIsoDate(changes.birthYear)
     if (Object.prototype.hasOwnProperty.call(changes, 'deathYear')) payload.deathDate = yearToIsoDate(changes.deathYear)
     if (Object.prototype.hasOwnProperty.call(changes, 'birthPlace')) payload.birthPlace = (changes.birthPlace || '').trim() || null
+    if (Object.prototype.hasOwnProperty.call(changes, 'deathPlace')) payload.deathPlace = (changes.deathPlace || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(changes, 'profession')) payload.profession = (changes.profession || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(changes, 'region')) payload.region = (changes.region || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(changes, 'nationality')) payload.nationality = (changes.nationality || '').trim() || null
@@ -1805,6 +1820,43 @@ function App() {
       console.error('Failed to add relation:', err)
     }
   }, [auth.userAuth.token, tree.canEditCurrentTree, tree.treeContext.accessToken, tree.treeContext.treeId, refreshTreeAndKeepSelection, isDemoMode, makeLocalId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Lien avec ses parents : naissance ou adoption, pour tous les liens parent de la personne
+  const handleSetParentage = useCallback(async (childPersonId, parentageType) => {
+    const childLinks = filiations.filter((candidate) => String(candidate.childId) === String(childPersonId))
+    if (childLinks.length === 0) return
+
+    if (isDemoMode) {
+      for (const link of childLinks) link.parentageType = parentageType
+      tree.bumpGraphRevision()
+      setRelationFeedback({ loading: false, success: t('Lien modifié (démo locale)'), error: '' })
+      return
+    }
+
+    if (!tree.canEditCurrentTree) {
+      const draft = editMode.restoreDraft()
+      const parentageChanges = { ...(draft.parentageChanges || {}), [String(childPersonId)]: parentageType }
+      editMode.updateDraft({ parentageChanges })
+      setRelationFeedback({ loading: false, success: t('Modification ajoutée à la contribution'), error: '' })
+      return
+    }
+
+    const accessToken = tree.treeContext.accessToken || auth.userAuth.token
+    if (!accessToken || !tree.treeContext.treeId) return
+
+    setRelationFeedback({ loading: true, success: '', error: '' })
+    try {
+      for (const link of childLinks) {
+        if (String(link.id).startsWith('local-') || (link.parentageType || 'biologique') === parentageType) continue
+        await updateParentChildLink(tree.treeContext.treeId, link.id, { parentageType }, accessToken)
+      }
+      await refreshTreeAndKeepSelection(childPersonId, { relayout: true })
+      setRelationFeedback({ loading: false, success: t('Lien modifié'), error: '' })
+    } catch (err) {
+      setRelationFeedback({ loading: false, success: '', error: getAccountErrorMessage(err) })
+      console.error('Failed to update parentage:', err)
+    }
+  }, [auth.userAuth.token, tree.canEditCurrentTree, tree.treeContext.accessToken, tree.treeContext.treeId, refreshTreeAndKeepSelection, isDemoMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Suppression d'une relation (mode édition)
   const handleRemoveRelation = useCallback(async (sourcePersonId, targetPersonId, relationType) => {
@@ -3037,6 +3089,7 @@ function App() {
           onDelete={handlePersonDelete}
           onAddRelation={handleAddRelation}
           onRemoveRelation={handleRemoveRelation}
+          onSetParentage={handleSetParentage}
           relationActionLoading={relationFeedback.loading}
           relationActionSuccess={relationFeedback.success}
           relationActionError={relationFeedback.error}

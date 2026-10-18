@@ -58,6 +58,7 @@ const PersonCard = ({
   onDelete,
   onAddRelation,
   onRemoveRelation,
+  onSetParentage,
   relationActionLoading = false,
   relationActionSuccess = '',
   relationActionError = '',
@@ -123,6 +124,10 @@ const PersonCard = ({
   const [relationSearchQuery, setRelationSearchQuery] = useState('')
   const relationSearchRef = useRef(null)
   const avatarInputRef = useRef(null)
+  // Infos en modification : champs ouverts depuis une pastille (et leur focus)
+  const [openedFields, setOpenedFields] = useState([])
+  const [focusField, setFocusField] = useState(null)
+  const bodyRef = useRef(null)
 
   // Reset edits quand la personne change
   useEffect(() => {
@@ -136,7 +141,17 @@ const PersonCard = ({
     setShowSourceMenu(false)
     setMomentSheet(null)
     setLifeNotice('')
+    setOpenedFields([])
+    setFocusField(null)
   }, [person.id])
+
+  // Pastille cliquée : le champ s'ouvre à sa place et prend le focus
+  useEffect(() => {
+    if (!focusField) return
+    const target = bodyRef.current?.querySelector(`[data-pc-field="${focusField}"] input, [data-pc-field="${focusField}"] textarea`)
+    target?.focus()
+    setFocusField(null)
+  }, [focusField])
 
   // Connexion Immich de l'arbre : métadonnées sans clé. Une erreur (rôle périmé, réseau) se
   // traduit par « non configuré » : la fiche reste utilisable, simplement sans choix de source.
@@ -213,6 +228,42 @@ const PersonCard = ({
     }))
   }
 
+  // Onglet Infos en modification : seuls les champs remplis (ou ouverts) s'affichent, le reste est en pastilles
+  const isFilled = (value) => value !== null && value !== undefined && String(value).trim() !== ''
+  const openedHas = (field) => openedFields.includes(field)
+  const openField = (field) => {
+    setOpenedFields((prev) => (prev.includes(field) ? prev : [...prev, field]))
+    setFocusField(field)
+  }
+  const birthFilled = isFilled(getEditValue('birthYear', person.birthDate || person.birthYear))
+  const deathFilled = isFilled(getEditValue('deathYear', person.deathDate || person.deathYear))
+  const deceasedNow = editMode ? !getEditValue('isAlive', person.isAlive) : !person.isAlive
+  const notesShown = editMode && (isFilled(getEditValue('note', person.note)) || openedHas('note'))
+  // En lecture : toujours visible si demandé (naissance, décès d'une personne décédée), sinon si rempli
+  const infoRow = (field, label, filled, content, always = false) => {
+    const shown = editMode ? (filled || openedHas(field)) : (always || filled)
+    if (!shown) return null
+    return (
+      <div className="pc-row" data-pc-field={field}>
+        <span className="pc-label">{label}</span>
+        {content}
+      </div>
+    )
+  }
+  const chipCandidates = [
+    { field: 'nickname', label: t('Surnom'), filled: isFilled(getEditValue('nickname', person.nickname)), relevant: true },
+    { field: 'birthYear', label: t('Date de naissance'), filled: birthFilled, relevant: true },
+    { field: 'birthPlace', label: t('Lieu de naissance'), filled: isFilled(getEditValue('birthPlace', person.birthPlace)), relevant: true },
+    { field: 'deathYear', label: t('Date de décès'), filled: deathFilled, relevant: deceasedNow },
+    { field: 'deathPlace', label: t('Lieu de décès'), filled: isFilled(getEditValue('deathPlace', person.deathPlace)), relevant: deceasedNow },
+    { field: 'birthName', label: t('Nom de naissance'), filled: isFilled(getEditValue('birthName', person.birthName)), relevant: true },
+    { field: 'profession', label: t('Métier'), filled: isFilled(getEditValue('profession', person.profession)), relevant: true },
+    { field: 'region', label: t('Région'), filled: isFilled(getEditValue('region', person.region)), relevant: true },
+    { field: 'nationality', label: t('Nationalité'), filled: isFilled(getEditValue('nationality', person.nationality)), relevant: true },
+    { field: 'note', label: t('Notes'), filled: isFilled(getEditValue('note', person.note)), relevant: true },
+  ]
+  const emptyChips = editMode ? chipCandidates.filter((c) => c.relevant && !c.filled && !openedHas(c.field)) : []
+
   const handleSave = async () => {
     if (!hasChanges || !onSave) return
     if (!unknownFirstName && 'firstName' in edits && !String(edits.firstName).trim()) {
@@ -224,6 +275,7 @@ const PersonCard = ({
       const savedFor = person.id
       await onSave(savedFor, edits)
       setEditState(prev => (prev.personId === savedFor ? { ...prev, changed: false } : prev))
+      setOpenedFields([])
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 2000)
     } finally {
@@ -295,6 +347,17 @@ const PersonCard = ({
     return childFiliations[0]
   })()
   const personMedias = getPersonMedias(person.id)
+  // Filiation d'adoption entre un enfant et un parent (lien direct ou via une union)
+  const parentageAdopted = (childId, parentId) => filiations.some((f) => (
+    String(f.childId) === String(childId)
+    && f.parentageType === 'adoption'
+    && (String(f.parentId) === String(parentId) || (f.unionId && personUnions.some((u) => String(u.id) === String(f.unionId))))
+  ))
+  const parentsAdopted = filiations.some((f) => String(f.childId) === String(person.id) && f.parentageType === 'adoption')
+  const adoptedChildLabel = (child) => {
+    if (!parentageAdopted(child.id, person.id)) return null
+    return child.sex === 'female' ? t('adoptée') : t('adopté')
+  }
 
   // Frise de vie : la famille vient de l'arbre déjà chargé, les événements de la route /life,
   // demandée seulement à l'ouverture de l'onglet (la démo a ses propres données)
@@ -717,32 +780,14 @@ const PersonCard = ({
 
         {/* ── Infos ── */}
         {tab === 'infos' && (
-          <div className="pc-infos">
+          <div className="pc-infos" ref={bodyRef}>
             <section className="pc-section">
               <h3 className="pz-eyebrow">{t('État civil')}</h3>
               <div className="pc-rows">
-                <div className="pc-row">
-                  <span className="pc-label">{t('Naissance')}</span>
-                  {renderEditableValue({ field: 'birthYear', value: person.birthDate || person.birthYear, placeholder: t('Date de naissance'), type: 'date' })}
-                </div>
-                {(person.birthPlace || editMode) && (
-                  <div className="pc-row">
-                    <span className="pc-label">{t('Lieu')}</span>
-                    {renderEditableValue({ field: 'birthPlace', value: person.birthPlace || '', placeholder: t('Lieu de naissance'), format: formatPlace })}
-                  </div>
-                )}
-                {(person.birthName || editMode) && (
-                  <div className="pc-row">
-                    <span className="pc-label">{t('Nom de naissance')}</span>
-                    {renderEditableValue({ field: 'birthName', value: person.birthName || '', placeholder: t('Nom de naissance') })}
-                  </div>
-                )}
-                {(person.nickname || editMode) && (
-                  <div className="pc-row">
-                    <span className="pc-label">{t('Surnom')}</span>
-                    {renderEditableValue({ field: 'nickname', value: person.nickname || '', placeholder: t('Surnom') })}
-                  </div>
-                )}
+                {infoRow('birthYear', t('Naissance'), birthFilled, renderEditableValue({ field: 'birthYear', value: person.birthDate || person.birthYear, placeholder: t('Date de naissance'), type: 'date' }), true)}
+                {infoRow('birthPlace', t('Lieu'), isFilled(getEditValue('birthPlace', person.birthPlace)), renderEditableValue({ field: 'birthPlace', value: person.birthPlace || '', placeholder: t('Lieu de naissance'), format: formatPlace }))}
+                {infoRow('birthName', t('Nom de naissance'), isFilled(getEditValue('birthName', person.birthName)), renderEditableValue({ field: 'birthName', value: person.birthName || '', placeholder: t('Nom de naissance') }))}
+                {infoRow('nickname', t('Surnom'), isFilled(getEditValue('nickname', person.nickname)), renderEditableValue({ field: 'nickname', value: person.nickname || '', placeholder: t('Surnom') }))}
                 {editMode && (
                   <div className="pc-row">
                     <span className="pc-label">{t('Statut')}</span>
@@ -756,37 +801,28 @@ const PersonCard = ({
                     </button>
                   </div>
                 )}
-                {(!getEditValue('isAlive', person.isAlive) || (!editMode && !person.isAlive)) && (
-                  <div className="pc-row">
-                    <span className="pc-label">{t('Décès')}</span>
-                    {renderEditableValue({ field: 'deathYear', value: person.deathDate || person.deathYear || '', placeholder: t('Date de décès'), type: 'date', emptyLabel: t('Date inconnue') })}
-                  </div>
-                )}
+                {infoRow('deathYear', t('Décès'), deathFilled, renderEditableValue({ field: 'deathYear', value: person.deathDate || person.deathYear || '', placeholder: t('Date de décès'), type: 'date', emptyLabel: t('Date inconnue') }), deceasedNow)}
+                {infoRow('deathPlace', t('Lieu de décès'), isFilled(getEditValue('deathPlace', person.deathPlace)), renderEditableValue({ field: 'deathPlace', value: person.deathPlace || '', placeholder: t('Lieu de décès'), format: formatPlace }))}
                 {!editMode && (
                   <div className="pc-row">
                     <span className="pc-label">{t('Âge')}</span>
                     <span className="value">{ageLabel || '-'}</span>
                   </div>
                 )}
-                {(person.region || editMode) && (
-                  <div className="pc-row">
-                    <span className="pc-label">{t('Région')}</span>
-                    {renderEditableValue({ field: 'region', value: person.region || '', placeholder: t('Région') })}
-                  </div>
-                )}
-                {(person.nationality || editMode) && (
-                  <div className="pc-row">
-                    <span className="pc-label">{t('Nationalité')}</span>
-                    {renderEditableValue({ field: 'nationality', value: person.nationality || '', placeholder: t('Nationalité') })}
-                  </div>
-                )}
-                {(person.profession || editMode) && (
-                  <div className="pc-row">
-                    <span className="pc-label">{t('Métier')}</span>
-                    {renderEditableValue({ field: 'profession', value: person.profession || '', placeholder: t('Métier') })}
-                  </div>
-                )}
+                {infoRow('region', t('Région'), isFilled(getEditValue('region', person.region)), renderEditableValue({ field: 'region', value: person.region || '', placeholder: t('Région') }))}
+                {infoRow('nationality', t('Nationalité'), isFilled(getEditValue('nationality', person.nationality)), renderEditableValue({ field: 'nationality', value: person.nationality || '', placeholder: t('Nationalité') }))}
+                {infoRow('profession', t('Métier'), isFilled(getEditValue('profession', person.profession)), renderEditableValue({ field: 'profession', value: person.profession || '', placeholder: t('Métier') }))}
               </div>
+              {/* Modification : une pastille par champ vide, qui ouvre le champ à sa place */}
+              {editMode && emptyChips.length > 0 && (
+                <div className="pc-fill-chips">
+                  {emptyChips.map((chip) => (
+                    <button key={chip.field} type="button" className="pc-fill-chip" onClick={() => openField(chip.field)}>
+                      + {chip.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </section>
 
             {!editMode && (parentsList.length > 0 || personUnions.length > 0 || childrenList.length > 0) && (
@@ -828,8 +864,8 @@ const PersonCard = ({
               </section>
             )}
 
-            {(person.note || editMode) && (
-              <section className="pc-section">
+            {(editMode ? notesShown : person.note) && (
+              <section className="pc-section" data-pc-field="note">
                 <h3 className="pz-eyebrow">{t('Notes')}</h3>
                 {editMode ? (
                   <textarea
@@ -857,9 +893,21 @@ const PersonCard = ({
             )}
 
             <section className="pc-section">
-              <h3 className="pz-eyebrow">{t('Parents')}</h3>
+              <div className="pc-section-head">
+                <h3 className="pz-eyebrow">{t('Parents')}</h3>
+                {parentsAdopted && parentsList.length > 0 && <span className="pc-adopt-tag">{t('Parents adoptifs')}</span>}
+              </div>
               {parentsList.length > 0 ? parentsList.map(p => renderRelationRow(p, 'parent')) : <p className="pc-rel-empty">{t("Aucun parent pour l'instant")}</p>}
               {renderRelationAdd('parent', t('Ajouter un parent'), t('Rechercher un parent'))}
+              {parentsList.length > 0 && (
+                <div className="pc-parentage">
+                  <span className="pc-label">{t('Lien avec ses parents')}</span>
+                  <div className="pz-tabs pc-seg" role="radiogroup" aria-label={t('Lien avec ses parents')}>
+                    <button type="button" role="radio" aria-checked={!parentsAdopted} className={`pz-tab ${!parentsAdopted ? 'is-active' : ''}`} onClick={() => onSetParentage?.(person.id, 'biologique')}>{t('Naissance')}</button>
+                    <button type="button" role="radio" aria-checked={parentsAdopted} className={`pz-tab ${parentsAdopted ? 'is-active' : ''}`} onClick={() => onSetParentage?.(person.id, 'adoption')}>{t('Adoption')}</button>
+                  </div>
+                </div>
+              )}
             </section>
 
             <section className="pc-section">
@@ -874,7 +922,7 @@ const PersonCard = ({
 
             <section className="pc-section">
               <h3 className="pz-eyebrow">{t('Enfants')}</h3>
-              {childrenList.length > 0 ? childrenList.map(c => renderRelationRow(c, 'child')) : <p className="pc-rel-empty">{t('Aucun enfant')}</p>}
+              {childrenList.length > 0 ? childrenList.map(c => renderRelationRow(c, 'child', adoptedChildLabel(c))) : <p className="pc-rel-empty">{t('Aucun enfant')}</p>}
               {renderRelationAdd('child', t('Ajouter un enfant'), t('Rechercher un enfant'))}
             </section>
           </div>
