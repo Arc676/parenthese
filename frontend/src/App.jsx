@@ -3047,11 +3047,23 @@ function App() {
           onMomentSaved={media.refreshMomentMedia}
         />
       )}
+      {/* Crayon de modification masqué en démo : rien n'y est enregistré */}
       {tree.selectedMedia && (
         <MediaViewer
           media={tree.selectedMedia.media}
           person={tree.selectedMedia.person}
           onClose={() => tree.setSelectedMedia(null)}
+          canEdit={Boolean(tree.canEditCurrentTree && editMode.isActive && !isDemoMode)}
+          onLoadLifeEvents={() => media.loadPersonLifeEvents(tree.selectedMedia.person.id)}
+          onSave={async (payload) => {
+            const { person, media: current } = tree.selectedMedia
+            await media.handleUpdatePersonMedia(person.id, current.id, payload)
+            // Le rafraîchissement de l'arbre referme la visionneuse : on la rouvre sur le souvenir modifié
+            tree.setSelectedMedia({
+              person,
+              media: { ...current, label: payload.caption, lifeEventId: payload.lifeEventId },
+            })
+          }}
         />
       )}
       <MediaManagerPanel
