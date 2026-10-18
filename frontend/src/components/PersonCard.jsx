@@ -12,6 +12,7 @@ import './PersonCard.css'
 import PzBusy from './PzBusy.jsx'
 import { t, dateLocale } from '../i18n/index.js'
 import { formatPlace } from '../utils/place.js'
+import { firstNameLabel, fullNameLabel, isFirstNameUnknown } from '../utils/personName.js'
 import { isYearOnly } from '../utils/dateInput.js'
 import DateField from './DateField.jsx'
 
@@ -94,6 +95,9 @@ const PersonCard = ({
 
   // État local pour les modifications en mode édition
   const [edits, setEdits] = useState({})
+  // Prénom inconnu (case cochée) et saisie de prénom vide sans case : le prénom est demandé avant l'enregistrement
+  const [unknownFirstName, setUnknownFirstName] = useState(() => isFirstNameUnknown(person))
+  const [firstNameMissing, setFirstNameMissing] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -116,6 +120,8 @@ const PersonCard = ({
   // Reset edits quand la personne change
   useEffect(() => {
     setEdits({})
+    setUnknownFirstName(isFirstNameUnknown(person))
+    setFirstNameMissing(false)
     setHasChanges(false)
     setShowDeleteConfirm(false)
     setActiveRelationSearch(null)
@@ -199,6 +205,10 @@ const PersonCard = ({
 
   const handleSave = async () => {
     if (!hasChanges || !onSave) return
+    if (!unknownFirstName && 'firstName' in edits && !String(edits.firstName).trim()) {
+      setFirstNameMissing(true)
+      return
+    }
     setSaving(true)
     try {
       await onSave(person.id, edits)
@@ -333,16 +343,16 @@ const PersonCard = ({
         const p2 = persons.find(p => p.id === union.partner2Id)
         // Union sans type (fréquent après un import GEDCOM) : pas de « (null) » à côté des prénoms
         const kind = union.unionType ? ` (${unionTypeLabel(union.unionType)})` : ''
-        return `${p1?.firstName || '?'} + ${p2?.firstName || '?'}${kind}`
+        return `${p1 ? firstNameLabel(p1) : '?'} + ${p2 ? firstNameLabel(p2) : '?'}${kind}`
       }
     }
 
     if (preferredFiliation.parentId && parentsList.length <= 1) {
       const parent = persons.find(p => p.id === preferredFiliation.parentId)
       if (preferredFiliation.parentageType === 'inconnu') {
-        return t('{name} (parent unique, autre parent inconnu)', { name: parent?.firstName || '?' })
+        return t('{name} (parent unique, autre parent inconnu)', { name: parent ? firstNameLabel(parent) : '?' })
       }
-      return t('{name} (parent unique)', { name: parent?.firstName || '?' })
+      return t('{name} (parent unique)', { name: parent ? firstNameLabel(parent) : '?' })
     }
     return null
   }
@@ -421,12 +431,12 @@ const PersonCard = ({
       <span className="pc-rel-avatar" aria-hidden="true">
         {target?.photo ? <img src={target.photo} alt="" /> : <span>{target?.firstName?.[0] || '?'}</span>}
       </span>
-      <span className="pc-rel-name">{target?.firstName} {target?.lastName || ''}</span>
+      <span className="pc-rel-name">{target ? fullNameLabel(target) : ''}</span>
       {meta && <span className="pc-rel-meta">{meta}</span>}
       <button
         type="button"
         className="pz-btn pz-btn--ghost pz-btn--icon pc-rel-remove"
-        aria-label={t('Retirer {name}', { name: target?.firstName })}
+        aria-label={t('Retirer {name}', { name: target ? fullNameLabel(target) : '' })}
         onClick={() => handleRelationRemove(target.id, relationType)}
         disabled={relationActionLoading}
       >
@@ -455,7 +465,7 @@ const PersonCard = ({
   )
 
   return (
-    <div className={`person-card ${editMode ? 'person-card--edit-mode' : ''}`} role="dialog" aria-label={t('Fiche de {name}', { name: `${person.firstName} ${person.lastName || ''}` })}>
+    <div className={`person-card ${editMode ? 'person-card--edit-mode' : ''}`} role="dialog" aria-label={t('Fiche de {name}', { name: fullNameLabel(person) })}>
       <span className="pc-grab" aria-hidden="true" />
       <button type="button" className="pz-btn pz-btn--ghost pz-btn--icon pc-close" onClick={onClose} aria-label={t('Fermer la fiche')}>
         <X size={18} strokeWidth={2} />
@@ -488,7 +498,7 @@ const PersonCard = ({
           ) : (
             <div className="pc-photo">
               {person.photo
-                ? <img src={person.photo} alt={`${person.firstName} ${person.lastName || ''}`} />
+                ? <img src={person.photo} alt={fullNameLabel(person)} />
                 : <span className="pc-photo-initials">{initials}</span>}
             </div>
           )}
@@ -526,9 +536,14 @@ const PersonCard = ({
                 type="text"
                 className="pc-input pc-input--name"
                 value={getEditValue('firstName', person.firstName)}
-                onChange={(e) => handleFieldChange('firstName', e.target.value)}
+                onChange={(e) => {
+                  setFirstNameMissing(false)
+                  handleFieldChange('firstName', e.target.value)
+                }}
                 placeholder={t('Prénom')}
                 aria-label={t('Prénom')}
+                disabled={unknownFirstName}
+                aria-invalid={firstNameMissing}
               />
               <input
                 type="text"
@@ -538,10 +553,23 @@ const PersonCard = ({
                 placeholder={t('Nom')}
                 aria-label={t('Nom')}
               />
+              <label className="pc-unknown-first">
+                <input
+                  type="checkbox"
+                  checked={unknownFirstName}
+                  onChange={(e) => {
+                    setUnknownFirstName(e.target.checked)
+                    setFirstNameMissing(false)
+                    handleFieldChange('firstName', '')
+                  }}
+                />
+                {t('Je ne connais pas son prénom')}
+              </label>
+              {firstNameMissing && <p className="pc-name-error">{t('Il faut au moins un prénom.')}</p>}
             </div>
           ) : (
             <h2 className="pc-name">
-              {person.firstName} <em>{person.lastName}</em>
+              {isFirstNameUnknown(person) ? <span className="pc-name-unknown">{firstNameLabel(person)}</span> : person.firstName} <em>{person.lastName}</em>
             </h2>
           )}
           {!editMode && person.nickname && <p className="pc-nick">{person.nickname}</p>}
@@ -591,7 +619,7 @@ const PersonCard = ({
           <div className="pc-souvenirs">
             {personMedias.length === 0 && (
               <div className="pc-empty">
-                <p className="pz-sub">{t('Pas encore de souvenir pour {name}.', { name: person.firstName })}</p>
+                <p className="pz-sub">{t('Pas encore de souvenir pour {name}.', { name: firstNameLabel(person) })}</p>
                 <p className="pz-small">{canManageMedia ? t('Une photo, une anecdote, sa voix. Vous pouvez ajouter le premier.') : t('Une photo, une anecdote, sa voix.')}</p>
               </div>
             )}
@@ -757,7 +785,7 @@ const PersonCard = ({
                   {parentsList.length > 0 && (
                     <div className="pc-row">
                       <span className="pc-label">{t('Parents')}</span>
-                      <span className="value">{getParentageLabel() || parentsList.map(p => `${p.firstName} ${p.lastName}`).join(t(' et '))}</span>
+                      <span className="value">{getParentageLabel() || parentsList.map(p => fullNameLabel(p)).join(t(' et '))}</span>
                     </div>
                   )}
                   {preferredFiliation && preferredFiliation.parentageType !== 'biologique' && parentsList.length <= 1 && (
@@ -774,7 +802,7 @@ const PersonCard = ({
                           const partnerId = u.partner1Id === person.id ? u.partner2Id : u.partner1Id
                           const partner = persons.find(p => p.id === partnerId)
                           const yearRange = u.startYear ? (u.endYear ? `${u.startYear}–${u.endYear}` : t('depuis {year}', { year: u.startYear })) : ''
-                          return `${partner?.firstName || '?'} ${partner?.lastName || ''}${yearRange ? ` (${yearRange})` : ''}`
+                          return `${partner ? firstNameLabel(partner) : '?'} ${partner?.lastName || ''}${yearRange ? ` (${yearRange})` : ''}`
                         }).join(', ')}
                       </span>
                     </div>
@@ -782,7 +810,7 @@ const PersonCard = ({
                   {childrenList.length > 0 && (
                     <div className="pc-row">
                       <span className="pc-label">{t('Enfants')}</span>
-                      <span className="value">{childrenList.map(c => c.firstName).join(', ')}</span>
+                      <span className="value">{childrenList.map(c => firstNameLabel(c)).join(', ')}</span>
                     </div>
                   )}
                 </div>
@@ -847,7 +875,7 @@ const PersonCard = ({
         <footer className="pc-foot">
           {showDeleteConfirm ? (
             <div className="pc-delete-confirm">
-              <span>{t("Supprimer {name} de l'arbre ?", { name: person.firstName })}</span>
+              <span>{t("Supprimer {name} de l'arbre ?", { name: firstNameLabel(person) })}</span>
               <div className="pc-delete-actions">
                 <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => setShowDeleteConfirm(false)}>{t('Annuler')}</button>
                 <button type="button" className="pz-btn pz-btn--danger pz-btn--sm" onClick={handleDelete}>{t('Supprimer')}</button>
@@ -967,7 +995,7 @@ const RelationSearchInline = forwardRef(function RelationSearchInline(
                 <span className="pc-rel-avatar" aria-hidden="true">
                   {p.photo ? <img src={p.photo} alt="" /> : <span>{p.firstName[0]}</span>}
                 </span>
-                <span className="pc-rel-name">{p.firstName} <em>{p.lastName || ''}</em></span>
+                <span className="pc-rel-name">{firstNameLabel(p)} <em>{p.lastName || ''}</em></span>
                 {p.birthYear && <span className="pc-rel-meta">{p.birthYear}</span>}
               </button>
             </li>

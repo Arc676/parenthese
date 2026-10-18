@@ -1,5 +1,6 @@
 import './SearchResultsDropdown.css'
 import { t } from '../../i18n/index.js'
+import { firstNameLabel } from '../../utils/personName.js'
 
 // Raison du match renvoyée par usePersonSearch (valeur française), traduite à l'affichage
 const REASON_LABELS = {
@@ -67,7 +68,7 @@ function SearchResultsDropdown({
             {/* Info personne */}
             <div className="search-result-info">
               <div className="search-result-name">
-                {person.firstName} <span className="search-result-lastname">{person.lastName}</span>
+                {firstNameLabel(person)} <span className="search-result-lastname">{person.lastName}</span>
               </div>
               <div className="search-result-meta">
                 {person.birthYear && <span className="search-result-year">{person.birthYear}{person.deathYear ? `–${person.deathYear}` : ''}</span>}

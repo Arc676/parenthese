@@ -258,8 +258,14 @@ function pushLifeEvent(lines: string[], event: ExportedEvent, tags: Record<strin
 
 // ─── Name Parsing ────────────────────────────────────────────────────────────
 
+// Valeur de « 1 NAME ». Prénom inconnu (chaîne vide) : « /Dupont/ », sans espace de tête
+export function gedcomNameValue(firstName: string, lastName: string): string {
+  const given = firstName ? `${oneLine(firstName)} ` : ''
+  return `${given}/${oneLine(lastName).replace(/\//g, '')}/`
+}
+
 // « Jean /Dupont/ » : lu par indexOf, l'ancienne expression régulière était quadratique sur les espaces
-function parseGedcomName(value: string): { firstName: string; lastName: string } {
+export function parseGedcomName(value: string): { firstName: string; lastName: string } {
   const open = value.indexOf('/')
   const close = open >= 0 ? value.indexOf('/', open + 1) : -1
   if (open >= 0 && close > open) {
@@ -453,7 +459,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
     for (const person of persons) {
       const xref = sanitizeXref(person.id)
       lines.push(`0 @I${xref}@ INDI`)
-      lines.push(`1 NAME ${oneLine(person.firstName)} /${oneLine(person.lastName).replace(/\//g, '')}/`)
+      lines.push(`1 NAME ${gedcomNameValue(person.firstName, person.lastName)}`)
       if (person.nickname) lines.push(`2 NICK ${oneLine(person.nickname)}`)
 
       if (person.sex === 'male' || person.sex === 'M') lines.push('1 SEX M')
@@ -655,7 +661,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
         const nameNode = findChild(indi, 'NAME')
         const { firstName, lastName } = nameNode
           ? parseGedcomName(nameNode.value)
-          : { firstName: '?', lastName: '' }
+          : { firstName: '', lastName: '' }
 
         const sexNode = findChild(indi, 'SEX')
         const sex = sexNode?.value === 'M' ? 'male' : sexNode?.value === 'F' ? 'female' : null
@@ -671,7 +677,8 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
 
         const notes = clip(personNotes(indi, records), 2000)
 
-        const personFirstName = (firstName || '?').slice(0, 120)
+        // Prénom absent du fichier : chaîne vide, comme un prénom inconnu dans l'arbre
+        const personFirstName = (firstName || '').slice(0, 120)
         const personLastName = (lastName || '').slice(0, 120)
         const birthDate = isoDateToDbDate(birthDateIso)
         const deathDate = isoDateToDbDate(deathDateIso)

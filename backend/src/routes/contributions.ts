@@ -68,7 +68,7 @@ const reviewSessionSchema = z.object({
 })
 
 const personCreateSchema = z.object({
-  firstName: z.string().min(1).max(120),
+  firstName: z.string().trim().max(120),
   lastName: z.string().min(1).max(120),
   birthName: z.string().max(120).optional().nullable(),
   nickname: z.string().max(120).optional().nullable(),
@@ -85,7 +85,7 @@ const personCreateSchema = z.object({
 
 const personUpdateSchema = z
   .object({
-    firstName: z.string().min(1).max(120).optional(),
+    firstName: z.string().trim().max(120).optional(),
     lastName: z.string().min(1).max(120).optional(),
     birthName: z.string().max(120).optional().nullable(),
     nickname: z.string().max(120).optional().nullable(),

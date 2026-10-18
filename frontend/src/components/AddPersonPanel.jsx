@@ -4,6 +4,7 @@ import { UserPlus, X, Search, ChevronDown } from 'lucide-react'
 import './AddPersonPanel.css'
 import PzBusy from './PzBusy.jsx'
 import { t } from '../i18n/index.js'
+import { firstNameLabel } from '../utils/personName.js'
 
 // Titre traduit d'un bloc : le passage entre <em> et </em> garde son italique
 function withEmphasis(text) {
@@ -32,6 +33,8 @@ function withEmphasis(text) {
  */
 function AddPersonPanel({ visible, persons = [], loading = false, error = '', onSubmit, onClose }) {
   const [firstName, setFirstName] = useState('')
+  // Prénom inconnu : enregistré vide, affiché « Prénom inconnu » dans l'arbre et la fiche
+  const [unknownFirstName, setUnknownFirstName] = useState(false)
   const [lastName, setLastName] = useState('')
   const [birthName, setBirthName] = useState('')
   const [nickname, setNickname] = useState('')
@@ -90,6 +93,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
   useEffect(() => {
     if (justAdded && !loading && !error) {
       setFirstName('')
+      setUnknownFirstName(false)
       setLastName('')
       setBirthName('')
       setNickname('')
@@ -116,7 +120,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
 
     setRelations((prev) => [
       ...prev,
-      { personId: person.id, personName: `${person.firstName} ${person.lastName || ''}`.trim(), type: selectedRelationType },
+      { personId: person.id, personName: `${firstNameLabel(person)} ${person.lastName || ''}`.trim(), type: selectedRelationType },
     ])
     setRelationSearch('')
     setRelationDropdownOpen(false)
@@ -129,7 +133,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
   const handleSubmit = (e) => {
     e.preventDefault()
 
-    if (!firstName.trim()) {
+    if (!unknownFirstName && !firstName.trim()) {
       setTouched({ firstName: true })
       firstNameRef.current?.focus()
       return
@@ -138,7 +142,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
     setJustAdded(true)
 
     onSubmit({
-      firstName: firstName.trim(),
+      firstName: unknownFirstName ? '' : firstName.trim(),
       lastName: lastName.trim(),
       birthName: birthName.trim() || null,
       nickname: nickname.trim() || null,
@@ -189,12 +193,13 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
                 ref={firstNameRef}
                 id="ap-firstName"
                 type="text"
-                className={touched.firstName && !firstName.trim() ? 'apn-input--error' : ''}
+                className={touched.firstName && !unknownFirstName && !firstName.trim() ? 'apn-input--error' : ''}
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
                 placeholder={t('Marie')}
                 autoComplete="off"
-                aria-invalid={touched.firstName && !firstName.trim()}
+                disabled={unknownFirstName}
+                aria-invalid={touched.firstName && !unknownFirstName && !firstName.trim()}
               />
             </div>
             <div className="pz-field">
@@ -209,7 +214,18 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
               />
             </div>
           </div>
-          {touched.firstName && !firstName.trim() && (
+          <label className="apn-deceased">
+            <input
+              type="checkbox"
+              checked={unknownFirstName}
+              onChange={(e) => {
+                setUnknownFirstName(e.target.checked)
+                setTouched({})
+              }}
+            />
+            {t('Je ne connais pas son prénom')}
+          </label>
+          {touched.firstName && !unknownFirstName && !firstName.trim() && (
             <p className="apn-error-text">{t('Il faut au moins un prénom.')}</p>
           )}
 
@@ -298,9 +314,9 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
                     <li key={p.id}>
                       <button type="button" className="apn-dropdown-item" onClick={() => handleAddRelation(p)}>
                         <span className="apn-avatar" aria-hidden="true">
-                          {p.photo ? <img src={p.photo} alt="" /> : (p.firstName || '?').charAt(0)}
+                          {p.photo ? <img src={p.photo} alt="" /> : (p.firstName || '').trim().charAt(0) || '?'}
                         </span>
-                        <span className="apn-dropdown-name">{p.firstName} <em>{p.lastName || ''}</em></span>
+                        <span className="apn-dropdown-name">{firstNameLabel(p)} <em>{p.lastName || ''}</em></span>
                         {(p.birthYear || p.birthDate) && (
                           <span className="apn-dropdown-date">{p.birthYear || String(p.birthDate).slice(0, 4)}</span>
                         )}

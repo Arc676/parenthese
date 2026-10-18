@@ -227,7 +227,8 @@ function buildContributionChangesFromDraft(draft = {}) {
   const addedPersons = Array.isArray(draft.addedPersons) ? draft.addedPersons : []
   for (const person of addedPersons) {
     if (!person || typeof person !== 'object') continue
-    if (!person.firstName || !person.lastName) continue
+    // Prénom inconnu (chaîne vide) : la personne part quand même, nom de famille obligatoire comme avant
+    if (!person.lastName) continue
 
     // Identifiant provisoire : le serveur le remplace par le vrai id pour créer les liens
     const ref = typeof person.ref === 'string' && person.ref.startsWith('tmp:') ? person.ref : null
@@ -803,6 +804,10 @@ function App() {
       return
     }
 
+    // Cliquer une personne pendant un ajout ferme le panneau d'ajout (il passe au-dessus de la fiche) ;
+    // sa saisie reste en mémoire et reprend quand on rouvre « Ajouter »
+    setAddPersonPanelVisible(false)
+
     const freshPerson = persons.find((candidate) => String(candidate.id) === String(personId)) || personLike || null
     tree.setSelectedPerson(freshPerson)
     trackTreeInteraction('text')
@@ -1091,7 +1096,7 @@ function App() {
         // La personne n'apparaît dans l'arbre qu'après envoi : on passe tout de suite à l'envoi
         // (prénom, un mot), la famille n'a pas à chercher le bouton
         setAddPersonPanelVisible(false)
-        setDraftNotice(t('{name} est dans vos modifications. Envoyez-les quand vous avez fini.', { name: formData.firstName }))
+        setDraftNotice(t('{name} est dans vos modifications. Envoyez-les quand vous avez fini.', { name: [formData.firstName, formData.lastName].filter(Boolean).join(' ') || t('Nouvelle personne') }))
         setContribSubmitError('')
         setContribChanges(buildContribChangesList(editMode.restoreDraft()))
         setShowContribModal(true)
