@@ -11,6 +11,7 @@ import {
 } from './constants'
 import { getEntranceProgress, drawPartialBezier } from './utils'
 import { fitNickname } from '../../utils/nickname.js'
+import { firstNameLabel, isFirstNameUnknown } from '../../utils/personName.js'
 
 // Largeur maximale du surnom sur le nœud (px canevas) : au-delà, coupé avec …
 const NICKNAME_MAX_W = 150
@@ -582,13 +583,15 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
   // Libellés du petit portrait : un peu réduits, pas autant que le portrait pour rester lisibles
   if (node._compact) ctx.scale(0.85, 0.85)
 
-  ctx.font = '400 13px "Newsreader", Georgia, serif'
+  // Prénom inconnu : libellé en italique (pas de prénom à afficher sinon)
+  const nameUnknown = isFirstNameUnknown(person)
+  const nameLabel = nameUnknown ? firstNameLabel(person) : person.firstName
+  ctx.font = `${nameUnknown ? 'italic ' : ''}400 13px "Newsreader", Georgia, serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  const nameLabel = person.firstName || ''
   if (nameLabel) {
     if (withDetail) {
-      const nameMetrics = measureTextCached(ctx, nameLabel, 'name')
+      const nameMetrics = measureTextCached(ctx, nameLabel, nameUnknown ? 'name-unknown' : 'name')
       const nameBlockH = Math.max(
         18,
         (nameMetrics.actualBoundingBoxAscent || 7) + (nameMetrics.actualBoundingBoxDescent || 4) + 8,

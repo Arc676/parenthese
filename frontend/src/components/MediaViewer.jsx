@@ -9,6 +9,7 @@ import {
 } from '../utils/geoMedia'
 import './MediaViewer.css'
 import { t } from '../i18n/index.js'
+import { firstNameLabel } from '../utils/personName.js'
 
 const HTTP_URL_RE = /^https?:\/\/\S+$/i
 
@@ -396,7 +397,7 @@ const MediaViewer = ({ media, person, onClose }) => {
               ) : (
                 <span className="mv-person-avatar mv-person-initial">{person?.firstName?.[0] || '?'}</span>
               )}
-              <span className="mv-person-name">{person?.firstName} <em>{person?.lastName}</em></span>
+              <span className="mv-person-name">{person ? firstNameLabel(person) : ''} <em>{person?.lastName}</em></span>
               {personYears && <span className="mv-person-years">{personYears}</span>}
             </span>
             <span className="pz-tag">{typeLabels[mediaType] || mediaType}</span>

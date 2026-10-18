@@ -6,6 +6,7 @@
 // enfant), limitée aux années où la personne a vécu. Une fiche sans aucun événement a donc déjà une frise.
 
 import { t, dateLocale } from '../i18n/index.js'
+import { firstNameLabel } from './personName.js'
 import { formatPlace } from './place.js'
 
 const EVENT_LABELS = {
@@ -93,15 +94,15 @@ const ageAt = (birthYear, year) => (birthYear && year && year > birthYear ? t('{
 const joinMeta = (...parts) => parts.filter(Boolean).join(' · ')
 
 const parentWord = (p) => {
-  if (p.sex === 'male' || p.sex === 'M') return t('Décès de son père {name}', { name: p.firstName })
-  if (p.sex === 'female' || p.sex === 'F') return t('Décès de sa mère {name}', { name: p.firstName })
-  return t('Décès de {name}, son parent', { name: p.firstName })
+  if (p.sex === 'male' || p.sex === 'M') return t('Décès de son père {name}', { name: firstNameLabel(p) })
+  if (p.sex === 'female' || p.sex === 'F') return t('Décès de sa mère {name}', { name: firstNameLabel(p) })
+  return t('Décès de {name}, son parent', { name: firstNameLabel(p) })
 }
 
 const siblingWord = (p) => {
-  if (p.sex === 'male' || p.sex === 'M') return t('Naissance de son frère {name}', { name: p.firstName })
-  if (p.sex === 'female' || p.sex === 'F') return t('Naissance de sa sœur {name}', { name: p.firstName })
-  return t('Naissance de {name}, sa fratrie', { name: p.firstName })
+  if (p.sex === 'male' || p.sex === 'M') return t('Naissance de son frère {name}', { name: firstNameLabel(p) })
+  if (p.sex === 'female' || p.sex === 'F') return t('Naissance de sa sœur {name}', { name: firstNameLabel(p) })
+  return t('Naissance de {name}, sa fratrie', { name: firstNameLabel(p) })
 }
 
 /**

@@ -250,3 +250,9 @@
 @media (prefers-reduced-motion: reduce) {
   .person-card { animation: pz-fade 200ms ease both; }
 }
+
+/* Prénom inconnu (issue Anaïs, 18/10) : libellé en italique, case à cocher sous les champs de nom */
+.pc-name-unknown { font-style: italic; font-weight: 300; }
+.pc-unknown-first { display: inline-flex; align-items: center; gap: 7px; margin-top: 6px; font: 400 13px var(--pz-sans); color: var(--pz-ink-2); cursor: pointer; }
+.pc-unknown-first input { width: 15px; height: 15px; accent-color: var(--pz-a500); }
+.pc-name-error { margin: 6px 0 0; font: 500 12.5px var(--pz-sans); color: var(--pz-danger); }

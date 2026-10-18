@@ -405,4 +405,6 @@ export default {
   'Date inconnue': 'Date unknown',
   'date inconnue': 'date unknown',
   'Décédé(e), date inconnue': 'Deceased, date unknown',
+  'Prénom inconnu': 'Unknown first name',
+  'Je ne connais pas son prénom': "I don't know their first name",
 }

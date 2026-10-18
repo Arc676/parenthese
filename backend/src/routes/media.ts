@@ -273,6 +273,7 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
       select: {
         id: true,
         firstName: true,
+        lastName: true,
       },
     })
 
@@ -362,7 +363,7 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
             submittedByLabel: payload.data.submittedByLabel?.trim() || contribution.submittedByLabel,
             mode: contribution.mode,
             status: contribution.autoStatus,
-            title: `Souvenir pour ${person.firstName}`.slice(0, 120),
+            title: `Souvenir pour ${person.firstName || person.lastName}`.slice(0, 120),
             reviewedAt: contribution.autoStatus === 'approved' ? now : undefined,
             reviewedBy: contribution.autoStatus === 'approved' ? contribution.submittedByUserId : undefined,
           },

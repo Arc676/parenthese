@@ -84,7 +84,7 @@ const listAuditQuerySchema = z.object({
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/
 
 const createPersonSchema = z.object({
-  firstName: z.string().min(1).max(120),
+  firstName: z.string().trim().max(120),
   lastName: z.string().min(1).max(120),
   birthName: z.string().max(120).optional().nullable(),
   nickname: z.string().max(120).optional().nullable(),
@@ -101,7 +101,7 @@ const createPersonSchema = z.object({
 
 const patchPersonSchema = z
   .object({
-    firstName: z.string().min(1).max(120).optional(),
+    firstName: z.string().trim().max(120).optional(),
     lastName: z.string().min(1).max(120).optional(),
     birthName: z.string().max(120).optional().nullable(),
     nickname: z.string().max(120).optional().nullable(),
@@ -2125,7 +2125,7 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
 
     const person = await app.prisma.person.findFirst({
       where: { id: params.data.personId, treeId: params.data.id, deletedAt: null },
-      select: { id: true, firstName: true },
+      select: { id: true, firstName: true, lastName: true },
     })
     if (!person) return reply.code(404).send({ error: 'person_not_found' })
 
@@ -2164,7 +2164,7 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
           submittedByLabel: payload.data.submittedByLabel?.trim() || contribution.submittedByLabel,
           mode: contribution.mode,
           status: contribution.autoStatus,
-          title: `Moment pour ${person.firstName}`.slice(0, 120),
+          title: `Moment pour ${person.firstName || person.lastName}`.slice(0, 120),
           reviewedAt: isPending ? undefined : new Date(),
           reviewedBy: isPending ? undefined : contribution.submittedByUserId,
         },
