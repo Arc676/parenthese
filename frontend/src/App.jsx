@@ -2759,6 +2759,8 @@ function App() {
           treeNotFound={treeNotFound}
           loading={tree.gateLoading}
           errorMessage={tree.gateError}
+          connected={Boolean(auth.userAuth.token)}
+          connectedName={accountUser?.firstName || ''}
           onSubmit={handleGateUnlock}
           onUseDemo={handleUseDemo}
           onUseAccount={handleUseAccount}

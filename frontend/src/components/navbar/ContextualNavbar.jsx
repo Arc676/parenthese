@@ -307,7 +307,7 @@ function ContextualNavbar({
               <NavButton
                 icon={<User size={20} strokeWidth={2} />}
                 label={authenticated ? t('Mon compte') : t('Se connecter')}
-                onClick={() => onProfileClick?.(authenticated ? 'login' : 'register')}
+                onClick={() => onProfileClick?.('login')}
               />
             </>
           )
