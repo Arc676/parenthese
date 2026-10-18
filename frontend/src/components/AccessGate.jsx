@@ -27,6 +27,7 @@ const AccessGate = ({
   connectedName = '',
   onSubmit,
   onUseAccount,
+  onNotMyAccount,
 }) => {
   const [treeId, setTreeId] = useState(initialTreeId || '')
   const [password, setPassword] = useState('')
@@ -57,7 +58,6 @@ const AccessGate = ({
 
         <form className="pz-card pz-screen-card" onSubmit={handleSubmit}>
           <div className="pz-auth-head">
-            <p className="pz-eyebrow">{t('Arbre partagé')}</p>
             {treeNotFound ? (
               <h1 className="pz-title">{richText(t('Cet arbre est *introuvable*'))}</h1>
             ) : (
@@ -69,7 +69,7 @@ const AccessGate = ({
               {treeNotFound
                 ? t("Le lien est peut-être incomplet, ou l'arbre a été supprimé. Demandez un nouveau lien à la personne qui vous l'a envoyé.")
                 : treeName
-                  ? t('Entrez le mot de passe reçu avec le lien. Pas besoin de compte pour regarder.')
+                  ? t('Tapez le mot de passe reçu avec le lien. Pas besoin de compte pour regarder.')
                   : t('Entrez le code et le mot de passe reçus avec votre lien de partage.')}
             </p>
           </div>
@@ -120,20 +120,6 @@ const AccessGate = ({
               )}
 
               <div className="pz-field">
-                <label htmlFor="visitorFirstName">{t('Votre prénom (facultatif)')}</label>
-                <input
-                  id="visitorFirstName"
-                  type="text"
-                  value={firstName}
-                  onChange={(event) => setFirstName(event.target.value)}
-                  disabled={loading}
-                  autoComplete="given-name"
-                  maxLength={60}
-                />
-                <p className="pz-hint">{t("Il sert à savoir qui est venu voir l'arbre.")}</p>
-              </div>
-
-              <div className="pz-field">
                 <label htmlFor="sharePassword">{t('Mot de passe reçu avec le lien')}</label>
                 <input
                   id="sharePassword"
@@ -145,6 +131,23 @@ const AccessGate = ({
                   required
                 />
               </div>
+
+              {/* Compte connecté : son prénom sert déjà, on ne le redemande pas */}
+              {!connected && (
+                <div className="pz-field">
+                  <label htmlFor="visitorFirstName">{t('Votre prénom (facultatif)')}</label>
+                  <input
+                    id="visitorFirstName"
+                    type="text"
+                    value={firstName}
+                    onChange={(event) => setFirstName(event.target.value)}
+                    disabled={loading}
+                    autoComplete="given-name"
+                    maxLength={60}
+                  />
+                  <p className="pz-hint">{t("Il sert à savoir qui est venu voir l'arbre.")}</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -163,7 +166,15 @@ const AccessGate = ({
           )}
         </form>
 
-        {onUseAccount && !treeNotFound && (
+        {connected && onNotMyAccount && !treeNotFound && (
+          <div className="pz-account-foot">
+            <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={onNotMyAccount} disabled={loading}>
+              {t("Ce n'est pas mon compte")}
+            </button>
+          </div>
+        )}
+
+        {!connected && onUseAccount && !treeNotFound && (
           <div className="pz-account-foot">
             <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => onUseAccount('login')} disabled={loading}>
               {t("J'ai déjà un compte")}

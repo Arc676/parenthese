@@ -217,4 +217,10 @@ export default {
   "Vous êtes sur le compte de {name}": "You are signed in as {name}",
   "Vous êtes sur votre compte.": "You are signed in to your account.",
   "Tapez une fois le mot de passe reçu avec le lien. Ensuite, l'arbre s'ouvrira directement.": "Enter the password you received with the link once. After that, the tree opens directly.",
+  "Tapez le mot de passe reçu avec le lien. Pas besoin de compte pour regarder.": "Type the password you received with the link. No account needed to look around.",
+  "Que voulez-vous faire ?": "What would you like to do?",
+  "J'ai reçu un lien": "I received a link",
+  "Pas besoin de compte pour regarder l'arbre.": "No account needed to look at the tree.",
+  "Pour retrouver vos arbres et ajouter des souvenirs.": "To find your trees again and add memories.",
+  "Ce n'est pas mon compte": "This is not my account",
 }

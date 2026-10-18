@@ -9,6 +9,7 @@ import MediaViewer from './components/MediaViewer'
 import MediaManagerPanel from './components/MediaManagerPanel'
 import AdminPanel from './components/AdminPanel'
 import AccessGate from './components/AccessGate'
+import EntryChoice from './components/EntryChoice'
 import AccountDashboard from './components/AccountDashboard'
 import AccountPanel from './components/AccountPanel'
 import TreeCreationWizard from './components/TreeCreationWizard'
@@ -2002,12 +2003,12 @@ function App() {
       const resolvedTreeOwnerEmail = ''
 
       // Root app:
-      // - not connected => demo by default
+      // - not connected => accueil à deux choix (variante B, 18/10)
       // - connected => continue bootstrap to open the user's tree
       if (!slug && !TREE_ID_FROM_ENV && !query.has('account')) {
         const userToken = auth.restoreUserToken()
         if (!userToken) {
-          tree.handleUseDemo()
+          tree.setBootState('welcome')
           return
         }
       }
@@ -2517,6 +2518,21 @@ function App() {
     resetSignedOutState()
   }
 
+  // Accueil « J'ai reçu un lien de famille » : la porte demande le code de l'arbre et son mot de passe
+  const handleFamilyLinkChoice = () => {
+    tree.setTreeContext(buildEmptyTreeContext())
+    tree.setGateError('')
+    tree.setBootState('need-access')
+  }
+
+  // « Ce n'est pas mon compte » : déconnexion, puis la porte du même arbre
+  const handleNotMyAccount = async () => {
+    setTreeNotFound(false)
+    await auth.handleLogout()
+    tree.setGateError('')
+    tree.setBootState('need-access')
+  }
+
   // Suppression du compte : même remise à zéro que la déconnexion une fois la session effacée.
   const handleDeleteAccount = async (password) => {
     const errorMessage = await auth.handleDeleteAccount(password)
@@ -2739,6 +2755,18 @@ function App() {
     )
   }
 
+  if (tree.bootState === 'welcome') {
+    return (
+      <div className="app">
+        <EntryChoice
+          onFamilyLink={handleFamilyLinkChoice}
+          onLogin={() => handleUseAccount('login')}
+          onRegister={() => handleUseAccount('register')}
+        />
+      </div>
+    )
+  }
+
   if (tree.bootState === 'need-access') {
     return (
       <div className="app">
@@ -2753,6 +2781,7 @@ function App() {
           errorMessage={tree.gateError}
           connected={Boolean(auth.userAuth.token)}
           connectedName={accountUser?.firstName || ''}
+          onNotMyAccount={handleNotMyAccount}
           onSubmit={handleGateUnlock}
           onUseDemo={handleUseDemo}
           onUseAccount={handleUseAccount}
