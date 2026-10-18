@@ -186,7 +186,7 @@ jobs:
       - name: Sauvegarde puis restauration
         run: |
           set -euo pipefail
-          bash tools/docker-restore-check.sh
+          bash tools/docker-restore-check.sh http://localhost:8080
           bash tools/docker-smoke.sh http://localhost:8080
 
       # Un second front qui joint l'API par le nom de son conteneur (API_UPSTREAM), comme sur Umbrel.
