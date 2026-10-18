@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -472,6 +473,8 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
           data: {
             avatarPath: relativePath,
             avatarMimeType: prepared.mimeType,
+            // Nouveau portrait, nouveau cadrage à faire
+            avatarCrop: Prisma.DbNull,
             immichPersonId,
             updatedBy: request.actor.userId,
           },
@@ -551,10 +554,12 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
       updatedBy: string
       avatarPath?: null
       avatarMimeType?: null
+      avatarCrop?: typeof Prisma.DbNull
     } = { immichPersonId: null, updatedBy: request.actor.userId }
     if (avatarFromImmich) {
       updateData.avatarPath = null
       updateData.avatarMimeType = null
+      updateData.avatarCrop = Prisma.DbNull
     }
 
     // Base d'abord, fichier ensuite : le portrait disparaît seulement une fois la base à jour.
