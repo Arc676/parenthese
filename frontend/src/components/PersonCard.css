@@ -68,8 +68,11 @@
 .pc-id { display: grid; gap: 6px; min-width: 0; padding-top: 4px; }
 .pc-name { margin: 0; font: 400 28px/1.08 var(--pz-serif); letter-spacing: -.01em; color: var(--pz-ink); text-wrap: balance; }
 .pc-name em { font-style: italic; font-weight: 300; }
-.pc-nick { margin: 0; font: italic 300 17px/1.3 var(--pz-serif); color: var(--pz-muted); }
-.pc-life { margin: 0; font: 400 13.5px/1.4 var(--pz-sans); color: var(--pz-muted); }
+.pc-meta { margin: 0; font: 400 13.5px/1.5 var(--pz-sans); color: var(--pz-muted); text-wrap: pretty; }
+.pc-meta-item { display: inline; }
+.pc-meta-item--nowrap { white-space: nowrap; }
+.pc-nick { font: italic 300 15.5px/1 var(--pz-serif); color: var(--pz-ink-2); }
+.pc-meta-sep { margin: 0 .45em; color: var(--pz-faint); }
 .pc-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .pc-chips:empty { display: none; }
 /* Place dans la fratrie (mode édition) : ‹ 2 sur 3 › dans une pastille */

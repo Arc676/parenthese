@@ -778,9 +778,19 @@ function Header({ t, onCta, loginHref, elevated }) {
           <a href="#comment">{t.nav.how}</a>
           <a href="#demo">{t.nav.demo}</a>
           {t.nav.privacy && <a href={t.privacyHref}>{t.nav.privacy}</a>}
-          <a href={loginHref}>{t.nav.login}</a>
         </nav>
-        <button type="button" onClick={onCta} className="btn p sm">{t.cta}</button>
+        <div className="nav-cta">
+          {/* Icône « connexion » de Lucide (ISC), tracée à la main : la landing n'embarque pas la bibliothèque */}
+          <a href={loginHref} className="btn s sm nav-login">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+              <polyline points="10 17 15 12 10 7" />
+              <line x1="15" x2="3" y1="12" y2="12" />
+            </svg>
+            {t.nav.login}
+          </a>
+          <button type="button" onClick={onCta} className="btn p sm">{t.cta}</button>
+        </div>
       </div>
     </header>
   )
