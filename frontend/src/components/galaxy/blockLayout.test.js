@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeBlockLayout } from './blockLayout'
+import { computeBlockLayout, filCroiseAutreFamille } from './blockLayout'
 import { COMPACT_W, PERSON_W } from './constants'
 
 const person = (id) => ({ id, firstName: id, lastName: '' })
@@ -58,5 +58,52 @@ describe('computeBlockLayout, ordre de la fratrie', () => {
 
   it("garde l'ordre d'arrivée quand displayOrder est égal partout", () => {
     expect(order(graphWith([1, 1, 1]))).toEqual(['a', 'b', 'c'])
+  })
+})
+
+describe('computeBlockLayout, renvoi seulement si le fil croise une autre famille', () => {
+  // Structure type : l'enfant (P) a sa fratrie à côté, son conjoint (Z) est dans la lignée de l'autre parent
+  // Jacqueline + Roger ont 6 enfants, dont Marie, en couple avec Philippe ; Marcel + Yvette ont 5 enfants, dont Philippe
+  const graph = {
+    persons: ['jac', 'rog', 'marie', 'philippe', 'anais', 'greg', 'marcel', 'yvette', 'severine', 'isabelle', 'laurent', 'stephane', 'k1', 'k2', 'k3', 'k4', 'k5'].map(person),
+    unions: [union('uJR', 'jac', 'rog'), union('uMP', 'marie', 'philippe'), union('uMY', 'marcel', 'yvette')],
+    filiations: [
+      ...['k1', 'k2', 'k3', 'k4', 'k5'].map((k, i) => fil(`f${k}`, k, 'uJR', i + 1)), fil('fmarie', 'marie', 'uJR', 6),
+      fil('fa', 'anais', 'uMP'), fil('fg', 'greg', 'uMP'),
+      fil('fs', 'severine', 'uMY', 1), fil('fi', 'isabelle', 'uMY', 2), fil('fl', 'laurent', 'uMY', 3),
+      fil('fst', 'stephane', 'uMY', 4), fil('fp', 'philippe', 'uMY', 5),
+    ],
+  }
+
+  it('garde le fil vers Philippe quand la fratrie de son autre famille est à côté de lui', () => {
+    const { edges } = computeBlockLayout(graph)
+    expect(edges.find(e => e.sources[0] === 'u-uMY' && e.targets[0] === 'p-philippe')._renvoi).toBeUndefined()
+  })
+})
+
+describe('filCroiseAutreFamille', () => {
+  // Ligne d'une génération : union u (aplomb x=0 à 120), enfant c en x=600
+  const at = (id, x, type = 'person', gen = 1) => ({ id, x, width: 120, _type: type, _generation: gen })
+  const base = () => [at('u', 0, 'union', 0), at('c', 600), at('sib', 300), at('spouse', 700), at('other', 400)]
+  const childrenOfUnion = new Map([['u', ['c', 'sib']]])
+  const spouseKeysOf = new Map([['c', new Set(['spouse'])]])
+
+  it('croise quand une personne d\'une autre famille est entre l\'union et l\'enfant', () => {
+    expect(filCroiseAutreFamille(base(), childrenOfUnion, spouseKeysOf, 'u', 'c')).toBe(true)
+  })
+
+  it('ne croise pas quand seuls les frères et sœurs sont entre l\'union et l\'enfant', () => {
+    const nodes = base().filter(n => n.id !== 'other')
+    expect(filCroiseAutreFamille(nodes, childrenOfUnion, spouseKeysOf, 'u', 'c')).toBe(false)
+  })
+
+  it('ne croise pas pour le conjoint de l\'enfant placé du côté de l\'enfant', () => {
+    const nodes = base().filter(n => n.id !== 'other').map(n => n.id === 'spouse' ? { ...n, x: 300 } : n)
+    expect(filCroiseAutreFamille(nodes, childrenOfUnion, spouseKeysOf, 'u', 'c')).toBe(false)
+  })
+
+  it('ignore une personne d\'une autre génération sur la même abscisse', () => {
+    const nodes = base().filter(n => n.id !== 'other').concat(at('x', 400, 'person', 2))
+    expect(filCroiseAutreFamille(nodes, childrenOfUnion, spouseKeysOf, 'u', 'c')).toBe(false)
   })
 })

@@ -16,8 +16,6 @@ export const COMPACT_SCALE = 0.6
 export const COMPACT_R = PERSON_R * COMPACT_SCALE
 export const COMPACT_W = 40
 export const COMPACT_JOIN_GAP = -18
-// Filiation qui traverse l'arbre (enfant placé sous l'autre lignée) : renvoi cliquable au lieu du trait
-export const RENVOI_MIN_DX = 360
 export const MAX_ORBIT_MEDIAS = 3
 export const ORBIT_RADIUS = 55
 export const ORBIT_MEDIA_SIZE = 22
