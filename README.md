@@ -4,7 +4,7 @@
 
 A family tree you explore like a map, with the photos, videos and voices of each person. Share it with one link and a password: relatives look around without an account and add what they know.
 
-Website: [parenthese.io/en](https://parenthese.io/en/) · Demo, no account needed: [app.parenthese.io](https://app.parenthese.io/?lang=en) · [Version française](README.fr.md)
+Website: [parenthese.io/en](https://parenthese.io/en/) · Demo, no account needed: [app.parenthese.io](https://app.parenthese.io/?demo&lang=en) · [Version française](README.fr.md)
 
 ![The demo tree, with Jean Dupont's profile open and his photos](docs/demo-tree.png)
 
