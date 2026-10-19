@@ -1,9 +1,10 @@
 import { useRef, useCallback } from 'react'
 import { getPersonMedias } from '../../data/mockData'
 import { MAX_ORBIT_MEDIAS, ORBIT_MEDIA_SIZE } from './constants'
-import { nodeRadius, renvoiHitAreas } from './renderers'
+import { nodeRadius, renvoiHitAreas, photoPlaceholderHitAreas } from './renderers'
 
 const hitRenvoi = (x, y) => renvoiHitAreas.find(a => x >= a.x0 && x <= a.x1 && y >= a.y0 && y <= a.y1)
+const hitPhotoPlaceholder = (x, y) => photoPlaceholderHitAreas.find(a => Math.hypot(x - a.cx, y - a.cy) < a.r)
 import { getEntranceProgress } from './utils'
 
 const CURSOR_GRAB = 'default'
@@ -21,7 +22,7 @@ export function useGalaxyInteractions({
   canvasRef, transformRef, targetTransformRef,
   layoutDataRef, nodeRandomDataRef, entranceRef,
   hoveredNodeIdRef, hoveredMediaKeyRef, mouseWorldPosRef,
-  getAnimatedPos, onPersonSelect, onMediaSelect,
+  getAnimatedPos, onPersonSelect, onMediaSelect, onPhotoPlaceholderClick = null,
   annotationHandlers,
   minScale = 0.2,
   maxScale = 4,
@@ -138,6 +139,7 @@ export function useGalaxyInteractions({
         }
       }
       if (!isOverClickable && hitRenvoi(mouseWorldPosRef.current.x, mouseWorldPosRef.current.y)) isOverClickable = true
+      if (!isOverClickable && hitPhotoPlaceholder(mouseWorldPosRef.current.x, mouseWorldPosRef.current.y)) isOverClickable = true
       hoveredNodeIdRef.current = newHoveredNode
       hoveredMediaKeyRef.current = newHoveredMedia
 
@@ -262,6 +264,13 @@ export function useGalaxyInteractions({
       }
     }
 
+    // « + photo » : le clic lance directement la photo (la fiche s'ouvre aussi, côté App)
+    const photoZone = hitPhotoPlaceholder(clickX, clickY)
+    if (photoZone && onPhotoPlaceholderClick) {
+      onPhotoPlaceholderClick(photoZone.personId)
+      return
+    }
+
     for (const node of layoutData.children) {
       if (node._type !== 'person') continue
       if (ent && !ent.finished) {
@@ -286,7 +295,7 @@ export function useGalaxyInteractions({
         y: rect2.height / 2 - renvoi.targetY * scale,
       }
     }
-  }, [canvasRef, transformRef, targetTransformRef, layoutDataRef, nodeRandomDataRef, entranceRef, getAnimatedPos, onPersonSelect, onMediaSelect, annotationHandlers])
+  }, [canvasRef, transformRef, targetTransformRef, layoutDataRef, nodeRandomDataRef, entranceRef, getAnimatedPos, onPersonSelect, onMediaSelect, onPhotoPlaceholderClick, annotationHandlers])
 
   return {
     isDragging, isZooming, zoomTimeoutRef, hasDragged,
