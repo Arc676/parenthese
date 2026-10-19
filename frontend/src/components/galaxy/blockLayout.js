@@ -646,10 +646,25 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
   }
   const mainIds = nodes.filter(n => !familyOf.has(n.id)).map(n => n.id)
   nodes.forEach(n => { n._family = familyOf.get(n.id) || 'main' })
-  result.families = [
+  const partnerOf = (id) => { const ch = chainOf.get(id) || []; return ch.find(x => x !== id && byId.get(x)?._type === 'person') }
+  const families = [
     { id: 'main', label: referenceNode?._data?.lastName || '', count: mainPeople.length, portraits: portraitsOf(mainIds), bbox: bboxOf(mainIds), links: [] },
-    ...clusters.map(c => ({ id: c.cardId, label: c.label, count: c.people.length, portraits: portraitsOf([...c.block.members]), bbox: bboxOf([...c.block.members]), links: [{ to: 'main', label: byId.get(c.anchorId)?._data?.firstName || '' }] })),
+    ...clusters.map(c => ({ id: c.cardId, label: c.label, count: c.people.length, portraits: portraitsOf([...c.block.members]), bbox: bboxOf([...c.block.members]), links: [{ to: 'main', label: [byId.get(c.anchorId)?._data?.firstName, byId.get(partnerOf(c.anchorId))?._data?.firstName].filter(Boolean).join(' et ') }] })),
   ].filter(f => f.bbox)
+  // Place réelle (centre de la famille sur la toile) et place sur la carte : les familles par alliance se rangent
+  // autour de la famille principale, en coordonnées de l'arbre, à une distance qui tient dans un écran au dézoom
+  const centerOf = (f) => ({ x: (f.bbox.x0 + f.bbox.x1) / 2, y: (f.bbox.y0 + f.bbox.y1) / 2 })
+  const mainFam = families[0]
+  const others = families.slice(1)
+  const RING = 2600
+  families.forEach((f, i) => {
+    f.spread = centerOf(f)
+    if (i === 0) { f.gathered = f.spread; return }
+    const k = i - 1, n = others.length
+    const angle = -Math.PI / 3 + (k / n) * Math.PI * 2
+    f.gathered = { x: mainFam.spread.x + Math.cos(angle) * RING, y: mainFam.spread.y + Math.sin(angle) * RING * 0.62 }
+  })
+  result.families = families
 
   return result
 }

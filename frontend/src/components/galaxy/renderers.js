@@ -269,7 +269,7 @@ function drawFamilyCard(ctx, node, pos, posMap, progress, view) {
     ctx.globalAlpha = alpha
     ctx.strokeStyle = FIL.color
     ctx.lineWidth = FIL.width
-    ctx.setLineDash([3, 4])
+    ctx.setLineDash([])
     ctx.lineCap = 'round'
     ctx.beginPath()
     if (node._data.stem === 'down') { ctx.moveTo(cx, cy + h / 2); ctx.lineTo(to.cx, to.cy - PERSON_R - 2) }
@@ -319,47 +319,43 @@ function drawFamilyCard(ctx, node, pos, posMap, progress, view) {
 }
 
 // ============================================================
-// Carte des familles (maquette J, 19/10) : au dézoom, l'arbre s'efface et chaque famille devient une tuile
-// de taille constante à l'écran (nom, mosaïque de portraits, nombre), les mariages entre familles des traits.
-// Un clic sur une tuile s'approche de la famille (même mécanique que les pastilles).
+// Carte des familles (maquette J, 19/10). Passé un seuil de dézoom, chaque famille par alliance se replie en
+// son bloc, qui glisse de sa place réelle vers sa place sur la carte (calculée par le placement, en coordonnées
+// de l'arbre). Plus bas encore, la famille principale se replie aussi. Les mariages entre familles sont des
+// traits de bloc à bloc, avec les deux prénoms. Pas d'animation, pas de clic : le zoom est la navigation.
 // ============================================================
-export function drawFamilyMap(ctx, families, view, alpha) {
-  if (!families?.length || alpha <= 0) return
+export function familyTileSize(scale) { return { w: 290 / scale, h: 112 / scale } }
+export function drawFamilyMap(ctx, families, view, offsets, progress) {
+  if (!families?.length || progress <= 0) return
   const s = view?.scale || 1
   const px = (v) => v / s
-  const real = (f) => ({ x: (f.bbox.x0 + f.bbox.x1) / 2, y: (f.bbox.y0 + f.bbox.y1) / 2 })
-  // Les tuiles se rangent autour de la famille principale, à distance d'écran constante, quel que soit
-  // l'éloignement réel des familles sur la toile ; un clic mène à la vraie place de la famille
-  const main = families.find((f) => f.id === 'main') || families[0]
-  const origin = real(main)
-  const others = families.filter((f) => f !== main)
-  const tilePos = new Map([[main.id, origin]])
-  others.forEach((f, i) => {
-    const angle = -Math.PI / 2 + (i / Math.max(1, others.length)) * Math.PI * 2 + Math.PI / others.length
-    tilePos.set(f.id, { x: origin.x + Math.cos(angle) * px(380), y: origin.y + Math.sin(angle) * px(230) })
-  })
-  const center = (f) => tilePos.get(f.id)
-  if (alpha >= 1) renvoiHitAreas.length = 0
+  const { w, h } = familyTileSize(s)
+  const shown = families.filter((f) => f.id !== 'main' || progress >= 1)
+  const at = (f) => { const o = offsets.get(f.id) || { x: 0, y: 0 }; return { x: f.spread.x + o.x, y: f.spread.y + o.y } }
   ctx.save()
-  ctx.globalAlpha = alpha
   ctx.lineCap = 'round'
-  for (const f of families) for (const l of (f.links || [])) {
+  // Traits de bloc à bloc : du bord du bloc au bord de l'autre, ou jusqu'au centre de la famille encore dépliée
+  for (const f of shown) for (const l of (f.links || [])) {
     const g = families.find((x) => x.id === l.to)
     if (!g) continue
-    const a = center(f), b = center(g)
+    const a = at(f), b = shown.includes(g) ? at(g) : g.spread
+    const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1
+    const ux = dx / len, uy = dy / len
+    const clip = (c, toward) => { const kx = Math.abs(toward.x) > 1e-6 ? (w / 2) / Math.abs(toward.x) : Infinity; const ky = Math.abs(toward.y) > 1e-6 ? (h / 2) / Math.abs(toward.y) : Infinity; const k = Math.min(kx, ky); return { x: c.x + toward.x * k, y: c.y + toward.y * k } }
+    const p1 = clip(a, { x: ux, y: uy })
+    const p2 = shown.includes(g) ? clip(b, { x: -ux, y: -uy }) : b
     ctx.strokeStyle = FIL.color
     ctx.lineWidth = px(1.6)
-    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke()
+    ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke()
     if (l.label) {
       ctx.fillStyle = COLORS.textLight
       ctx.font = `400 ${px(11)}px "DM Sans", system-ui, sans-serif`
       ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'
-      ctx.fillText(l.label, (a.x + b.x) / 2, (a.y + b.y) / 2 - px(6))
+      ctx.fillText(l.label, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - px(6))
     }
   }
-  for (const f of families) {
-    const c = center(f)
-    const w = px(290), h = px(112)
+  for (const f of shown) {
+    const c = at(f)
     ctx.fillStyle = '#FFFFFF'
     ctx.strokeStyle = '#E3DED6'
     ctx.lineWidth = px(1)
@@ -380,8 +376,6 @@ export function drawFamilyMap(ctx, families, view, alpha) {
     ctx.fillStyle = '#93402A'
     ctx.font = `400 ${px(12)}px "DM Sans", system-ui, sans-serif`
     ctx.fillText(t('{n} personnes', { n: f.count }), c.x - w / 2 + px(118), c.y + px(14))
-    const target = real(f)
-    if (alpha > 0.5) renvoiHitAreas.push({ x0: c.x - w / 2, y0: c.y - h / 2, x1: c.x + w / 2, y1: c.y + h / 2, targetX: target.x, targetY: target.y })
   }
   ctx.restore()
 }

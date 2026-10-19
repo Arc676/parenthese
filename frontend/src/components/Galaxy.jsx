@@ -29,6 +29,7 @@ const MAX_SCALE = 3.2
 // Carte des familles : l'arbre s'efface entre ces deux échelles, les tuiles de familles apparaissent
 const MAP_HI = 0.3
 const MAP_LO = 0.2
+const nodeById = (layoutData, id) => { if (!layoutData._byId) layoutData._byId = new Map(layoutData.children.map((n) => [n.id, n])); return layoutData._byId.get(id) }
 // Ouverture sur la personne de départ quand l'arbre entier serait illisible
 const FOCUS_MIN_READABLE_SCALE = 0.5
 const FOCUS_SCALE = 0.95
@@ -793,6 +794,19 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       // Rien n'a changé : on ne redessine pas
       if (!dirty) { rafId = requestAnimationFrame(animate); return }
 
+      // Carte des familles : passé MAP_HI, les familles par alliance se replient en blocs qui glissent vers leur
+      // place sur la carte (progress de 0 à 1 entre MAP_HI et MAP_LO) ; passé MAP_LO, la famille principale aussi
+      const families = layoutData.families || []
+      const mapProgress = families.length > 1 ? Math.min(1, Math.max(0, (MAP_HI - scale) / (MAP_HI - MAP_LO))) : 0
+      const familyOffsets = new Map()
+      for (const f of families) familyOffsets.set(f.id, f.id === 'main' ? { x: 0, y: 0 } : { x: (f.gathered.x - f.spread.x) * mapProgress, y: (f.gathered.y - f.spread.y) * mapProgress })
+      const visibleFamily = (n) => mapProgress <= 0 || (mapProgress < 1 && (n?._family || 'main') === 'main')
+      const drawn = mapProgress <= 0 ? layoutData : {
+        ...layoutData,
+        children: layoutData.children.filter(visibleFamily),
+        edges: layoutData.edges.filter((e) => visibleFamily(nodeById(layoutData, e.sources[0])) && visibleFamily(nodeById(layoutData, e.targets[0]))),
+      }
+
       // Positions animées, calculées seulement quand on redessine
       const posMap = new Map()
       layoutData.children.forEach(node => {
@@ -814,12 +828,10 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       const cssW = canvas.width / dprRef.current
       const cssH = canvas.height / dprRef.current
       const view = { x0: -x / scale, y0: -y / scale, x1: (cssW - x) / scale, y1: (cssH - y) / scale, scale }
-      // Carte des familles : au dézoom, l'arbre laisse la place aux tuiles de familles
-      const families = layoutData.families || []
-      const mapAlpha = families.length > 1 ? Math.min(1, Math.max(0, (MAP_HI - scale) / (MAP_HI - MAP_LO))) : 0
-      if (mapAlpha < 1) {
-      drawCoupleLinks(ctx, coupleBarMeta, posMap, nodeMap, nodeRandomDataRef.current, entrance, entranceActive, elapsed, view)
-      drawFiliations(ctx, layoutData.edges, posMap, nodeMap, nodeRandomDataRef.current, entrance, entranceActive, elapsed, view)
+      if (mapProgress < 1) {
+      const drawnCouples = mapProgress <= 0 ? coupleBarMeta : coupleBarMeta.filter((c) => visibleFamily(nodeMap.get(c.p1Key)))
+      drawCoupleLinks(ctx, drawnCouples, posMap, nodeMap, nodeRandomDataRef.current, entrance, entranceActive, elapsed, view)
+      drawFiliations(ctx, drawn.edges, posMap, nodeMap, nodeRandomDataRef.current, entrance, entranceActive, elapsed, view)
       drawPathHighlight(ctx, {
         pathEdgesRef: pathEdgesRef.current,
         pathNodesRef: pathNodesRef.current,
@@ -832,7 +844,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
         nodeRandomData: nodeRandomDataRef.current,
         layoutData,
       })
-      drawNodes(ctx, layoutData, posMap, entrance, entranceActive, elapsed, {
+      drawNodes(ctx, drawn, posMap, entrance, entranceActive, elapsed, {
         nodeRandomData: nodeRandomDataRef.current,
         imageCache: imageCache.current,
         hoverScales: hoverScales.current,
@@ -846,7 +858,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       })
       drawRenvoiPills(ctx)
       }
-      if (mapAlpha > 0) drawFamilyMap(ctx, families, view, mapAlpha)
+      if (mapProgress > 0) drawFamilyMap(ctx, families, view, familyOffsets, mapProgress)
       // Annotations dessinées APRES les noeuds pour que stickers/texte soient au-dessus
       // Annotations : ancrer aux personnes proches pour qu'elles suivent le layout
       const personPosMap = new Map()
