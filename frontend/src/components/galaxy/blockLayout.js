@@ -196,11 +196,19 @@ function layoutOnce(graphData, referenceId, forcedSide) {
 
   // Un couple « enfant + pièce rapportée » se tourne vers l'extérieur de la fratrie : la pièce rapportée
   // à gauche dans la moitié gauche, à droite dans la moitié droite, pour que sa famille se pose à côté
+  // Remariage (chaîne plus longue) : si l'enfant de la lignée est à un bout, il reste du côté de sa fratrie
+  // et toute la suite de conjoints (ex-époux compris) part de l'autre côté, vers la belle-famille.
   function orient(chain, kid, side) {
-    if (chain.length !== 3) return
-    const spouse = chain[0] === kid ? chain[2] : chain[0]
-    if (chain[1] !== chain.find(id => byId.get(id)._type === 'union') || !parentUnionOf.has(spouse)) return
-    if ((side < 0 && chain[0] !== spouse) || (side > 0 && chain[2] !== spouse)) chain.reverse()
+    if (!kid) return
+    if (chain.length === 3) {
+      const spouse = chain[0] === kid ? chain[2] : chain[0]
+      if (chain[1] !== chain.find(id => byId.get(id)._type === 'union') || !parentUnionOf.has(spouse)) return
+      if ((side < 0 && chain[0] !== spouse) || (side > 0 && chain[2] !== spouse)) chain.reverse()
+      return
+    }
+    const i = chain.indexOf(kid)
+    if (i !== 0 && i !== chain.length - 1) return
+    if ((side < 0 && i === 0) || (side > 0 && i === chain.length - 1)) chain.reverse()
   }
 
   const pos = new Map()
@@ -334,6 +342,9 @@ function layoutOnce(graphData, referenceId, forcedSide) {
     // déjà dessinée (reliée deux fois) ne l'est pas une seconde fois : la filiation reste externe, renvoi si
     // son fil croise une autre famille.
     const built = []
+    // L'enfant de la lignée dans cette chaîne (celui dont les parents sont ownerUnion), s'il est seul
+    const kidsHere = chain.filter(id => byId.get(id)._type === 'person' && ownerUnion && parentUnionOf.get(id) === ownerUnion)
+    const kidOfChain = kidsHere.length === 1 ? kidsHere[0] : null
     for (const id of [...chain]) {
       if (byId.get(id)._type !== 'person') continue
       const pu = parentUnionOf.get(id)
@@ -375,11 +386,11 @@ function layoutOnce(graphData, referenceId, forcedSide) {
         const card = { isCard: true, rows: new Map([[gen - 1, [[0, FAMILY_CARD_W]]]]), members: new Set([cardId]), external: [], gen: gen - 1, rel: (x) => (x === cardId ? 0 : null), chain: [0, FAMILY_CARD_W], width: FAMILY_CARD_W, place(x0) { pos.set(cardId, x0) } }
         clusters.push({ block, anchorId: id, pu, cardId, echoId, mainCardId, label, people, side })
         built.push({ block: card, anchorId: id, side })
-        if (chain.length === 3) orient(chain, chain[0] === id ? chain[2] : chain[0], side)
+        orient(chain, kidOfChain ?? (chain.length === 3 ? (chain[0] === id ? chain[2] : chain[0]) : null), side)
         continue
       }
       built.push({ block, anchorId: id, side })
-      if (chain.length === 3) orient(chain, chain[0] === id ? chain[2] : chain[0], side)
+      orient(chain, kidOfChain ?? (chain.length === 3 ? (chain[0] === id ? chain[2] : chain[0]) : null), side)
     }
 
     // Chaîne centrée sur la rangée de ses enfants directs (fantômes compris), décalée au plus près si une
@@ -437,12 +448,22 @@ function layoutOnce(graphData, referenceId, forcedSide) {
       const anchorX = rx + offsets.get(p.anchorId)
       return at == null ? anchorX - p.block.width / 2 : anchorX - at
     }
+    // Sur un remariage où l'enfant de la lignée est à un bout, seule sa moitié est réservée : au-dessus des
+    // ex-conjoints, la carte ou la famille du conjoint peut se poser.
+    const parentsSpan = (rx) => {
+      if (chain.length > 3 && kidOfChain) {
+        const k = rx + offsets.get(kidOfChain)
+        return chain.indexOf(kidOfChain) === 0 ? [rx - FAMILY_GAP, k + byId.get(kidOfChain).width + FAMILY_GAP] : [k - FAMILY_GAP, rx + rowW + FAMILY_GAP]
+      }
+      return [rx - FAMILY_GAP, rx + rowW + FAMILY_GAP]
+    }
+    const reserveParents = (r, rx) => { if (ownerUnion) mergeRows(r, new Map([[gen - 1, [parentsSpan(rx)]]]), 0) }
     // 1) Le côté de chaque famille : celui prévu (extérieur de la branche), sauf si l'autre côté la rapproche
     //    nettement. Le couple se retourne alors et l'enfant ira au bout de sa fratrie de ce côté-là.
     {
       const trial = new Map([...rowsBase].map(([g, l]) => [g, l.map(i => [...i])]))
       mergeRows(trial, new Map([[gen, [[rowX, rowX + rowW]]]]), 0)
-      if (ownerUnion) mergeRows(trial, new Map([[gen - 1, [[rowX - FAMILY_GAP, rowX + rowW + FAMILY_GAP]]]]), 0)
+      reserveParents(trial, rowX)
       for (const p of built) {
         if (chain.length !== 3) break
         if (p.block.isCard) continue
@@ -464,7 +485,6 @@ function layoutOnce(graphData, referenceId, forcedSide) {
     //    mais la belle-famille est tout près et son fil reste court.
     // Au-dessus de la chaîne, la place de ses propres parents est réservée : les parents du conjoint se posent
     // à côté, pas dessus (sinon le couple des parents, posé après, ne trouve plus sa place au-dessus des enfants)
-    const reserveParents = (r, rx) => { if (ownerUnion) mergeRows(r, new Map([[gen - 1, [[rx - FAMILY_GAP, rx + rowW + FAMILY_GAP]]]]), 0) }
     const placeAll = (rx) => {
       const r = new Map([...rowsBase].map(([g, l]) => [g, l.map(i => [...i])]))
       mergeRows(r, new Map([[gen, [[rx, rx + rowW]]]]), 0)
