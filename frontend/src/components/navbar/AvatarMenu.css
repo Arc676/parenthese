@@ -45,3 +45,5 @@
 .navm-check { color: var(--pz-a700); }
 .navm-current { cursor: default; }
 .navm-current:hover { background: transparent !important; }
+/* Arbre en cours : désactivé pour le clavier et le clic, mais texte à sa couleur normale (pas la mise en retrait de .navm-item:disabled) */
+.navm-item.navm-current:disabled { opacity: 1; cursor: default; color: var(--pz-ink); }
