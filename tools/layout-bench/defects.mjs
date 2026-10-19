@@ -20,6 +20,8 @@ export function computeDefects(result, coupleBarMeta, graph, referenceId = null)
     if (!kidsOf.has(e.sources[0])) kidsOf.set(e.sources[0], [])
     kidsOf.get(e.sources[0]).push(e.targets[0])
   }
+  const siblingsOf = new Map()
+  for (const [, kids] of kidsOf) for (const k of kids) siblingsOf.set(k, kids)
   const spousesOf = new Map()
   for (const c of coupleBarMeta) {
     if (!spousesOf.has(c.p1Key)) spousesOf.set(c.p1Key, new Set())
@@ -34,7 +36,7 @@ export function computeDefects(result, coupleBarMeta, graph, referenceId = null)
     const u = byId.get(uid)
     const ks = kids.map((k) => byId.get(k)).filter(Boolean)
     if (!u || !ks.length) continue
-    const sx = cx(u), sy = u.y + u.height / 2, by = sy + BUS_DY + busOffset(uid)
+    const sx = cx(u), sy = u.y + u.height / 2, by = sy + BUS_DY + (u._railLift != null ? -8 * u._railLift : busOffset(uid))
     let l = sx, r = sx
     for (const k of ks) {
       const ex = cx(k)
@@ -63,8 +65,12 @@ export function computeDefects(result, coupleBarMeta, graph, referenceId = null)
   for (const hh of households) {
     const h = H.find((x) => x.u === hh.union)
     if (!h) continue
+    // Un seul arbre : la fratrie du conjoint d'un enfant peut se trouver sous la ligne (famille collée), pas un étranger
     const ok = new Set(hh.kids)
-    for (const k of hh.kids) for (const s of (spousesOf.get(k) || [])) ok.add(s)
+    for (const k of hh.kids) for (const s of (spousesOf.get(k) || [])) {
+      ok.add(s)
+      for (const sib of (siblingsOf.get(s) || [])) { ok.add(sib); for (const ss of (spousesOf.get(sib) || [])) ok.add(ss) }
+    }
     if (nodes.some((n) => n._type === 'person' && n._generation === hh.gen + 1 && !ok.has(n.id) && cx(n) > h.a && cx(n) < h.b)) fils_sur_etranger++
   }
   const foyers_larges = households.filter((h) => h.etendue > SCREEN).length

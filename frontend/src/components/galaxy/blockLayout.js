@@ -4,27 +4,35 @@ import { computeLayout, componentOrderPerGen, chainGap } from './elkLayout'
 // Layout par blocs familiaux (Reingold-Tilford adapté aux couples)
 //
 // S'appuie sur computeLayout pour tout ce qui n'est pas en cause
-// (normalisation des filiations, générations, chaînes de couples,
+// (normalisation des filiations, rangées, chaînes de couples,
 // coupleBarMeta, componentOrderPerGen) et ne recalcule que le X.
 //
-//   Un bloc = une chaîne de couples (même génération) + les blocs de
-//   ses enfants imbriqués en dessous (contours par génération), la
-//   chaîne centrée au-dessus. Fratries contiguës et parents centrés
-//   par construction.
+//   Un bloc = une chaîne de couples (même rangée) + les blocs de ses
+//   enfants imbriqués en dessous, la chaîne centrée au-dessus. Fratries
+//   contiguës et parents centrés par construction.
 //
-//   Mariage entre deux familles de l'arbre : la chaîne du couple n'est
-//   placée qu'une fois, sous la première lignée qui la revendique (les
-//   grandes lignées d'abord). L'autre lignée garde une arête longue.
+//   Un seul arbre. La famille d'un conjoint (ses parents, sa fratrie,
+//   ses ancêtres) se colle à lui, au-dessus et de son côté, en poussant
+//   les voisins pour faire la place : jamais posée dans un trou ailleurs.
+//   Le conjoint est tourné vers l'extérieur de sa fratrie pour que sa
+//   famille ne passe pas au-dessus des frères et sœurs.
 //
-//   Un bloc racine dont la chaîne a un enfant déjà placé ailleurs
-//   (beaux-parents) est ancré : centré sur cet enfant, puis décalé au
-//   créneau libre le plus proche.
+//   Le sang de la référence gagne : les lignées de la personne de
+//   référence sont dessinées d'abord, les familles des pièces rapportées
+//   s'y attachent. Une famille reliée deux fois (cousins qui se marient,
+//   deux grandes lignées de la référence) n'est dessinée qu'une fois :
+//   l'autre filiation devient un renvoi si son fil croiserait une famille.
 //
-// Benchmark et variantes écartées : tools/layout-bench/.
+//   L'ordre ne dépend jamais des effectifs : rangée, année de naissance,
+//   identifiant. Ajouter une personne ne bouge que son foyer.
+//
+// Banc, archétypes et témoins : tools/layout-bench/.
 // ============================================================
 
 const NODE_SPACING = 30
 const FAMILY_GAP = 60
+// Au-delà de cet écart entre la place idéale d'une famille de conjoint et la première place libre, on ne la colle pas
+const DETACH_PX = 1440
 
 // Le fil d'une filiation union → enfant : une personne d'une autre famille, sur la ligne de l'enfant,
 // entre l'aplomb de l'union et l'enfant, est croisée. Frères et sœurs et leurs conjoint(e)s ne comptent pas
@@ -40,12 +48,38 @@ export function filCroiseAutreFamille(nodes, childrenOfUnion, spouseKeysOf, u, c
     && n.x + n.width > lo && n.x < hi)
 }
 
+// Contours : par rangée, une liste d'intervalles [gauche, droite] triés et fusionnés
+function addInterval(list, l, r) {
+  const out = []
+  let nl = l, nr = r, inserted = false
+  for (const [a, b] of list) {
+    if (b < nl - 1) { out.push([a, b]); continue }
+    if (a > nr + 1) { if (!inserted) { out.push([nl, nr]); inserted = true } out.push([a, b]); continue }
+    nl = Math.min(nl, a); nr = Math.max(nr, b)
+  }
+  if (!inserted) out.push([nl, nr])
+  return out
+}
+function mergeRows(target, source, dx) {
+  for (const [g, list] of source) {
+    let cur = target.get(g) || []
+    for (const [l, r] of list) cur = addInterval(cur, l + dx, r + dx)
+    target.set(g, cur)
+  }
+}
+const extentOf = (rows) => {
+  let l = Infinity, r = -Infinity
+  for (const list of rows.values()) for (const [a, b] of list) { l = Math.min(l, a); r = Math.max(r, b) }
+  return [l, r]
+}
+const overlaps = (l, r, list, gap) => list.some(([a, b]) => l < b + gap && r > a - gap)
+
 export function computeBlockLayout(graphData = null, referenceId = null) {
   const result = computeLayout(graphData, referenceId)
   const nodes = result.children
   const byId = new Map(nodes.map(n => [n.id, n]))
 
-  // Chaînes de couples (composantes d'une génération) telles que computeLayout les a ordonnées
+  // Chaînes de couples (composantes d'une rangée) telles que computeLayout les a ordonnées
   const chainOf = new Map()
   const chains = []
   for (const gen of [...componentOrderPerGen.keys()].sort((a, b) => a - b)) {
@@ -72,16 +106,37 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
   for (const [u, kids] of childrenOfUnion) kids.sort((a, b) => edgeOrder.get(`${u}>${a}`) - edgeOrder.get(`${u}>${b}`))
   const hasParents = (chain) => chain.some(id => parentUnionOf.has(id))
 
-  const descCount = new Map()
-  function countDesc(chain, seen = new Set()) {
-    if (descCount.has(chain)) return descCount.get(chain)
-    if (seen.has(chain)) return 0
-    seen.add(chain)
-    let n = 0
-    for (const id of chain) for (const k of (childrenOfUnion.get(id) || [])) n += 1 + countDesc(chainOf.get(k), seen)
-    descCount.set(chain, n)
-    return n
+  // Ligne de sang de la référence : tout ce qu'on atteint par les seuls liens parent / enfant
+  const unionsOfPerson = new Map()
+  for (const n of nodes) {
+    if (n._type !== 'union') continue
+    for (const k of [n._data?.p1Key, n._data?.p2Key]) {
+      if (!k) continue
+      if (!unionsOfPerson.has(k)) unionsOfPerson.set(k, [])
+      unionsOfPerson.get(k).push(n.id)
+    }
   }
+  const blood = new Set()
+  const referenceKey = result.referenceId != null ? `p-${result.referenceId}` : null
+  if (referenceKey && byId.has(referenceKey)) {
+    // On ne monte que depuis la référence et ses ancêtres (jamais depuis un descendant : son autre
+    // parent est une pièce rapportée), puis on descend depuis chacun d'eux
+    const up = [referenceKey]
+    blood.add(referenceKey)
+    while (up.length) {
+      const pu = parentUnionOf.get(up.shift())
+      if (!pu) continue
+      for (const p of [byId.get(pu)?._data?.p1Key, byId.get(pu)?._data?.p2Key]) {
+        if (p && byId.get(p)?._type === 'person' && !blood.has(p)) { blood.add(p); up.push(p) }
+      }
+    }
+    const down = [...blood]
+    while (down.length) {
+      const id = down.shift()
+      for (const u of (unionsOfPerson.get(id) || [])) for (const k of (childrenOfUnion.get(u) || [])) if (!blood.has(k)) { blood.add(k); down.push(k) }
+    }
+  }
+  const isBloodChain = (chain) => chain.some(id => blood.has(id))
 
   const gapAfter = (chain, i) => chainGap(byId.get(chain[i]), byId.get(chain[i + 1]), NODE_SPACING)
   const chainWidth = (chain) => chain.reduce((s, id, i) => s + byId.get(id).width + (i < chain.length - 1 ? gapAfter(chain, i) : 0), 0)
@@ -92,159 +147,216 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
     return offsets
   }
 
+  // La chaîne la plus haute d'une famille : on remonte de parents en parents
+  function topChainOf(chain) {
+    let cur = chain
+    const seen = new Set()
+    while (!seen.has(cur)) {
+      seen.add(cur)
+      const m = cur.find(id => parentUnionOf.has(id))
+      if (!m) break
+      cur = chainOf.get(parentUnionOf.get(m))
+    }
+    return cur
+  }
+
+  // Un couple « enfant + pièce rapportée » se tourne vers l'extérieur de la fratrie : la pièce rapportée
+  // à gauche dans la moitié gauche, à droite dans la moitié droite, pour que sa famille se pose à côté
+  function orient(chain, kid, index, count) {
+    if (chain.length !== 3) return
+    const spouse = chain[0] === kid ? chain[2] : chain[0]
+    if (chain[1] !== chain.find(id => byId.get(id)._type === 'union') || !parentUnionOf.has(spouse)) return
+    const left = index < (count - 1) / 2
+    if ((left && chain[0] !== spouse) || (!left && chain[2] !== spouse)) chain.reverse()
+  }
+
   const pos = new Map()
   const placed = new Set()
-  const externalEdges = new Set() // `${union}>${enfant}` : enfant placé sous une autre lignée
+  const externalEdges = new Set() // `${union}>${enfant}` : enfant dessiné sous une autre lignée
+  const detached = [] // familles qu'on n'a pas pu coller à leur enfant (trop loin) : posées à part, renvoi
 
-  // Imbrique des blocs de gauche à droite, génération par génération
+  // Imbrique des blocs de gauche à droite, rangée par rangée
   function packBlocks(blocks, gap) {
     const acc = new Map()
     const xs = []
     for (const b of blocks) {
       let off = 0
-      for (const [g, [l]] of b.rows) {
+      for (const [g, list] of b.rows) {
         const a = acc.get(g)
-        if (a) off = Math.max(off, a[1] + gap - l)
+        if (a?.length) off = Math.max(off, a[a.length - 1][1] + gap - list[0][0])
       }
       xs.push(off)
-      for (const [g, [l, r]] of b.rows) {
-        const a = acc.get(g)
-        acc.set(g, a ? [Math.min(a[0], l + off), Math.max(a[1], r + off)] : [l + off, r + off])
-      }
+      mergeRows(acc, b.rows, off)
     }
     return { xs, rows: acc }
   }
 
-  function buildBlock(chain) {
+  // Décale un bloc depuis sa position idéale, du côté demandé, jusqu'à ce qu'il ne touche plus `rows`
+  function pushUntilFree(blockRows, ideal, rows, side, gap) {
+    let d = ideal
+    for (let iter = 0; iter < 500; iter++) {
+      let push = 0
+      for (const [g, list] of blockRows) {
+        const occ = rows.get(g)
+        if (!occ) continue
+        for (const [l, r] of list) for (const [ol, or] of occ) {
+          if (l + d < or + gap && r + d > ol - gap) push = Math.max(push, side > 0 ? or + gap - (l + d) : (r + d) - (ol - gap))
+        }
+      }
+      if (push <= 0) break
+      d += side * push
+    }
+    return d
+  }
+
+  // Place fantôme d'un enfant déjà dessiné ailleurs : il garde sa place dans l'ordre de la fratrie et
+  // dans le centrage des parents, sans occuper de contour (c'est l'enfant réel qui l'occupe)
+  const ghostBlock = (kid) => {
+    const n = byId.get(kid)
+    return { ghost: true, kid, rows: new Map([[n._generation, [[0, n.width]]]]), members: new Set(), external: [], gen: n._generation, chain: [0, n.width], rel: () => null, width: n.width, place() {} }
+  }
+
+  // Famille attachée à un conjoint : l'enfant à coller (ancre) doit finir au bout de sa fratrie, du côté du
+  // couple. Si l'ordre choisi l'en empêche, la fratrie est dessinée en miroir (du dernier au premier).
+  let anchor = null // { kid, end: 'left' | 'right' }
+
+  function buildBlock(chain, ownerUnion = null) {
     placed.add(chain)
     const gen = genOf(chain)
-    const rowW = chainWidth(chain)
-    const offsets = chainOffsets(chain)
     const childBlocks = []
     const external = []
+    const kidsOfChain = []
     for (const id of chain) {
       if (byId.get(id)._type !== 'union') continue
-      for (const k of (childrenOfUnion.get(id) || [])) {
-        const kc = chainOf.get(k)
-        if (!placed.has(kc)) childBlocks.push(buildBlock(kc))
-        else { external.push({ kid: k, unionId: id }); externalEdges.add(`${id}>${k}`) }
-      }
+      for (const k of (childrenOfUnion.get(id) || [])) kidsOfChain.push({ unionId: id, kid: k })
     }
+    if (anchor && kidsOfChain.length > 1 && kidsOfChain.some(k => k.kid === anchor.kid)) {
+      const idx = kidsOfChain.findIndex(k => k.kid === anchor.kid)
+      if ((anchor.end === 'right' && idx === 0) || (anchor.end === 'left' && idx === kidsOfChain.length - 1)) kidsOfChain.reverse()
+      anchor = null
+    }
+    kidsOfChain.forEach(({ unionId, kid }, i) => {
+      const kc = chainOf.get(kid)
+      if (placed.has(kc)) {
+        external.push({ kid, unionId })
+        externalEdges.add(`${unionId}>${kid}`)
+        childBlocks.push(ghostBlock(kid))
+        return
+      }
+      orient(kc, kid, i, kidsOfChain.length)
+      childBlocks.push(buildBlock(kc, unionId))
+    })
     const packed = packBlocks(childBlocks, FAMILY_GAP)
 
-    // Chaîne centrée sur la rangée de ses enfants directs
+    // Chaîne centrée sur la rangée de ses enfants directs (fantômes compris), décalée au plus près si une
+    // famille de pièce rapportée (attachée à un enfant) occupe déjà cette rangée
+    const rowW = chainWidth(chain)
+    const offsets = chainOffsets(chain)
     let rowX = 0
+    const rows = new Map()
+    childBlocks.forEach((b, i) => { if (!b.ghost) mergeRows(rows, b.rows, packed.xs[i]) })
     if (childBlocks.length) {
-      const kidRowL = Math.min(...childBlocks.map((b, i) => packed.xs[i] + b.rows.get(b.gen)[0]))
-      const kidRowR = Math.max(...childBlocks.map((b, i) => packed.xs[i] + b.rows.get(b.gen)[1]))
+      const kidRowL = Math.min(...childBlocks.map((b, i) => packed.xs[i] + b.chain[0]))
+      const kidRowR = Math.max(...childBlocks.map((b, i) => packed.xs[i] + b.chain[1]))
       rowX = (kidRowL + kidRowR) / 2 - rowW / 2
+      const obstacles = rows.get(gen) || []
+      if (overlaps(rowX, rowX + rowW, obstacles, FAMILY_GAP)) {
+        const candidates = obstacles.flatMap(([l, r]) => [r + FAMILY_GAP, l - FAMILY_GAP - rowW])
+          .filter(x => !overlaps(x, x + rowW, obstacles, FAMILY_GAP))
+        if (candidates.length) rowX = candidates.reduce((best, x) => (Math.abs(x - rowX) < Math.abs(best - rowX) ? x : best))
+      }
     }
-
-    const rows = new Map([[gen, [rowX, rowX + rowW]]])
-    for (const [g, [l, r]] of packed.rows) {
-      const a = rows.get(g)
-      rows.set(g, a ? [Math.min(a[0], l), Math.max(a[1], r)] : [l, r])
-    }
-    const minL = Math.min(...[...rows.values()].map(v => v[0]))
-    for (const [g, v] of rows) rows.set(g, [v[0] - minL, v[1] - minL])
-    rowX -= minL
-    const kidXs = packed.xs.map(x => x - minL)
-
+    mergeRows(rows, new Map([[gen, [[rowX, rowX + rowW]]]]), 0)
     const members = new Set(chain)
     for (const b of childBlocks) { for (const m of b.members) members.add(m); external.push(...b.external) }
+    const ghosts = new Map()
+    childBlocks.forEach((b, i) => { if (b.ghost) ghosts.set(b.kid, packed.xs[i]) })
+
+    // Familles des conjoints de la chaîne pas encore dessinées : construites entières depuis leur ancêtre
+    // le plus haut, collées au conjoint, de son côté. Une famille déjà dessinée (reliée deux fois) ne l'est pas
+    // une seconde fois : la filiation reste externe, renvoi si son fil croise une famille. Une famille qu'il
+    // faudrait pousser de plus d'un écran pour la coller est posée à part (cas impossible, renvoi).
+    const attachments = []
+    for (const id of chain) {
+      if (byId.get(id)._type !== 'person') continue
+      const pu = parentUnionOf.get(id)
+      if (!pu || pu === ownerUnion) continue
+      const pc = chainOf.get(pu)
+      if (placed.has(pc)) continue
+      const top = topChainOf(pc)
+      if (placed.has(top)) continue
+      const side = offsets.get(id) + byId.get(id).width / 2 < rowW / 2 ? -1 : 1
+      const saved = anchor
+      anchor = { kid: id, end: side < 0 ? 'right' : 'left' }
+      const block = buildBlock(top, null)
+      anchor = saved
+      const at = block.rel(id)
+      const ideal = at == null ? rowX + offsets.get(id) - block.width / 2 : rowX + offsets.get(id) - at
+      const x = pushUntilFree(block.rows, ideal, rows, side, FAMILY_GAP)
+      if (Math.abs(x - ideal) > DETACH_PX) { detached.push(block); continue }
+      attachments.push({ block, x })
+      mergeRows(rows, block.rows, x)
+      for (const m of block.members) members.add(m)
+      external.push(...block.external)
+    }
+
+    // Origine du bloc au bord gauche de son contour
+    const [minL] = extentOf(rows)
+    for (const [g, list] of rows) rows.set(g, list.map(([l, r]) => [l - minL, r - minL]))
+    rowX -= minL
+    const kidXs = packed.xs.map(x => x - minL)
+    for (const [k, x] of ghosts) ghosts.set(k, x - minL)
+    for (const a of attachments) a.x -= minL
+
     const rel = (id) => {
       if (offsets.has(id)) return rowX + offsets.get(id)
-      for (let i = 0; i < childBlocks.length; i++) if (childBlocks[i].members.has(id)) return kidXs[i] + childBlocks[i].rel(id)
+      if (ghosts.has(id)) return ghosts.get(id)
+      for (let i = 0; i < childBlocks.length; i++) {
+        if (childBlocks[i].ghost) continue
+        const r = childBlocks[i].rel(id)
+        if (r != null) return kidXs[i] + r
+      }
+      for (const a of attachments) { const r = a.block.rel(id); if (r != null) return a.x + r }
       return null
     }
     return {
       rows, members, external, gen, rel,
-      get width() { return Math.max(...[...rows.values()].map(v => v[1])) },
+      chain: [rowX, rowX + rowW],
+      get width() { return extentOf(rows)[1] },
       place(x0) {
         for (const id of chain) pos.set(id, x0 + rowX + offsets.get(id))
         childBlocks.forEach((b, i) => b.place(x0 + kidXs[i]))
+        attachments.forEach(a => a.block.place(x0 + a.x))
       },
     }
   }
 
-  // 1) Racines : chaînes sans parents, grandes lignées d'abord
-  const roots = chains.filter(c => !hasParents(c)).sort((a, b) => countDesc(b) - countDesc(a) || genOf(a) - genOf(b))
-  const free = [], anchored = []
-  for (const r of roots) {
-    if (placed.has(r)) continue
-    const block = buildBlock(r)
-    const ownExternal = block.external.some(({ unionId }) => r.includes(unionId))
-    if (ownExternal) anchored.push(block)
-    else free.push(block)
-  }
+  // Racines : chaînes sans parents, le sang de la référence d'abord, puis par rangée, année de naissance, identifiant.
+  // Jamais par effectifs : ajouter une personne ne change pas l'ordre des lignées.
+  const birthYearOf = (chain) => Math.min(...chain.map(id => {
+    const d = byId.get(id)._data
+    const raw = d?.birthYear ?? d?.birthDate
+    const y = raw != null ? parseInt(String(raw).slice(0, 4), 10) : NaN
+    return Number.isFinite(y) ? y : 9999
+  }))
+  const roots = chains.filter(c => !hasParents(c)).sort((a, b) => (
+    (isBloodChain(b) - isBloodChain(a)) || genOf(a) - genOf(b) || birthYearOf(a) - birthYearOf(b) || String(a[0]).localeCompare(String(b[0]))
+  ))
+  const free = []
+  for (const r of roots) if (!placed.has(r)) free.push(buildBlock(r))
+  for (const c of chains) if (!placed.has(c)) free.push(buildBlock(c))
+  free.push(...detached)
   const forest = packBlocks(free, FAMILY_GAP * 2)
   free.forEach((b, i) => b.place(forest.xs[i]))
-  let cursor = Math.max(0, ...[...forest.rows.values()].map(v => v[1])) + FAMILY_GAP * 2
 
-  // 2) Blocs ancrés : l'union concernée centrée sur son enfant déjà placé, générations profondes d'abord
-  const occupied = (exclude) => {
-    const byGen = new Map()
-    for (const n of nodes) {
-      if (!pos.has(n.id) || exclude.has(n.id)) continue
-      if (!byGen.has(n._generation)) byGen.set(n._generation, [])
-      byGen.get(n._generation).push([pos.get(n.id), pos.get(n.id) + n.width])
-    }
-    return byGen
-  }
-  anchored.sort((a, b) => b.gen - a.gen)
-  for (const block of anchored) {
-    const occ = occupied(block.members)
-    const targets = block.external
-      .filter(({ kid }) => pos.has(kid))
-      .map(({ kid, unionId }) => pos.get(kid) + byId.get(kid).width / 2 - (block.rel(unionId) + byId.get(unionId).width / 2))
-    if (!targets.length) { block.place(cursor); cursor += block.width + FAMILY_GAP * 2; continue }
-    const ideal = targets.reduce((s, v) => s + v, 0) / targets.length
-    const fits = (x0) => {
-      block.place(x0)
-      for (const id of block.members) {
-        const n = byId.get(id); const x = pos.get(id)
-        for (const [s, e] of (occ.get(n._generation) || [])) {
-          if (x < e + FAMILY_GAP && x + n.width > s - FAMILY_GAP) return false
-        }
-      }
-      return true
-    }
-    let found = false
-    for (let d = 0; d < 40000 && !found; d += 20) {
-      if (fits(ideal + d)) found = true
-      else if (d > 0 && fits(ideal - d)) found = true
-    }
-    if (!found) { block.place(cursor); cursor += block.width + FAMILY_GAP * 2 }
-  }
-
-  // Couple dont les deux conjoints ont leurs parents dans l'arbre, chacun du côté de la famille de l'autre :
-  // on intervertit les deux conjoints (même place, l'union reste au milieu), les deux fils ne se croisent plus.
-  // Répété : intervertir un couple peut remettre à l'endroit ou à l'envers celui de ses enfants.
-  const centerOf = (id) => pos.get(id) + byId.get(id).width / 2
-  for (let pass = 0; pass < 4; pass++) {
-    let swapped = 0
-    for (const chain of chains) {
-      if (chain.length !== 3 || !pos.has(chain[0])) continue
-      const [a, , b] = chain
-      const pa = parentUnionOf.get(a), pb = parentUnionOf.get(b)
-      if (!pa || !pb || pa === pb || !pos.has(pa) || !pos.has(pb)) continue
-      if ((centerOf(a) - centerOf(b)) * (centerOf(pa) - centerOf(pb)) >= 0) continue
-      const xa = pos.get(a), xb = pos.get(b)
-      pos.set(a, xb + byId.get(b).width - byId.get(a).width)
-      pos.set(b, xa)
-      swapped++
-    }
-    if (!swapped) break
-  }
-
-  // Réinjecter le X, normalisé à 0 ; Y inchangé (générations)
+  // Réinjecter le X, normalisé à 0 ; Y inchangé (rangées)
   let minX = Infinity
   for (const n of nodes) if (pos.has(n.id)) minX = Math.min(minX, pos.get(n.id))
   for (const n of nodes) if (pos.has(n.id)) n.x = pos.get(n.id) - minX
 
-  // Arête vers un enfant placé sous l'autre lignée : renvoi (voir drawFiliations) seulement si le fil
+  // Arête vers un enfant dessiné sous l'autre lignée : renvoi (voir drawFiliations) seulement si le fil
   // croise une autre famille. Plusieurs renvois sous la même union : pastilles empilées (_renvoiIndex)
-  // Le fil descend de l'union puis file sur la ligne de la fratrie jusqu'à l'enfant (traceBus) :
+  // Le fil descend de l'union puis file sur la ligne de la fratrie jusqu'à l'enfant (traceSibship) :
   // il ne traverse une autre famille que si une personne de cette famille se trouve sur cette ligne,
   // entre l'aplomb de l'union et l'enfant. Frères et sœurs et conjoint(e)s de l'enfant ne comptent pas.
   const spouseKeysOf = new Map()
@@ -264,6 +376,41 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
     e._renvoi = true
     e._renvoiIndex = renvoisByUnion.get(u) || 0
     renvoisByUnion.set(u, e._renvoiIndex + 1)
+  }
+
+  // Lignes de fratrie emboîtées : par rangée, la ligne d'une union qui en contient une autre passe au-dessus
+  // d'elle (_railLift plus grand = plus haut). Deux lignes qui se chevauchent sans s'emboîter prennent deux
+  // niveaux différents. Niveau 0 = la ligne la plus proche des enfants.
+  const rails = new Map()
+  for (const e of result.edges) {
+    if (e._renvoi) continue
+    const u = byId.get(e.sources[0]), k = byId.get(e.targets[0])
+    if (!u || !k) continue
+    const r = rails.get(u.id) || { gen: u._generation, l: u.x + u.width / 2, r: u.x + u.width / 2 }
+    r.l = Math.min(r.l, k.x + k.width / 2); r.r = Math.max(r.r, k.x + k.width / 2)
+    rails.set(u.id, r)
+  }
+  const byRow = new Map()
+  for (const [id, r] of rails) { if (!byRow.has(r.gen)) byRow.set(r.gen, []); byRow.get(r.gen).push({ id, ...r }) }
+  for (const list of byRow.values()) {
+    list.sort((a, b) => (b.r - b.l) - (a.r - a.l) || a.l - b.l)
+    const level = new Map()
+    for (let i = 0; i < list.length; i++) {
+      const me = list[i]
+      let min = 0
+      const taken = new Set()
+      for (let j = 0; j < i; j++) {
+        const o = list[j]
+        if (me.r <= o.l || me.l >= o.r) continue
+        if (o.l <= me.l && o.r >= me.r) min = Math.max(min, level.get(o.id) + 1)
+        else taken.add(level.get(o.id))
+      }
+      let lv = min
+      while (taken.has(lv)) lv++
+      level.set(me.id, lv)
+    }
+    const deepest = Math.min(3, Math.max(...level.values()))
+    for (const r of list) byId.get(r.id)._railLift = Math.max(0, deepest - Math.min(3, level.get(r.id)))
   }
 
   return result

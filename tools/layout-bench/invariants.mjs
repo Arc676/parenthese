@@ -89,23 +89,33 @@ export function checkInvariants(result, coupleBarMeta, graph, referenceId = null
 
   // Fratries : contiguës (seuls les frères, sœurs et leurs conjoints entre le premier et le dernier) et dans l'ordre choisi
   const kidsOf = new Map()
+  const siblingsOf = new Map()
   for (const e of result.edges) {
     if (e._renvoi) continue
     if (!kidsOf.has(e.sources[0])) kidsOf.set(e.sources[0], [])
     kidsOf.get(e.sources[0]).push(e)
   }
+  for (const edges of kidsOf.values()) for (const e of edges) siblingsOf.set(e.targets[0], edges.map((x) => x.targets[0]))
   let fratries_coupees = 0, fratries_desordre = 0
   for (const edges of kidsOf.values()) {
     const kids = edges.map((e) => byId.get(e.targets[0])).filter(Boolean)
     if (kids.length < 2) continue
+    // Un seul arbre : la famille du conjoint d'un enfant (sa fratrie, leurs conjoints) se colle à lui, elle peut
+    // donc se trouver entre deux frères. Seule une personne sans ce lien coupe la fratrie.
     const allowed = new Set(kids.map((k) => k.id))
-    for (const k of kids) for (const s of (spousesOf.get(k.id) || [])) allowed.add(s)
+    for (const k of kids) for (const s of (spousesOf.get(k.id) || [])) {
+      allowed.add(s)
+      for (const sib of (siblingsOf.get(s) || [])) { allowed.add(sib); for (const ss of (spousesOf.get(sib) || [])) allowed.add(ss) }
+    }
     const lo = Math.min(...kids.map((k) => k.x)), hi = Math.max(...kids.map((k) => k.x))
     const gen = kids[0]._generation
     if ((byGen.get(gen) || []).some((n) => n._type !== 'union' && !allowed.has(n.id) && n.x > lo && n.x < hi)) fratries_coupees++
+    // Ordre choisi, de gauche à droite, ou en miroir (famille attachée à un conjoint, retournée vers lui)
     const byX = [...edges].sort((a, b) => cx(byId.get(a.targets[0])) - cx(byId.get(b.targets[0])))
     const orders = byX.map((e) => e._displayOrder).filter((o) => Number.isFinite(o))
-    if (orders.some((o, i) => i > 0 && o < orders[i - 1])) fratries_desordre++
+    const ascending = orders.every((o, i) => i === 0 || o >= orders[i - 1])
+    const descending = orders.every((o, i) => i === 0 || o <= orders[i - 1])
+    if (!ascending && !descending) fratries_desordre++
   }
 
   // Rangées = génération de parenté (décalage calé par famille non reliée)

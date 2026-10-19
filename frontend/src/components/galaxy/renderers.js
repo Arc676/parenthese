@@ -107,19 +107,19 @@ const BUS_DY = 100
 const SIB_R = 24
 const SIB_STRAIGHT_DX = SIB_R * 2
 
-function busY(sourceId, sy) {
-  let h = 0
-  for (let i = 0; i < sourceId.length; i++) h = (h * 31 + sourceId.charCodeAt(i)) | 0
-  // Léger décalage par union : deux fratries voisines ne fusionnent pas leurs lignes
-  return sy + BUS_DY + (Math.abs(h) % 3) * 4
+// Les lignes de fratrie s'emboîtent : une famille collée au conjoint d'un enfant dessine sa ligne sous celle
+// de la famille qui l'entoure. Le placement pose le niveau (_railLift, 0 = la plus proche des enfants).
+const RAIL_STEP = 8
+function busY(lift, sy) {
+  return sy + BUS_DY - RAIL_STEP * (lift || 0)
 }
 
 // Une union, toute sa fratrie : un seul tracé. Tronc depuis l'union jusqu'à la barre, coins arrondis
 // de même rayon à chaque jonction, puis descente vers chaque enfant. Chaque enfant a sa propre trajectoire
 // (sur la même barre), donc le surlignage du chemin suit exactement la même géométrie.
-export function traceSibship(ctx, sourceId, sourcePos, items) {
+export function traceSibship(ctx, sourceId, sourcePos, items, lift = 0) {
   const sx = sourcePos.cx, sy = sourcePos.cy
-  const by = busY(sourceId, sy)
+  const by = busY(lift, sy)
   const rr = Math.min(SIB_R, by - sy - 2)
   ctx.beginPath()
   for (const { cx: ex, cy: ey } of items) {
@@ -312,7 +312,7 @@ export function drawFiliations(ctx, edges, posMap, nodeMap, nodeRandomData, entr
     ctx.lineCap = 'round'
     const p = progress / items.length
     ctx.globalAlpha = Math.min(1, p * 1.5) * p
-    traceSibship(ctx, sourceId, sourcePos, items)
+    traceSibship(ctx, sourceId, sourcePos, items, nodeMap.get(sourceId)?._railLift)
     ctx.globalAlpha = 1
     ctx.setLineDash([])
   }
@@ -389,7 +389,7 @@ export function drawPathHighlight(ctx, {
       ctx.globalAlpha = 1
 
       ctx.globalAlpha = hp
-      traceSibship(ctx, edge.sources[0], sourcePos, [{ cx: targetPos.cx, cy: targetPos.cy - childR }])
+      traceSibship(ctx, edge.sources[0], sourcePos, [{ cx: targetPos.cx, cy: targetPos.cy - childR }], nodeMap.get(edge.sources[0])?._railLift)
       ctx.globalAlpha = 1
     })
   }

@@ -800,7 +800,7 @@ export function computeLayout(graphData = null, referenceId = null) {
   // --- PASS B (bottom-up) : placement initial centré sur les enfants ---
   const sortedGensDesc = [...componentOrderPerGen.keys()].sort((a, b) => b - a)
   if (sortedGensDesc.length === 0) {
-    return { children: allNodes, edges: allEdges, generationConflicts }
+    return { children: allNodes, edges: allEdges, generationConflicts, referenceId: reference ?? null }
   }
   const genMax = sortedGensDesc[0]
   const genMin = sortedGensDesc[sortedGensDesc.length - 1]
@@ -840,7 +840,7 @@ export function computeLayout(graphData = null, referenceId = null) {
     node.y = node._generation * (PERSON_H + LAYER_SPACING)
   }
 
-  return { children: allNodes, edges: allEdges, generationConflicts }
+  return { children: allNodes, edges: allEdges, generationConflicts, referenceId: reference ?? null }
 }
 
 // ============================================================
