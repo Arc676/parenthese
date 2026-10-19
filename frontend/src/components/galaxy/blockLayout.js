@@ -100,9 +100,10 @@ export function computeBlockLayout(graphData = null, referenceId = null, { famil
   // ne change, ou après quatre passes (les positions bougent d'une passe à l'autre)
   for (let pass = 0; pass < 4 && result._inlaws?.length; pass++) {
     const byId = new Map(result.children.map(n => [n.id, n]))
-    const ref = referenceId != null ? byId.get(`p-${referenceId}`) : null
     const persons = result.children.filter(n => n._type === 'person')
-    const pivot = ref ? ref.x + ref.width / 2 : persons.length ? (Math.min(...persons.map(n => n.x)) + Math.max(...persons.map(n => n.x + n.width))) / 2 : 0
+    // Pivot : le centre de la famille dessinée. La référence elle-même, souvent au bord (dernière génération,
+    // charnière d'un onglet), enverrait toutes les belles-familles du même côté (Patch, 19/10 : « moins clair »)
+    const pivot = persons.length ? (Math.min(...persons.map(n => n.x)) + Math.max(...persons.map(n => n.x + n.width))) / 2 : 0
     let changed = false
     for (const { anchorId, side } of result._inlaws) {
       const a = byId.get(anchorId)
