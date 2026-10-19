@@ -8,6 +8,7 @@ import {
   imagePlacement,
   normalizeCrop,
   resolveFrameKind,
+  shapeOfKind,
 } from './portraitCrop.js'
 
 // Le cadrage visible ne sort jamais de la photo : aucun vide dans le cadre
@@ -84,5 +85,31 @@ describe('portraitCrop', () => {
     expect(frameAspect('polaroid', 1)).toBe(1)
     expect(frameAspect('rect', 1.5)).toBe(2)
     expect(frameAspect('rect', 1)).toBeCloseTo(60 / 68)
+  })
+})
+
+describe('forme choisie au recadrage', () => {
+  it('l emporte sur le format de la photo et sur le tirage de la personne', () => {
+    // Photo très large : cadre couché par défaut, rond si on le choisit
+    expect(resolveFrameKind('polaroid', 1.6)).toBe('rect')
+    expect(resolveFrameKind('polaroid', 1.6, 'round')).toBe('round')
+    expect(frameAspect(resolveFrameKind('polaroid', 1.6, 'round'), 1.6, 'round')).toBe(1)
+    // Vertical choisi sur une photo couchée : la zone visible est debout
+    expect(resolveFrameKind('round', 1.6, 'portrait')).toBe('rect')
+    expect(frameAspect('rect', 1.6, 'portrait')).toBeCloseTo(60 / 68)
+    expect(frameAspect('rect', 0.7, 'landscape')).toBe(2)
+  })
+
+  it('le sélecteur montre la forme en cours quand rien n est choisi', () => {
+    expect(shapeOfKind('rect', 1.6)).toBe('landscape')
+    expect(shapeOfKind('rect', 1)).toBe('portrait')
+    expect(shapeOfKind('polaroid', 0.7)).toBe('polaroid')
+  })
+
+  it('est gardée à la lecture et à l enregistrement, même sans recadrage', () => {
+    expect(normalizeCrop({ x: 0.2, y: 0.3, zoom: 2, shape: 'square' })).toEqual({ x: 0.2, y: 0.3, zoom: 2, shape: 'square' })
+    expect(normalizeCrop({ x: 0.2, y: 0.3, zoom: 2, shape: 'hexagone' })).toEqual({ x: 0.2, y: 0.3, zoom: 2 })
+    expect(cropForSave(400, 400, 1, DEFAULT_CROP)).toBeNull()
+    expect(cropForSave(400, 400, 1, DEFAULT_CROP, 'round')).toEqual({ x: 0.5, y: 0.5, zoom: 1, shape: 'round' })
   })
 })

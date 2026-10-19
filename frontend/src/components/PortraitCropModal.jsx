@@ -8,11 +8,13 @@ import {
   DEFAULT_CROP,
   clampCrop,
   cropForSave,
+  cropShape,
   cropViewport,
   frameAspect,
   imagePlacement,
   normalizeCrop,
   resolveFrameKind,
+  shapeOfKind,
 } from '../utils/portraitCrop.js'
 import './PortraitCropModal.css'
 
@@ -23,8 +25,11 @@ const KEY_STEP = 0.04
 const KEY_STEP_LARGE = 0.16
 const KEY_ZOOM_STEP = 0.2
 
+const SHAPE_LABELS = { round: t('Rond'), square: t('Carré'), polaroid: t('Polaroïd'), portrait: t('Vertical'), landscape: t('Horizontal') }
+
 // Recadrage d'un portrait. Le masque garde la forme du cadre de la personne dans l'arbre ; la photo
-// glisse dessous. `mode` : 'recrop' (depuis le menu) ou 'new' (juste après le choix d'une photo).
+// glisse dessous. La forme se choisit aussi ici : sans choix, elle suit la photo ou le tirage de la personne.
+// `mode` : 'recrop' (depuis le menu) ou 'new' (juste après le choix d'une photo).
 const PortraitCropModal = ({ src, frameType, name, mode = 'recrop', initialCrop = null, saving = false, error = '', onSave, onClose }) => {
   const stageRef = useRef(null)
   const dragRef = useRef(null)
@@ -33,11 +38,13 @@ const PortraitCropModal = ({ src, frameType, name, mode = 'recrop', initialCrop 
   const [size, setSize] = useState(null)
   const [loadFailed, setLoadFailed] = useState(false)
   const [crop, setCrop] = useState(() => normalizeCrop(initialCrop))
+  const [shape, setShape] = useState(() => cropShape(initialCrop))
   const [dragging, setDragging] = useState(false)
 
   const imageRatio = size ? size.w / size.h : 1
-  const frameKind = resolveFrameKind(frameType, imageRatio)
-  const aspect = frameAspect(frameKind, imageRatio)
+  const frameKind = resolveFrameKind(frameType, imageRatio, shape)
+  const aspect = frameAspect(frameKind, imageRatio, shape)
+  const shownShape = shape ?? shapeOfKind(frameKind, imageRatio)
   const winW = aspect >= 1 ? WINDOW_SIZE : WINDOW_SIZE * aspect
   const winH = aspect >= 1 ? WINDOW_SIZE / aspect : WINDOW_SIZE
 
@@ -159,7 +166,7 @@ const PortraitCropModal = ({ src, frameType, name, mode = 'recrop', initialCrop 
   const setZoom = (zoom) => apply({ ...current, zoom: Number(zoom) })
   const save = () => {
     if (!size || saving) return
-    onSave?.(cropForSave(size.w, size.h, aspect, current))
+    onSave?.(cropForSave(size.w, size.h, aspect, current, shape))
   }
 
   const isNew = mode === 'new'
@@ -206,6 +213,24 @@ const PortraitCropModal = ({ src, frameType, name, mode = 'recrop', initialCrop 
               aria-hidden="true"
             />
             {!size && !loadFailed && <div className="pcrop-loading"><PzBusy busy busyLabel={t('Chargement de la photo')} /></div>}
+          </div>
+
+          <div className="pz-tabs pcrop-shapes" role="radiogroup" aria-label={t('Forme du cadre')}>
+            {Object.entries(SHAPE_LABELS).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={shownShape === value}
+                className={`pz-tab ${shownShape === value ? 'is-active' : ''}`}
+                onClick={() => setShape(value)}
+                disabled={!size || saving}
+                aria-label={label}
+                title={label}
+              >
+                <span className={`pcrop-ico pcrop-ico--${value}`} aria-hidden="true" />
+              </button>
+            ))}
           </div>
 
           <p id="pcropHint" className="pz-small pcrop-hint">
