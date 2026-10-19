@@ -162,18 +162,18 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
 
   // Un couple « enfant + pièce rapportée » se tourne vers l'extérieur de la fratrie : la pièce rapportée
   // à gauche dans la moitié gauche, à droite dans la moitié droite, pour que sa famille se pose à côté
-  function orient(chain, kid, index, count) {
+  function orient(chain, kid, side) {
     if (chain.length !== 3) return
     const spouse = chain[0] === kid ? chain[2] : chain[0]
     if (chain[1] !== chain.find(id => byId.get(id)._type === 'union') || !parentUnionOf.has(spouse)) return
-    const left = index < (count - 1) / 2
-    if ((left && chain[0] !== spouse) || (!left && chain[2] !== spouse)) chain.reverse()
+    if ((side < 0 && chain[0] !== spouse) || (side > 0 && chain[2] !== spouse)) chain.reverse()
   }
 
   const pos = new Map()
   const placed = new Set()
   const externalEdges = new Set() // `${union}>${enfant}` : enfant dessiné sous une autre lignée
   const detached = [] // familles qu'on n'a pas pu coller à leur enfant (trop loin) : posées à part, renvoi
+  const attachedEdges = new Set() // `${union}>${enfant}` : fil d'une famille collée à son enfant, toujours dessiné
 
   // Imbrique des blocs de gauche à droite, rangée par rangée
   function packBlocks(blocks, gap) {
@@ -191,20 +191,17 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
     return { xs, rows: acc }
   }
 
-  // Décale un bloc depuis sa position idéale, du côté demandé, jusqu'à ce qu'il ne touche plus `rows`
-  function pushUntilFree(blockRows, ideal, rows, side, gap) {
+  // Décale un bloc depuis sa position idéale, du côté demandé, jusqu'au-delà de toute l'étendue de `rows`
+  // sur les rangées partagées : la famille d'un conjoint se pose au bout de la fratrie, jamais dans un trou
+  function pushOutside(blockRows, ideal, rows, side, gap) {
     let d = ideal
-    for (let iter = 0; iter < 500; iter++) {
-      let push = 0
-      for (const [g, list] of blockRows) {
-        const occ = rows.get(g)
-        if (!occ) continue
-        for (const [l, r] of list) for (const [ol, or] of occ) {
-          if (l + d < or + gap && r + d > ol - gap) push = Math.max(push, side > 0 ? or + gap - (l + d) : (r + d) - (ol - gap))
-        }
-      }
-      if (push <= 0) break
-      d += side * push
+    for (const [g, list] of blockRows) {
+      const occ = rows.get(g)
+      if (!occ?.length) continue
+      const l = list[0][0], r = list[list.length - 1][1]
+      const ol = occ[0][0], or = occ[occ.length - 1][1]
+      if (side > 0) d = Math.max(d, or + gap - l)
+      else d = Math.min(d, ol - gap - r)
     }
     return d
   }
@@ -220,7 +217,9 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
   // couple. Si l'ordre choisi l'en empêche, la fratrie est dessinée en miroir (du dernier au premier).
   let anchor = null // { kid, end: 'left' | 'right' }
 
-  function buildBlock(chain, ownerUnion = null) {
+  // `outer` : côté extérieur hérité de la lignée (−1 gauche, +1 droite). Les belles-familles d'une branche vont
+  // toutes du même côté, celui où la branche est au bord de l'arbre, pour ne pas se poser entre deux familles.
+  function buildBlock(chain, ownerUnion = null, outer = 0) {
     placed.add(chain)
     const gen = genOf(chain)
     const childBlocks = []
@@ -243,18 +242,68 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
         childBlocks.push(ghostBlock(kid))
         return
       }
-      orient(kc, kid, i, kidsOfChain.length)
-      childBlocks.push(buildBlock(kc, unionId))
+      const side = outer || (i < (kidsOfChain.length - 1) / 2 ? -1 : 1)
+      childBlocks.push(buildBlock(kc, unionId, side))
     })
+    // Un enfant dont le conjoint amène sa famille va au bout de la fratrie, de son côté : sa belle-famille
+    // se colle à lui sans survoler ses frères et sœurs. L'ordre de naissance s'efface pour lui (choix du 19/10).
+    const sideOf = (b) => {
+      if (b.ghost || !b.pending?.length) return 0
+      const left = b.pending.some(p => p.side < 0), right = b.pending.some(p => p.side > 0)
+      return left && !right ? -1 : right && !left ? 1 : 0
+    }
+    const ordered = [...childBlocks.filter(b => sideOf(b) < 0), ...childBlocks.filter(b => sideOf(b) === 0), ...childBlocks.filter(b => sideOf(b) > 0)]
+    childBlocks.length = 0
+    childBlocks.push(...ordered)
     const packed = packBlocks(childBlocks, FAMILY_GAP)
+    const rows = new Map()
+    childBlocks.forEach((b, i) => { if (!b.ghost) mergeRows(rows, b.rows, packed.xs[i]) })
+
+    // Familles des conjoints des enfants (construites par chaque enfant, voir plus bas) : posées au-delà du
+    // bout de la fratrie entière, du côté du conjoint, la plus proche du couple d'abord. Jamais entre deux frères.
+    const attachments = []
+    const pending = []
+    childBlocks.forEach((b, i) => { for (const p of (b.pending || [])) pending.push({ ...p, anchorX: packed.xs[i] + b.rel(p.anchorId) }) })
+    for (const side of [1, -1]) {
+      const list = pending.filter(p => p.side === side).sort((a, b) => side > 0 ? b.anchorX - a.anchorX : a.anchorX - b.anchorX)
+      for (const p of list) {
+        const at = p.block.rel(p.anchorId)
+        const ideal = at == null ? p.anchorX - p.block.width / 2 : p.anchorX - at
+        const x = pushOutside(p.block.rows, ideal, rows, side, FAMILY_GAP)
+        if (Math.abs(x - ideal) > DETACH_PX) { detached.push(p.block); continue }
+        attachedEdges.add(`${parentUnionOf.get(p.anchorId)}>${p.anchorId}`)
+        attachments.push({ block: p.block, x })
+        mergeRows(rows, p.block.rows, x)
+      }
+    }
+
+    // Familles des conjoints de la chaîne pas encore dessinées : construites entières depuis leur ancêtre
+    // le plus haut, puis remises au bloc du dessus qui les pose au bout de la fratrie, du côté du conjoint.
+    // Le couple se tourne vers cette famille (conjoint du côté où elle se pose). Une famille déjà dessinée
+    // (reliée deux fois) ne l'est pas une seconde fois : la filiation reste externe, renvoi si son fil croise.
+    const ownPending = []
+    for (const id of [...chain]) {
+      if (byId.get(id)._type !== 'person') continue
+      const pu = parentUnionOf.get(id)
+      if (!pu || pu === ownerUnion) continue
+      const pc = chainOf.get(pu)
+      if (placed.has(pc)) continue
+      const top = topChainOf(pc)
+      if (placed.has(top)) continue
+      const side = outer || (chain.indexOf(id) < chain.length / 2 ? -1 : 1)
+      const saved = anchor
+      anchor = { kid: id, end: side < 0 ? 'right' : 'left' }
+      const block = buildBlock(top, null, side)
+      anchor = saved
+      ownPending.push({ block, anchorId: id, side })
+      if (chain.length === 3) orient(chain, chain[0] === id ? chain[2] : chain[0], side)
+    }
 
     // Chaîne centrée sur la rangée de ses enfants directs (fantômes compris), décalée au plus près si une
-    // famille de pièce rapportée (attachée à un enfant) occupe déjà cette rangée
+    // famille de conjoint occupe déjà cette rangée
     const rowW = chainWidth(chain)
     const offsets = chainOffsets(chain)
     let rowX = 0
-    const rows = new Map()
-    childBlocks.forEach((b, i) => { if (!b.ghost) mergeRows(rows, b.rows, packed.xs[i]) })
     if (childBlocks.length) {
       const kidRowL = Math.min(...childBlocks.map((b, i) => packed.xs[i] + b.chain[0]))
       const kidRowR = Math.max(...childBlocks.map((b, i) => packed.xs[i] + b.chain[1]))
@@ -269,35 +318,24 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
     mergeRows(rows, new Map([[gen, [[rowX, rowX + rowW]]]]), 0)
     const members = new Set(chain)
     for (const b of childBlocks) { for (const m of b.members) members.add(m); external.push(...b.external) }
+    for (const a of attachments) { for (const m of a.block.members) members.add(m); external.push(...a.block.external) }
     const ghosts = new Map()
     childBlocks.forEach((b, i) => { if (b.ghost) ghosts.set(b.kid, packed.xs[i]) })
 
-    // Familles des conjoints de la chaîne pas encore dessinées : construites entières depuis leur ancêtre
-    // le plus haut, collées au conjoint, de son côté. Une famille déjà dessinée (reliée deux fois) ne l'est pas
-    // une seconde fois : la filiation reste externe, renvoi si son fil croise une famille. Une famille qu'il
-    // faudrait pousser de plus d'un écran pour la coller est posée à part (cas impossible, renvoi).
-    const attachments = []
-    for (const id of chain) {
-      if (byId.get(id)._type !== 'person') continue
-      const pu = parentUnionOf.get(id)
-      if (!pu || pu === ownerUnion) continue
-      const pc = chainOf.get(pu)
-      if (placed.has(pc)) continue
-      const top = topChainOf(pc)
-      if (placed.has(top)) continue
-      const side = offsets.get(id) + byId.get(id).width / 2 < rowW / 2 ? -1 : 1
-      const saved = anchor
-      anchor = { kid: id, end: side < 0 ? 'right' : 'left' }
-      const block = buildBlock(top, null)
-      anchor = saved
-      const at = block.rel(id)
-      const ideal = at == null ? rowX + offsets.get(id) - block.width / 2 : rowX + offsets.get(id) - at
-      const x = pushUntilFree(block.rows, ideal, rows, side, FAMILY_GAP)
-      if (Math.abs(x - ideal) > DETACH_PX) { detached.push(block); continue }
-      attachments.push({ block, x })
-      mergeRows(rows, block.rows, x)
-      for (const m of block.members) members.add(m)
-      external.push(...block.external)
+    // Une chaîne sans bloc au-dessus (racine) pose elle-même ses familles de conjoints, au bout de sa propre étendue
+    if (ownerUnion == null) {
+      for (const p of ownPending) {
+        const at = p.block.rel(p.anchorId)
+        const anchorX = rowX + offsets.get(p.anchorId)
+        const ideal = at == null ? anchorX - p.block.width / 2 : anchorX - at
+        const x = pushOutside(p.block.rows, ideal, rows, p.side, FAMILY_GAP)
+        attachedEdges.add(`${parentUnionOf.get(p.anchorId)}>${p.anchorId}`)
+        attachments.push({ block: p.block, x })
+        mergeRows(rows, p.block.rows, x)
+        for (const m of p.block.members) members.add(m)
+        external.push(...p.block.external)
+      }
+      ownPending.length = 0
     }
 
     // Origine du bloc au bord gauche de son contour
@@ -320,7 +358,7 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
       return null
     }
     return {
-      rows, members, external, gen, rel,
+      rows, members, external, gen, rel, pending: ownPending,
       chain: [rowX, rowX + rowW],
       get width() { return extentOf(rows)[1] },
       place(x0) {
@@ -372,45 +410,56 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
   const renvoisByUnion = new Map()
   for (const e of result.edges) {
     const u = e.sources[0], c = e.targets[0]
-    if (!externalEdges.has(`${u}>${c}`) || !crossesOtherFamily(u, c)) continue
+    if (!externalEdges.has(`${u}>${c}`) || attachedEdges.has(`${u}>${c}`) || !crossesOtherFamily(u, c)) continue
     e._renvoi = true
     e._renvoiIndex = renvoisByUnion.get(u) || 0
     renvoisByUnion.set(u, e._renvoiIndex + 1)
   }
 
-  // Lignes de fratrie emboîtées : par rangée, la ligne d'une union qui en contient une autre passe au-dessus
-  // d'elle (_railLift plus grand = plus haut). Deux lignes qui se chevauchent sans s'emboîter prennent deux
-  // niveaux différents. Niveau 0 = la ligne la plus proche des enfants.
+  // Lignes de fratrie emboîtées, par rangée. Une ligne qui en contient une autre passe au-dessus d'elle.
+  // Deux lignes qui se chevauchent sans s'emboîter : celle dont l'union est en dehors de l'autre passe
+  // au-dessus (son fil n'entre dans l'autre famille qu'une fois, à l'enfant collé), sinon la plus longue.
+  // _railLift plus grand = plus haut ; 0 = la ligne la plus proche des enfants.
   const rails = new Map()
   for (const e of result.edges) {
     if (e._renvoi) continue
     const u = byId.get(e.sources[0]), k = byId.get(e.targets[0])
     if (!u || !k) continue
-    const r = rails.get(u.id) || { gen: u._generation, l: u.x + u.width / 2, r: u.x + u.width / 2 }
+    const ux = u.x + u.width / 2
+    const r = rails.get(u.id) || { id: u.id, gen: u._generation, ux, l: ux, r: ux }
     r.l = Math.min(r.l, k.x + k.width / 2); r.r = Math.max(r.r, k.x + k.width / 2)
     rails.set(u.id, r)
   }
   const byRow = new Map()
-  for (const [id, r] of rails) { if (!byRow.has(r.gen)) byRow.set(r.gen, []); byRow.get(r.gen).push({ id, ...r }) }
+  for (const r of rails.values()) { if (!byRow.has(r.gen)) byRow.set(r.gen, []); byRow.get(r.gen).push(r) }
   for (const list of byRow.values()) {
-    list.sort((a, b) => (b.r - b.l) - (a.r - a.l) || a.l - b.l)
-    const level = new Map()
-    for (let i = 0; i < list.length; i++) {
-      const me = list[i]
-      let min = 0
-      const taken = new Set()
-      for (let j = 0; j < i; j++) {
-        const o = list[j]
-        if (me.r <= o.l || me.l >= o.r) continue
-        if (o.l <= me.l && o.r >= me.r) min = Math.max(min, level.get(o.id) + 1)
-        else taken.add(level.get(o.id))
+    list.sort((a, b) => a.l - b.l)
+    const below = new Map(list.map(r => [r.id, []]))
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const a = list[i], b = list[j]
+      if (b.l >= a.r) break
+      const aIn = a.l <= b.l && a.r >= b.r, bIn = b.l <= a.l && b.r >= a.r
+      let upper
+      if (aIn && !bIn) upper = a
+      else if (bIn && !aIn) upper = b
+      else {
+        const aOut = a.ux < b.l || a.ux > b.r, bOut = b.ux < a.l || b.ux > a.r
+        upper = aOut && !bOut ? a : bOut && !aOut ? b : (a.r - a.l >= b.r - b.l ? a : b)
       }
-      let lv = min
-      while (taken.has(lv)) lv++
-      level.set(me.id, lv)
+      below.get(upper.id).push(upper === a ? b.id : a.id)
     }
-    const deepest = Math.min(3, Math.max(...level.values()))
-    for (const r of list) byId.get(r.id)._railLift = Math.max(0, deepest - Math.min(3, level.get(r.id)))
+    const lift = new Map()
+    const visiting = new Set()
+    const liftOf = (id) => {
+      if (lift.has(id)) return lift.get(id)
+      if (visiting.has(id)) return 0
+      visiting.add(id)
+      const v = below.get(id).reduce((m, o) => Math.max(m, liftOf(o) + 1), 0)
+      visiting.delete(id)
+      lift.set(id, v)
+      return v
+    }
+    for (const r of list) byId.get(r.id)._railLift = Math.min(3, liftOf(r.id))
   }
 
   return result

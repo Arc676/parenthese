@@ -96,6 +96,7 @@ export function checkInvariants(result, coupleBarMeta, graph, referenceId = null
     kidsOf.get(e.sources[0]).push(e)
   }
   for (const edges of kidsOf.values()) for (const e of edges) siblingsOf.set(e.targets[0], edges.map((x) => x.targets[0]))
+  const parentsOf = new Set(result.edges.map((e) => e.targets[0]))
   let fratries_coupees = 0, fratries_desordre = 0
   for (const edges of kidsOf.values()) {
     const kids = edges.map((e) => byId.get(e.targets[0])).filter(Boolean)
@@ -111,7 +112,10 @@ export function checkInvariants(result, coupleBarMeta, graph, referenceId = null
     const gen = kids[0]._generation
     if ((byGen.get(gen) || []).some((n) => n._type !== 'union' && !allowed.has(n.id) && n.x > lo && n.x < hi)) fratries_coupees++
     // Ordre choisi, de gauche à droite, ou en miroir (famille attachée à un conjoint, retournée vers lui)
-    const byX = [...edges].sort((a, b) => cx(byId.get(a.targets[0])) - cx(byId.get(b.targets[0])))
+    // Un enfant dont le conjoint a ses parents dans l'arbre va au bout de la fratrie (sa belle-famille se colle à
+    // lui) : l'ordre choisi ne vaut que pour les autres
+    const hasInLaws = (id) => [...(spousesOf.get(id) || [])].some((s) => parentsOf.has(s))
+    const byX = [...edges].filter((e) => !hasInLaws(e.targets[0])).sort((a, b) => cx(byId.get(a.targets[0])) - cx(byId.get(b.targets[0])))
     const orders = byX.map((e) => e._displayOrder).filter((o) => Number.isFinite(o))
     const ascending = orders.every((o, i) => i === 0 || o >= orders[i - 1])
     const descending = orders.every((o, i) => i === 0 || o <= orders[i - 1])
