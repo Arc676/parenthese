@@ -324,7 +324,7 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
         nodes.push({ id: cardId, _type: 'family', width: FAMILY_CARD_W, height: FAMILY_CARD_H, _generation: gen - 1, y: A.y - rowStep + (PERSON_H - FAMILY_CARD_H) / 2, _data: { label, count: people.length, portraits, targetId: echoId, stem: 'down', stemTo: id } })
         byId.set(cardId, nodes[nodes.length - 1])
         const card = { rows: new Map([[gen - 1, [[0, FAMILY_CARD_W]]]]), members: new Set([cardId]), external: [], gen: gen - 1, rel: (x) => (x === cardId ? 0 : null), chain: [0, FAMILY_CARD_W], width: FAMILY_CARD_W, place(x0) { pos.set(cardId, x0) } }
-        clusters.push({ block, anchorId: id, pu, cardId, echoId, mainCardId })
+        clusters.push({ block, anchorId: id, pu, cardId, echoId, mainCardId, label, people })
         built.push({ block: card, anchorId: id, side })
         if (chain.length === 3) orient(chain, chain[0] === id ? chain[2] : chain[0], side)
         continue
@@ -630,6 +630,26 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
     }
     for (const r of list) byId.get(r.id)._railLift = Math.min(4, liftOf(r.id))
   }
+
+  // Carte des familles (maquette J, 19/10) : au dézoom, chaque famille (la lignée principale, chaque cluster)
+  // devient une tuile, et chaque mariage entre familles un trait. Le dessin se fait dans Galaxy / renderers.
+  const familyOf = new Map()
+  clusters.forEach(c => { for (const m of c.block.members) familyOf.set(m, c.cardId); familyOf.set(c.echoId, c.cardId); familyOf.set(c.mainCardId, c.cardId) })
+  const bboxOf = (ids) => {
+    const ps = ids.map(id => byId.get(id)).filter(n => n && n._type === 'person' && n.x != null)
+    if (!ps.length) return null
+    return { x0: Math.min(...ps.map(n => n.x)), y0: Math.min(...ps.map(n => n.y)), x1: Math.max(...ps.map(n => n.x + n.width)), y1: Math.max(...ps.map(n => n.y + n.height)) }
+  }
+  const portraitsOf = (ids) => {
+    const ps = ids.map(id => byId.get(id)).filter(n => n?._type === 'person' && !n._echo)
+    return [...ps.filter(n => n._data?.photo), ...ps.filter(n => !n._data?.photo)].slice(0, 6).map(n => n._data)
+  }
+  const mainIds = nodes.filter(n => !familyOf.has(n.id)).map(n => n.id)
+  nodes.forEach(n => { n._family = familyOf.get(n.id) || 'main' })
+  result.families = [
+    { id: 'main', label: referenceNode?._data?.lastName || '', count: mainPeople.length, portraits: portraitsOf(mainIds), bbox: bboxOf(mainIds), links: [] },
+    ...clusters.map(c => ({ id: c.cardId, label: c.label, count: c.people.length, portraits: portraitsOf([...c.block.members]), bbox: bboxOf([...c.block.members]), links: [{ to: 'main', label: byId.get(c.anchorId)?._data?.firstName || '' }] })),
+  ].filter(f => f.bbox)
 
   return result
 }

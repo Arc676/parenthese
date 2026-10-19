@@ -318,6 +318,74 @@ function drawFamilyCard(ctx, node, pos, posMap, progress, view) {
   if (target && alpha > 0.5) renvoiHitAreas.push({ x0: cx - w / 2, y0: cy - h / 2, x1: cx + w / 2, y1: cy + h / 2, targetX: target.cx, targetY: target.cy })
 }
 
+// ============================================================
+// Carte des familles (maquette J, 19/10) : au dézoom, l'arbre s'efface et chaque famille devient une tuile
+// de taille constante à l'écran (nom, mosaïque de portraits, nombre), les mariages entre familles des traits.
+// Un clic sur une tuile s'approche de la famille (même mécanique que les pastilles).
+// ============================================================
+export function drawFamilyMap(ctx, families, view, alpha) {
+  if (!families?.length || alpha <= 0) return
+  const s = view?.scale || 1
+  const px = (v) => v / s
+  const real = (f) => ({ x: (f.bbox.x0 + f.bbox.x1) / 2, y: (f.bbox.y0 + f.bbox.y1) / 2 })
+  // Les tuiles se rangent autour de la famille principale, à distance d'écran constante, quel que soit
+  // l'éloignement réel des familles sur la toile ; un clic mène à la vraie place de la famille
+  const main = families.find((f) => f.id === 'main') || families[0]
+  const origin = real(main)
+  const others = families.filter((f) => f !== main)
+  const tilePos = new Map([[main.id, origin]])
+  others.forEach((f, i) => {
+    const angle = -Math.PI / 2 + (i / Math.max(1, others.length)) * Math.PI * 2 + Math.PI / others.length
+    tilePos.set(f.id, { x: origin.x + Math.cos(angle) * px(380), y: origin.y + Math.sin(angle) * px(230) })
+  })
+  const center = (f) => tilePos.get(f.id)
+  if (alpha >= 1) renvoiHitAreas.length = 0
+  ctx.save()
+  ctx.globalAlpha = alpha
+  ctx.lineCap = 'round'
+  for (const f of families) for (const l of (f.links || [])) {
+    const g = families.find((x) => x.id === l.to)
+    if (!g) continue
+    const a = center(f), b = center(g)
+    ctx.strokeStyle = FIL.color
+    ctx.lineWidth = px(1.6)
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke()
+    if (l.label) {
+      ctx.fillStyle = COLORS.textLight
+      ctx.font = `400 ${px(11)}px "DM Sans", system-ui, sans-serif`
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'
+      ctx.fillText(l.label, (a.x + b.x) / 2, (a.y + b.y) / 2 - px(6))
+    }
+  }
+  for (const f of families) {
+    const c = center(f)
+    const w = px(290), h = px(112)
+    ctx.fillStyle = '#FFFFFF'
+    ctx.strokeStyle = '#E3DED6'
+    ctx.lineWidth = px(1)
+    ctx.beginPath(); ctx.roundRect(c.x - w / 2, c.y - h / 2, w, h, px(18)); ctx.fill(); ctx.stroke()
+    ;(f.portraits || []).forEach((p, i) => {
+      const cx = c.x - w / 2 + px(24) + (i % 3) * px(30), cy = c.y - px(16) + Math.floor(i / 3) * px(30)
+      ctx.fillStyle = '#F2EFEA'; ctx.strokeStyle = '#E3DED6'; ctx.lineWidth = px(0.8)
+      ctx.beginPath(); ctx.roundRect(cx - px(11), cy - px(11), px(22), px(22), px(4)); ctx.fill(); ctx.stroke()
+      ctx.fillStyle = COLORS.textLight
+      ctx.font = `400 ${px(9)}px "Newsreader", Georgia, serif`
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.fillText(`${(p.firstName || '')[0] || ''}${(p.lastName || '')[0] || ''}`, cx, cy + px(0.5))
+    })
+    ctx.fillStyle = COLORS.text
+    ctx.font = `500 ${px(18)}px "Newsreader", Georgia, serif`
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
+    ctx.fillText(f.label ? t('Famille {name}', { name: f.label }) : t('Famille'), c.x - w / 2 + px(118), c.y - px(12))
+    ctx.fillStyle = '#93402A'
+    ctx.font = `400 ${px(12)}px "DM Sans", system-ui, sans-serif`
+    ctx.fillText(t('{n} personnes', { n: f.count }), c.x - w / 2 + px(118), c.y + px(14))
+    const target = real(f)
+    if (alpha > 0.5) renvoiHitAreas.push({ x0: c.x - w / 2, y0: c.y - h / 2, x1: c.x + w / 2, y1: c.y + h / 2, targetX: target.x, targetY: target.y })
+  }
+  ctx.restore()
+}
+
 // Après drawNodes : les pastilles passent au-dessus des portraits et des souvenirs
 export function drawRenvoiPills(ctx) {
   renvoiPills.forEach(p => drawRenvoiPill(ctx, p))

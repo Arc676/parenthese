@@ -8,7 +8,7 @@ import { computeBlockLayout } from './galaxy/blockLayout'
 // Placement par blocs familiaux par défaut (mesures : tools/layout-bench). ?layout=sugiyama = placement Sugiyama.
 const USE_BLOCK_LAYOUT = typeof window === 'undefined' || new URLSearchParams(window.location.search).get('layout') !== 'sugiyama'
 import { findPathBFS } from './galaxy/pathfinding'
-import { drawBackground, drawCoupleLinks, drawFiliations, drawAnnotations, drawPathHighlight, drawNodes, drawRenvoiPills, nodeRadius } from './galaxy/renderers'
+import { drawBackground, drawCoupleLinks, drawFiliations, drawAnnotations, drawPathHighlight, drawNodes, drawRenvoiPills, nodeRadius, drawFamilyMap } from './galaxy/renderers'
 import { buildSiblingGroups, moveInOrder, pickSlot, rubberBand, springStep, isSettled, buildOrderPayload, filiationsWithOrder } from './galaxy/siblingReorder'
 import { annotations as annotationData } from '../data/mockData'
 import { useImageCache } from './galaxy/useImageCache'
@@ -26,6 +26,9 @@ function approach(prev, target, k, eps = 1e-3) {
   return Math.abs(target - next) < eps ? target : next
 }
 const MAX_SCALE = 3.2
+// Carte des familles : l'arbre s'efface entre ces deux échelles, les tuiles de familles apparaissent
+const MAP_HI = 0.3
+const MAP_LO = 0.2
 // Ouverture sur la personne de départ quand l'arbre entier serait illisible
 const FOCUS_MIN_READABLE_SCALE = 0.5
 const FOCUS_SCALE = 0.95
@@ -811,6 +814,10 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       const cssW = canvas.width / dprRef.current
       const cssH = canvas.height / dprRef.current
       const view = { x0: -x / scale, y0: -y / scale, x1: (cssW - x) / scale, y1: (cssH - y) / scale, scale }
+      // Carte des familles : au dézoom, l'arbre laisse la place aux tuiles de familles
+      const families = layoutData.families || []
+      const mapAlpha = families.length > 1 ? Math.min(1, Math.max(0, (MAP_HI - scale) / (MAP_HI - MAP_LO))) : 0
+      if (mapAlpha < 1) {
       drawCoupleLinks(ctx, coupleBarMeta, posMap, nodeMap, nodeRandomDataRef.current, entrance, entranceActive, elapsed, view)
       drawFiliations(ctx, layoutData.edges, posMap, nodeMap, nodeRandomDataRef.current, entrance, entranceActive, elapsed, view)
       drawPathHighlight(ctx, {
@@ -838,6 +845,8 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
         liftScales: liftScalesRef.current,
       })
       drawRenvoiPills(ctx)
+      }
+      if (mapAlpha > 0) drawFamilyMap(ctx, families, view, mapAlpha)
       // Annotations dessinées APRES les noeuds pour que stickers/texte soient au-dessus
       // Annotations : ancrer aux personnes proches pour qu'elles suivent le layout
       const personPosMap = new Map()
