@@ -201,6 +201,8 @@ export function drawCoupleLinks(ctx, coupleBarMeta, posMap, nodeMap, nodeRandomD
 // useGalaxyInteractions.
 // ============================================================
 export const renvoiHitAreas = []
+// Zones « + photo » : portraits vides, chez le propriétaire (cercle du nœud, rempli au dessin)
+export const photoPlaceholderHitAreas = []
 const renvoiPills = []
 const RENVOI_FONT = '500 11px "DM Sans", system-ui, sans-serif'
 // Pastilles collées aux personnes : juste sous le couple, juste au-dessus du portrait de l'enfant
@@ -450,6 +452,10 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
   const { cx, cy } = pos
   const person = getPersonById(node._data.id) || node._data
   const rd = nodeRandomData.get(node.id)
+  // Zone « + photo » : seulement là où le cadre invite à poser une photo (même condition que le dessin)
+  if (photoHint && !person.photo && nodeProgress >= 0.5) {
+    photoPlaceholderHitAreas.push({ personId: node._data.id, cx, cy, r: nodeRadius(node) })
+  }
   const img = person.photo ? imageCache.get(person.photo) : null
   const frameType = resolveFrameType(person, img)
   const frameRot = rd?.frameRotation || 0
@@ -1043,6 +1049,7 @@ function drawImageCover(ctx, img, x, y, w, h, crop = null) {
 // ============================================================
 export function drawNodes(ctx, layoutData, posMap, entrance, entranceActive, elapsed, renderState) {
   const view = renderState.view || null
+  photoPlaceholderHitAreas.length = 0
   layoutData.children.forEach(node => {
     const pos = posMap.get(node.id)
     if (!pos) return
