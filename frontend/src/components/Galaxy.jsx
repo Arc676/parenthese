@@ -8,11 +8,12 @@ import { computeBlockLayout } from './galaxy/blockLayout'
 // Placement par blocs familiaux par défaut (mesures : tools/layout-bench). ?layout=sugiyama = placement Sugiyama.
 const USE_BLOCK_LAYOUT = typeof window === 'undefined' || new URLSearchParams(window.location.search).get('layout') !== 'sugiyama'
 import { findPathBFS } from './galaxy/pathfinding'
-import { drawBackground, drawCoupleLinks, drawFiliations, drawAnnotations, drawPathHighlight, drawNodes, drawRenvoiPills, nodeRadius, drawFamilyMap, familyAt, drawFamilyBanner } from './galaxy/renderers'
+import { drawBackground, drawCoupleLinks, drawFiliations, drawAnnotations, drawPathHighlight, drawNodes, drawRenvoiPills, nodeRadius } from './galaxy/renderers'
 import { buildSiblingGroups, moveInOrder, pickSlot, rubberBand, springStep, isSettled, buildOrderPayload, filiationsWithOrder } from './galaxy/siblingReorder'
 import { annotations as annotationData } from '../data/mockData'
 import { useImageCache } from './galaxy/useImageCache'
 import { useGalaxyInteractions } from './galaxy/useGalaxyInteractions'
+import { t as tr } from '../i18n/index.js'
 import './Galaxy.css'
 
 // Assez bas pour cadrer un grand arbre entier à l'ouverture
@@ -27,7 +28,6 @@ function approach(prev, target, k, eps = 1e-3) {
 }
 const MAX_SCALE = 3.2
 // Carte des familles : l'arbre s'efface entre ces deux échelles, les tuiles de familles apparaissent
-const MAP_SCALE = 0.25
 // Ouverture sur la personne de départ quand l'arbre entier serait illisible
 const FOCUS_MIN_READABLE_SCALE = 0.5
 const FOCUS_SCALE = 0.95
@@ -44,14 +44,27 @@ const prefersReducedMotion = () => typeof window !== 'undefined' && window.match
 
 const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, photoHint = false, onPhotoPlaceholderClick = null, reorderEnabled = false, onReorderSiblings = null }) => {
   const canvasRef = useRef(null)
+  // Onglets de familles : la personne de référence de l'arbre affiché (celle de départ, puis le conjoint
+  // dont on ouvre la famille), et la liste des familles rencontrées, dans l'ordre des mariages
+  const layoutDataRef = useRef(null)
+  const [activeRef, setActiveRef] = useState(focusPersonId)
+  const [tabs, setTabs] = useState([])
+  const startRefRef = useRef(focusPersonId)
+  useEffect(() => { startRefRef.current = focusPersonId; setActiveRef(focusPersonId); setTabs([]) }, [focusPersonId])
   // Lu au calcul du cadrage seulement : changer de personne de départ ne recadre pas une vue en cours
   const focusPersonIdRef = useRef(focusPersonId)
   // Mis à jour hors du rendu, avant l'effet de cadrage déclaré plus bas (même phase, ordre de déclaration)
-  useEffect(() => { focusPersonIdRef.current = focusPersonId }, [focusPersonId])
+  useEffect(() => { focusPersonIdRef.current = activeRef }, [activeRef])
+  // Clic sur un badge : l'onglet de cette famille s'il existe déjà (la même famille vue depuis un autre
+  // conjoint), sinon un nouvel onglet avec ce conjoint comme référence
+  const openFamily = useCallback((anchorId) => {
+    const fam = layoutDataRef.current?.families?.find((f) => f.anchorId === anchorId)
+    const known = fam && tabs.find((tb) => `p-${tb.referenceId}` === String(anchorId) || fam.members.includes(String(tb.referenceId)))
+    setActiveRef(known ? known.referenceId : String(anchorId).replace(/^p-/, ''))
+  }, [tabs])
   // Propriétaire : un portrait vide survolé montre « + photo »
   const photoHintRef = useRef(photoHint)
   useEffect(() => { photoHintRef.current = photoHint }, [photoHint])
-  const layoutDataRef = useRef(null)
   const [layoutReady, setLayoutReady] = useState(false)
   const transformRef = useRef({ x: 0, y: 0, scale: 1 })
 
@@ -141,7 +154,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     canvasRef, transformRef, targetTransformRef,
     layoutDataRef, nodeRandomDataRef, entranceRef,
     hoveredNodeIdRef: hoveredNodeId, hoveredMediaKeyRef: hoveredMediaKey, mouseWorldPosRef: mouseWorldPos,
-    getAnimatedPos, onPersonSelect, onMediaSelect, onPhotoPlaceholderClick,
+    getAnimatedPos, onPersonSelect, onMediaSelect, onPhotoPlaceholderClick, onOpenFamily: openFamily,
     annotationHandlers,
     minScale: MIN_SCALE,
     maxScale: MAX_SCALE,
@@ -561,7 +574,24 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     layoutDataRef.current = result
     needsRedrawRef.current = true
     setLayoutReady(true)
-  }, [graphRevision])
+    // Onglets : la famille affichée d'abord, puis chaque belle-famille rencontrée, sans doublon (une famille déjà
+    // en onglet se reconnaît à sa personne de référence parmi les membres)
+    const fams = result.families || []
+    if (fams.length) setTabs((prev) => {
+      // La liste commence toujours par la famille de départ ; un placement calculé pour une autre référence
+      // avant qu'elle soit connue (arbre chargé avant sa personne de départ) ne compte pas
+      const start = String(startRefRef.current)
+      const next = prev[0] && String(prev[0].referenceId) === start ? [...prev] : []
+      const main = fams[0]
+      if (!next.length && String(main.referenceId) !== start) return prev
+      if (!next.some((tb) => String(tb.referenceId) === String(main.referenceId))) next.push({ referenceId: main.referenceId, label: main.label, count: main.count })
+      for (const f of fams.slice(1)) {
+        if (next.some((tb) => `p-${tb.referenceId}` === String(f.anchorId) || f.members.includes(String(tb.referenceId)))) continue
+        next.push({ referenceId: String(f.anchorId).replace(/^p-/, ''), label: f.label, count: f.count })
+      }
+      return next
+    })
+  }, [graphRevision, activeRef])
 
   // Sync selectedPersonId
   useEffect(() => {
@@ -792,10 +822,6 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       // Rien n'a changé : on ne redessine pas
       if (!dirty) { rafId = requestAnimationFrame(animate); return }
 
-      // Carte des familles : passé MAP_SCALE, l'arbre laisse la place à la carte, bascule nette
-      const families = layoutData.families || []
-      const mapOn = families.length > 1 && scale < MAP_SCALE
-
       // Positions animées, calculées seulement quand on redessine
       const posMap = new Map()
       layoutData.children.forEach(node => {
@@ -817,7 +843,6 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       const cssW = canvas.width / dprRef.current
       const cssH = canvas.height / dprRef.current
       const view = { x0: -x / scale, y0: -y / scale, x1: (cssW - x) / scale, y1: (cssH - y) / scale, scale }
-      if (!mapOn) {
       drawCoupleLinks(ctx, coupleBarMeta, posMap, nodeMap, nodeRandomDataRef.current, entrance, entranceActive, elapsed, view)
       drawFiliations(ctx, layoutData.edges, posMap, nodeMap, nodeRandomDataRef.current, entrance, entranceActive, elapsed, view)
       drawPathHighlight(ctx, {
@@ -845,14 +870,6 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
         liftScales: liftScalesRef.current,
       })
       drawRenvoiPills(ctx)
-      }
-      if (mapOn || families.length > 1) {
-        ctx.save()
-        ctx.setTransform(dprRef.current, 0, 0, dprRef.current, 0, 0)
-        if (mapOn) drawFamilyMap(ctx, families, cssW, cssH)
-        else drawFamilyBanner(ctx, familyAt(families, view))
-        ctx.restore()
-      }
       // Annotations dessinées APRES les noeuds pour que stickers/texte soient au-dessus
       // Annotations : ancrer aux personnes proches pour qu'elles suivent le layout
       const personPosMap = new Map()
@@ -1049,6 +1066,22 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     />
     {displayLabel && (
       <div className="path-label-overlay">{displayLabel}</div>
+    )}
+    {tabs.length > 1 && (
+      <nav className="family-tabs" aria-label={tr('Familles')}>
+        {tabs.map((tb) => (
+          <button
+            key={String(tb.referenceId)}
+            type="button"
+            className={`family-tab${String(tb.referenceId) === String(activeRef) ? ' is-active' : ''}`}
+            aria-current={String(tb.referenceId) === String(activeRef) ? 'page' : undefined}
+            onClick={() => setActiveRef(tb.referenceId)}
+          >
+            <span className="family-tab-name">{tb.label ? tr('Famille {name}', { name: tb.label }) : tr('Famille')}</span>
+            <span className="family-tab-count">{tb.count}</span>
+          </button>
+        ))}
+      </nav>
     )}
     </>
   )

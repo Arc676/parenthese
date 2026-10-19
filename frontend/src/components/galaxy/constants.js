@@ -16,9 +16,6 @@ export const COMPACT_SCALE = 0.6
 export const COMPACT_R = PERSON_R * COMPACT_SCALE
 export const COMPACT_W = 40
 export const COMPACT_JOIN_GAP = -18
-// Carte de famille : tient la place d'un couple au-dessus d'un conjoint dont la famille est dessinée à part
-export const FAMILY_CARD_W = 200
-export const FAMILY_CARD_H = 76
 export const MAX_ORBIT_MEDIAS = 3
 export const ORBIT_RADIUS = 55
 export const ORBIT_MEDIA_SIZE = 22

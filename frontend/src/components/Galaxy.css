@@ -43,3 +43,52 @@
     font-size: 13px;
   }
 }
+
+/* ============================================================
+   Onglets de familles : un onglet par famille, en haut à gauche
+   ============================================================ */
+
+.family-tabs {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 500;
+  display: flex;
+  gap: 6px;
+  max-width: calc(100vw - 120px);
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 4px;
+}
+.family-tabs::-webkit-scrollbar { display: none; }
+
+.family-tab {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 7px 14px 8px;
+  border-radius: 999px;
+  border: 1px solid #EBE6DF;
+  background: #FFFFFF;
+  color: #2A2622;
+  font-family: "Newsreader", Georgia, serif;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.family-tab:hover { border-color: #D9CFC6; }
+.family-tab:focus-visible { outline: 2px solid #C9553D; outline-offset: 2px; }
+.family-tab.is-active { background: #2A2622; border-color: #2A2622; color: #FFFFFF; }
+.family-tab-count {
+  font-family: "DM Sans", system-ui, sans-serif;
+  font-size: 11px;
+  color: #93402A;
+}
+.family-tab.is-active .family-tab-count { color: #EDB6A4; }
+
+@media (max-width: 768px) {
+  .family-tabs { top: 10px; left: 10px; max-width: calc(100vw - 84px); }
+  .family-tab { font-size: 14px; padding: 6px 12px 7px; }
+}

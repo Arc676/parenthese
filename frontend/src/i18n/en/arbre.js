@@ -2,6 +2,7 @@
 export default {
   'Famille {name}': 'The {name} family',
   'Famille': 'Family',
+  'Familles': 'Families',
   // Arbre sur canvas (components/galaxy/renderers.js)
   'Voir les parents': 'See parents',
   'Voir {firstName}': 'See {firstName}',

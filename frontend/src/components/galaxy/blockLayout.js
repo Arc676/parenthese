@@ -1,5 +1,4 @@
 import { computeLayout, componentOrderPerGen, chainGap } from './elkLayout'
-import { PERSON_W, PERSON_H, FAMILY_CARD_W, FAMILY_CARD_H } from './constants'
 
 // ============================================================
 // Layout par blocs familiaux (Reingold-Tilford adapté aux couples)
@@ -44,7 +43,9 @@ const PARENT_SHIFT_PX = 400
 const SIDE_SWITCH_PX = 1440
 // Carte de famille et pont (maquette A, retenue le 19/10). Une belle-famille plus large que ça ne se colle pas à
 // son enfant : elle devient un cluster dessiné à part, et une carte prend sa place au-dessus du conjoint
-const CLUSTER_PX = 2880
+// Une belle-famille plus large que ça n'est pas dessinée dans cet arbre : elle devient un onglet (son propre
+// arbre, calculé avec le conjoint comme référence) et le conjoint porte un badge vers elle.
+const FAMILY_TAB_PX = 2880
 
 // Le fil d'une filiation union → enfant : une personne d'une autre famille, sur la ligne de l'enfant,
 // entre l'aplomb de l'union et l'enfant, est croisée. Frères et sœurs et leurs conjoint(e)s ne comptent pas
@@ -86,10 +87,6 @@ const extentOf = (rows) => {
 }
 const overlaps = (l, r, list, gap) => list.some(([a, b]) => l < b + gap && r > a - gap)
 
-// Les grosses belles-familles (clusters) se rangent du côté où leur conjoint se trouve dans la lignée
-// principale : gauche s'il est dans la moitié gauche, droite sinon. Ce côté ne se connaît qu'une fois la
-// lignée posée, d'où une seconde passe quand un cluster s'est construit du mauvais côté. Le couple se tourne
-// alors vers la famille, et la carte au-dessus du conjoint se pose de ce côté-là.
 // Règle globale (Patch, 19/10) : l'arbre s'ouvre à partir de la personne de référence. Toute belle-famille,
 // grosse ou petite, part du côté opposé à la référence (à droite pour un conjoint à sa droite), le couple se
 // tourne vers elle. Ce côté ne se connaît qu'une fois la lignée posée, d'où une seconde passe.
@@ -101,11 +98,12 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
   for (let pass = 0; pass < 4 && result._inlaws?.length; pass++) {
     const byId = new Map(result.children.map(n => [n.id, n]))
     const ref = referenceId != null ? byId.get(`p-${referenceId}`) : null
-    const main = result.families?.find(f => f.id === 'main')
-    const pivot = ref ? ref.x + ref.width / 2 : main ? (main.bbox.x0 + main.bbox.x1) / 2 : 0
+    const persons = result.children.filter(n => n._type === 'person')
+    const pivot = ref ? ref.x + ref.width / 2 : persons.length ? (Math.min(...persons.map(n => n.x)) + Math.max(...persons.map(n => n.x + n.width))) / 2 : 0
     let changed = false
     for (const { anchorId, side } of result._inlaws) {
       const a = byId.get(anchorId)
+      if (!a) continue // conjoint d'une famille devenue onglet : pas dans cet arbre
       const want = a.x + a.width / 2 < pivot ? -1 : 1
       if (want !== side && forced.get(anchorId) !== want) { forced.set(anchorId, want); changed = true }
     }
@@ -224,8 +222,8 @@ function layoutOnce(graphData, referenceId, forcedSide) {
   const placed = new Set()
   const externalEdges = new Set() // `${union}>${enfant}` : enfant dessiné sous une autre lignée
   const detached = [] // familles qu'on n'a pas pu coller à leur enfant (trop loin) : posées à part, renvoi
-  const clusters = [] // grosses belles-familles dessinées à part : { block, anchorId, cardId, echoId, mainCardId }
-  const rowStep = (() => { const ys = [...new Set(nodes.map(n => n.y))].sort((a, b) => a - b); return ys.length > 1 ? ys[1] - ys[0] : PERSON_H + 60 })()
+  const tabs = [] // belles-familles trop larges pour cet arbre, devenues onglets : { anchorId, pu, label, count, members }
+  const hiddenChains = new Set() // chaînes des familles devenues onglets : pas dessinées dans cet arbre
   const attachedEdges = new Set() // `${union}>${enfant}` : fil d'une famille collée à son enfant, toujours dessiné
 
   // Imbrique des blocs de gauche à droite, rangée par rangée
@@ -274,22 +272,9 @@ function layoutOnce(graphData, referenceId, forcedSide) {
 
   // Place fantôme d'un enfant déjà dessiné ailleurs : il garde sa place dans l'ordre de la fratrie et
   // dans le centrage des parents, sans occuper de contour (c'est l'enfant réel qui l'occupe)
-  // Pendant la reconstruction d'un cluster, la place de la carte inverse est réservée sous le fantôme du conjoint
-  let cardUnder = null
   const ghostBlock = (kid) => {
     const n = byId.get(kid)
-    const rows = new Map([[n._generation, [[0, n.width]]]])
-    if (kid === cardUnder) rows.set(n._generation + 1, [[(n.width - FAMILY_CARD_W) / 2, (n.width + FAMILY_CARD_W) / 2]])
-    return { ghost: true, withCard: kid === cardUnder, kid, rows, members: new Set(), external: [], gen: n._generation, chain: [0, n.width], rel: () => null, width: n.width, place() {} }
-  }
-  const CARD_SIDE_PX = 400
-  const freeSpotNear = (desired, w, list, prefer = 0) => {
-    if (!overlaps(desired, desired + w, list, FAMILY_GAP)) return desired
-    const candidates = list.flatMap(([l, r]) => [r + FAMILY_GAP, l - FAMILY_GAP - w]).filter(c => !overlaps(c, c + w, list, FAMILY_GAP))
-    if (!candidates.length) return null
-    // Le côté de la famille est préféré tant qu'il ne coûte pas plus de CARD_SIDE_PX
-    const cost = (c) => Math.abs(c - desired) + (prefer && Math.sign(c - desired) === -prefer ? CARD_SIDE_PX : 0)
-    return candidates.reduce((best, c) => (cost(c) < cost(best) ? c : best))
+    return { ghost: true, kid, rows: new Map([[n._generation, [[0, n.width]]]]), members: new Set(), external: [], gen: n._generation, chain: [0, n.width], rel: () => null, width: n.width, place() {} }
   }
 
   // Famille attachée à un conjoint : l'enfant à coller (ancre) doit finir au bout de sa fratrie, du côté du
@@ -354,8 +339,7 @@ function layoutOnce(graphData, referenceId, forcedSide) {
     childBlocks.push(...kids)
     const packed = packBlocks(childBlocks, FAMILY_GAP)
     const rows = new Map()
-    // Un fantôme ne compte pas dans le contour, sauf s'il porte la carte inverse d'un cluster (l'écho y est dessiné)
-    childBlocks.forEach((b, i) => { if (!b.ghost || b.withCard) mergeRows(rows, b.rows, packed.xs[i]) })
+    childBlocks.forEach((b, i) => { if (!b.ghost) mergeRows(rows, b.rows, packed.xs[i]) })
 
     // Familles des conjoints de la chaîne pas encore dessinées : construites entières depuis leur ancêtre
     // le plus haut. Le couple se tourne vers cette famille (conjoint du côté où elle se pose). Une famille
@@ -375,38 +359,27 @@ function layoutOnce(graphData, referenceId, forcedSide) {
       if (placed.has(top)) continue
       const side = forcedSide.get(id) ?? (chain.length > 3 ? (chain.indexOf(id) < chain.length / 2 ? -1 : 1) : (outer || (chain.indexOf(id) < chain.length / 2 ? -1 : 1)))
       const saved = anchor
-      const clustersBefore = clusters.length
+      const tabsBefore = tabs.length
       const externalBefore = new Set(externalEdges)
       anchor = { kid: id, end: side < 0 ? 'right' : 'left', path: pathOf(id) }
-      let block = buildBlock(top, null, side)
+      const block = buildBlock(top, null, side)
       anchor = saved
-      if (block.width > CLUSTER_PX) {
-        // La famille devient un cluster. On la reconstruit avec, sous le fantôme du conjoint, la place réservée
-        // de la carte inverse. La première construction ne laisse aucune trace : ses clusters imbriqués (et leurs
-        // chaînes), les chaînes qu'elle a posées et les arêtes externes qu'elle a notées sont oubliés avec elle.
-        const unplace = (members) => { for (const ch of new Set([...members].map(m => chainOf.get(m)).filter(Boolean))) placed.delete(ch) }
-        for (const c of clusters.splice(clustersBefore)) { const i = nodes.findIndex(n => n.id === c.cardId); if (i >= 0) nodes.splice(i, 1); byId.delete(c.cardId); unplace(c.block.members) }
+      if (block.width > FAMILY_TAB_PX) {
+        // Trop large pour cet arbre : la famille devient un onglet et n'est pas dessinée ici. Sa construction ne
+        // laisse aucune trace (onglets imbriqués, chaînes posées, arêtes externes), et le fil de ses parents
+        // vers le conjoint est caché : c'est le badge du conjoint qui dit où est sa famille.
+        const chainsOf = (members) => new Set([...members].map(m => chainOf.get(m)).filter(Boolean))
+        const unplace = (members) => { for (const ch of chainsOf(members)) { placed.delete(ch); hiddenChains.delete(ch) } }
+        for (const tb of tabs.splice(tabsBefore)) { unplace(tb.members); byId.get(tb.anchorId)._familyTab = null }
         unplace(block.members)
         for (const e of [...externalEdges]) if (!externalBefore.has(e)) externalEdges.delete(e)
-        const savedCard = cardUnder
-        cardUnder = id
-        anchor = { kid: id, end: side < 0 ? 'right' : 'left', path: pathOf(id) }
-        block = buildBlock(top, null, side)
-        anchor = saved
-        cardUnder = savedCard
-        // Ici, une carte de famille tient la place de ses parents, juste au-dessus de lui
+        for (const ch of chainsOf(block.members)) hiddenChains.add(ch)
         const A = byId.get(id)
-        const cardId = `fam-${id}`, echoId = `echo-${id}`, mainCardId = `fam-main-${id}`
         const partners = [byId.get(pu)?._data?.p1Key, byId.get(pu)?._data?.p2Key].map(k => byId.get(k)?._data).filter(Boolean)
-        const label = partners.find(d => d.lastName)?.lastName || A._data?.birthName || A._data?.lastName || ''
-        const people = [...block.members].map(m => byId.get(m)).filter(n => n?._type === 'person')
-        const portraits = [...people.filter(n => n._data?.photo), ...people.filter(n => !n._data?.photo)].slice(0, 4).map(n => n._data)
-        nodes.push({ id: cardId, _type: 'family', width: FAMILY_CARD_W, height: FAMILY_CARD_H, _generation: gen - 1, y: A.y - rowStep + (PERSON_H - FAMILY_CARD_H) / 2, _data: { label, count: people.length, portraits, targetId: echoId, stem: 'down', stemTo: id } })
-        byId.set(cardId, nodes[nodes.length - 1])
-        const card = { isCard: true, rows: new Map([[gen - 1, [[0, FAMILY_CARD_W]]]]), members: new Set([cardId]), external: [], gen: gen - 1, rel: (x) => (x === cardId ? 0 : null), chain: [0, FAMILY_CARD_W], width: FAMILY_CARD_W, place(x0) { pos.set(cardId, x0) } }
-        clusters.push({ block, anchorId: id, pu, cardId, echoId, mainCardId, label, people, side })
-        built.push({ block: card, anchorId: id, side })
-        orient(chain, kidOfChain ?? (chain.length === 3 ? (chain[0] === id ? chain[2] : chain[0]) : null), side)
+        const label = A._data?.birthName || partners.find(d => d.lastName)?.lastName || A._data?.lastName || ''
+        const members = new Set([...block.members].filter(m => byId.get(m)?._type === 'person'))
+        tabs.push({ anchorId: id, pu, label, count: members.size, members })
+        A._familyTab = { anchorId: id, label, count: members.size }
         continue
       }
       built.push({ block, anchorId: id, side })
@@ -486,7 +459,6 @@ function layoutOnce(graphData, referenceId, forcedSide) {
       reserveParents(trial, rowX)
       for (const p of built) {
         if (chain.length !== 3) break
-        if (p.block.isCard) continue
         const ideal = idealOf(p, rowX)
         const x = pushHybrid(p.block.rows, ideal, trial, p.side, gen, FAMILY_GAP)
         const other = -p.side
@@ -513,8 +485,8 @@ function layoutOnce(graphData, referenceId, forcedSide) {
       let maxPush = 0, sideOfMax = 0
       for (const p of built) {
         const ideal = idealOf(p, rx)
-        const x = p.block.isCard ? (freeSpotNear(ideal, p.block.width, r.get(gen - 1) || [], p.side) ?? pushHybrid(p.block.rows, ideal, r, p.side, gen, FAMILY_GAP)) : pushHybrid(p.block.rows, ideal, r, p.side, gen, FAMILY_GAP)
-        if (!p.block.isCard && Math.abs(x - ideal) > maxPush) { maxPush = Math.abs(x - ideal); sideOfMax = p.side }
+        const x = pushHybrid(p.block.rows, ideal, r, p.side, gen, FAMILY_GAP)
+        if (Math.abs(x - ideal) > maxPush) { maxPush = Math.abs(x - ideal); sideOfMax = p.side }
         list.push({ block: p.block, x, ideal, anchorId: p.anchorId, side: p.side })
         mergeRows(r, p.block.rows, x)
       }
@@ -608,42 +580,26 @@ function layoutOnce(graphData, referenceId, forcedSide) {
     (isBloodChain(b) - isBloodChain(a)) || countDesc(b) - countDesc(a) || genOf(a) - genOf(b) || birthYearOf(a) - birthYearOf(b) || String(a[0]).localeCompare(String(b[0]))
   ))
   const free = []
-  for (const r of roots) if (!placed.has(r)) free.push(buildBlock(r))
-  for (const c of chains) if (!placed.has(c)) free.push(buildBlock(c))
+  for (const r of roots) if (!placed.has(r) && !hiddenChains.has(r)) free.push(buildBlock(r))
+  for (const c of chains) if (!placed.has(c) && !hiddenChains.has(c)) free.push(buildBlock(c))
   free.push(...detached)
-  // Clusters : chaque grosse belle-famille à part, sur les mêmes rangées. Le conjoint y apparaît dans sa fratrie
-  // (écho de la même personne) avec, sous lui, la carte de la lignée qu'il a rejointe. Les deux cartes se répondent.
-  // Les clusters se rangent du côté de leur conjoint : à gauche de la lignée si le conjoint est dans la
-  // moitié gauche de sa fratrie, à droite sinon. L'orientation des gens et la place des familles se répondent.
-  const ordered = [...clusters.filter(c => c.side < 0).reverse().map(c => c.block), ...free, ...clusters.filter(c => c.side >= 0).map(c => c.block)]
-  const forest = packBlocks(ordered, FAMILY_GAP * 2)
-  ordered.forEach((b, i) => b.place(forest.xs[i]))
-  const xOfBlock = new Map(ordered.map((b, i) => [b, forest.xs[i]]))
+  const forest = packBlocks(free, FAMILY_GAP * 2)
+  free.forEach((b, i) => b.place(forest.xs[i]))
   const referenceNode = result.referenceId != null ? byId.get(`p-${result.referenceId}`) : null
-  const inCluster = new Set(clusters.flatMap(c => [...c.block.members]))
-  const mainPeople = nodes.filter(n => n._type === 'person' && !inCluster.has(n.id) && !n._echo)
-  clusters.forEach((c) => {
-    const A = byId.get(c.anchorId)
-    const ghostX = c.block.rel(c.anchorId)
-    const x0 = xOfBlock.get(c.block)
-    if (ghostX == null) return
-    pos.set(c.echoId, x0 + ghostX)
-    nodes.push({ id: c.echoId, _type: 'person', _data: A._data, width: PERSON_W, height: PERSON_H, _generation: A._generation, y: A.y, _echo: true, _echoOf: c.anchorId })
-    byId.set(c.echoId, nodes[nodes.length - 1])
-    const mainChain = chainOf.get(c.anchorId) || []
-    const around = [...mainChain.filter(id => byId.get(id)._type === 'person' && id !== c.anchorId), ...mainChain.flatMap(id => childrenOfUnion.get(id) || [])].map(id => byId.get(id)?._data).filter(Boolean)
-    const mainLabel = referenceNode?._data?.lastName || around[0]?.lastName || ''
-    nodes.push({ id: c.mainCardId, _type: 'family', width: FAMILY_CARD_W, height: FAMILY_CARD_H, _generation: A._generation + 1, y: A.y + rowStep + (PERSON_H - FAMILY_CARD_H) / 2, _data: { label: mainLabel, count: mainPeople.length, portraits: around.slice(0, 4), targetId: c.anchorId, stem: 'up', stemTo: c.echoId } })
-    byId.set(c.mainCardId, nodes[nodes.length - 1])
-    pos.set(c.mainCardId, pos.get(c.echoId) + (PERSON_W - FAMILY_CARD_W) / 2)
-    // Le fil des parents va à l'écho dans le cluster ; vers le conjoint du plan principal, c'est la carte qui parle
-    for (const e of [...result.edges]) {
-      if (e.targets[0] !== c.anchorId || !c.block.members.has(e.sources[0])) continue
-      e._hidden = true
-      result.edges.push({ ...e, id: `${e.id}#echo`, targets: [c.echoId], _hidden: false })
-    }
-  })
+  // Le fil des parents d'un conjoint dont la famille est un onglet n'est pas dessiné : son badge dit où elle est
+  for (const tb of tabs) for (const e of result.edges) if (e.sources[0] === tb.pu && e.targets[0] === tb.anchorId) e._hidden = true
 
+  // Les familles devenues onglets sortent de cet arbre : leurs nœuds et leurs arêtes ne sont pas dessinés
+  if (hiddenChains.size) {
+    const hidden = new Set([...hiddenChains].flatMap(ch => ch))
+    for (const n of nodes) if (n._type === 'unknown' && hidden.has(n.id.replace(/^unknown-/, 'p-'))) hidden.add(n.id)
+    result.children = nodes.filter(n => !hidden.has(n.id))
+    // Un onglet se propose depuis le badge d'un conjoint dessiné : ceux dont le conjoint est caché avec sa famille tombent
+    for (let i = tabs.length - 1; i >= 0; i--) if (hidden.has(tabs[i].anchorId)) tabs.splice(i, 1)
+    result.edges = result.edges.filter(e => !hidden.has(e.sources[0]) && !hidden.has(e.targets[0]))
+    nodes.length = 0
+    nodes.push(...result.children)
+  }
   // Réinjecter le X, normalisé à 0 ; Y inchangé (rangées)
   let minX = Infinity
   for (const n of nodes) if (pos.has(n.id)) minX = Math.min(minX, pos.get(n.id))
@@ -724,28 +680,13 @@ function layoutOnce(graphData, referenceId, forcedSide) {
     for (const r of list) byId.get(r.id)._railLift = Math.min(4, liftOf(r.id))
   }
 
-  // Carte des familles (maquette J, 19/10) : au dézoom, chaque famille (la lignée principale, chaque cluster)
-  // devient une tuile, et chaque mariage entre familles un trait. Le dessin se fait dans Galaxy / renderers.
-  const familyOf = new Map()
-  clusters.forEach(c => { for (const m of c.block.members) familyOf.set(m, c.cardId); familyOf.set(c.echoId, c.cardId); familyOf.set(c.mainCardId, c.cardId) })
-  const bboxOf = (ids) => {
-    const ps = ids.map(id => byId.get(id)).filter(n => n && n._type === 'person' && n.x != null)
-    if (!ps.length) return null
-    return { x0: Math.min(...ps.map(n => n.x)), y0: Math.min(...ps.map(n => n.y)), x1: Math.max(...ps.map(n => n.x + n.width)), y1: Math.max(...ps.map(n => n.y + n.height)) }
-  }
-  const portraitsOf = (ids) => {
-    const ps = ids.map(id => byId.get(id)).filter(n => n?._type === 'person' && !n._echo)
-    return [...ps.filter(n => n._data?.photo), ...ps.filter(n => !n._data?.photo)].slice(0, 6).map(n => n._data)
-  }
-  const mainIds = nodes.filter(n => !familyOf.has(n.id)).map(n => n.id)
-  nodes.forEach(n => { n._family = familyOf.get(n.id) || 'main' })
-  const partnerOf = (id) => { const ch = chainOf.get(id) || []; return ch.find(x => x !== id && byId.get(x)?._type === 'person') }
-  const families = [
-    { id: 'main', label: referenceNode?._data?.lastName || '', count: mainPeople.length, portraits: portraitsOf(mainIds), bbox: bboxOf(mainIds), links: [] },
-    ...clusters.map(c => ({ id: c.cardId, side: c.side, anchorId: c.anchorId, label: c.label, count: c.people.length, portraits: portraitsOf([...c.block.members]), bbox: bboxOf([...c.block.members]), links: [{ to: 'main', label: [byId.get(c.anchorId)?._data?.firstName, byId.get(partnerOf(c.anchorId))?._data?.firstName].filter(Boolean).join(' et ') }] })),
-  ].filter(f => f.bbox)
-  families.forEach(f => { f.spread = { x: (f.bbox.x0 + f.bbox.x1) / 2, y: (f.bbox.y0 + f.bbox.y1) / 2 } })
-  result.families = families
+  // Les familles de cet arbre : la lignée dessinée, puis chaque belle-famille devenue onglet. Galaxy en fait
+  // la barre d'onglets ; un onglet est le même arbre recalculé avec le conjoint comme référence.
+  const drawn = nodes.filter(n => n._type === 'person')
+  result.families = [
+    { id: 'main', label: referenceNode?._data?.lastName || drawn[0]?._data?.lastName || '', count: drawn.length, referenceId: result.referenceId ?? null },
+    ...tabs.map(tb => ({ id: tb.anchorId, anchorId: tb.anchorId, label: tb.label, count: tb.count, members: [...tb.members].map(m => m.replace(/^p-/, '')) })),
+  ]
   result._inlaws = inlaws
 
   return result
