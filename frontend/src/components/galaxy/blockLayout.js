@@ -90,20 +90,29 @@ const overlaps = (l, r, list, gap) => list.some(([a, b]) => l < b + gap && r > a
 // principale : gauche s'il est dans la moitié gauche, droite sinon. Ce côté ne se connaît qu'une fois la
 // lignée posée, d'où une seconde passe quand un cluster s'est construit du mauvais côté. Le couple se tourne
 // alors vers la famille, et la carte au-dessus du conjoint se pose de ce côté-là.
+// Règle globale (Patch, 19/10) : l'arbre s'ouvre à partir de la personne de référence. Toute belle-famille,
+// grosse ou petite, part du côté opposé à la référence (à droite pour un conjoint à sa droite), le couple se
+// tourne vers elle. Ce côté ne se connaît qu'une fois la lignée posée, d'où une seconde passe.
 export function computeBlockLayout(graphData = null, referenceId = null) {
-  const first = layoutOnce(graphData, referenceId, new Map())
-  const main = first.families?.find(f => f.id === 'main')
-  if (!main || !first.families.some(f => f.anchorId)) return first
-  const mid = (main.bbox.x0 + main.bbox.x1) / 2
-  const byId = new Map(first.children.map(n => [n.id, n]))
   const forced = new Map()
-  for (const f of first.families) {
-    if (!f.anchorId) continue
-    const a = byId.get(f.anchorId)
-    const want = a.x + a.width / 2 < mid ? -1 : 1
-    if (want !== f.side) forced.set(f.anchorId, want)
+  let result = layoutOnce(graphData, referenceId, forced)
+  // Chaque passe fixe le côté des belles-familles d'après la passe précédente ; on s'arrête dès que plus rien
+  // ne change, ou après quatre passes (les positions bougent d'une passe à l'autre)
+  for (let pass = 0; pass < 4 && result._inlaws?.length; pass++) {
+    const byId = new Map(result.children.map(n => [n.id, n]))
+    const ref = referenceId != null ? byId.get(`p-${referenceId}`) : null
+    const main = result.families?.find(f => f.id === 'main')
+    const pivot = ref ? ref.x + ref.width / 2 : main ? (main.bbox.x0 + main.bbox.x1) / 2 : 0
+    let changed = false
+    for (const { anchorId, side } of result._inlaws) {
+      const a = byId.get(anchorId)
+      const want = a.x + a.width / 2 < pivot ? -1 : 1
+      if (want !== side && forced.get(anchorId) !== want) { forced.set(anchorId, want); changed = true }
+    }
+    if (!changed) break
+    result = layoutOnce(graphData, referenceId, forced)
   }
-  return forced.size ? layoutOnce(graphData, referenceId, forced) : first
+  return result
 }
 
 function layoutOnce(graphData, referenceId, forcedSide) {
@@ -285,7 +294,18 @@ function layoutOnce(graphData, referenceId, forcedSide) {
 
   // Famille attachée à un conjoint : l'enfant à coller (ancre) doit finir au bout de sa fratrie, du côté du
   // couple. Si l'ordre choisi l'en empêche, la fratrie est dessinée en miroir (du dernier au premier).
-  let anchor = null // { kid, end: 'left' | 'right' }
+  let anchor = null // { kid, end: 'left' | 'right', path: Set<chaîne> } : la branche du conjoint longe ce bord
+  const pathOf = (kid) => {
+    const s = new Set([chainOf.get(kid)])
+    let cur = chainOf.get(parentUnionOf.get(kid))
+    while (cur && !s.has(cur)) {
+      s.add(cur)
+      const m = cur.find(id => parentUnionOf.has(id) && blood.has(id)) || cur.find(id => parentUnionOf.has(id))
+      cur = m ? chainOf.get(parentUnionOf.get(m)) : null
+    }
+    return s
+  }
+  const inlaws = [] // { anchorId, side } : toutes les belles-familles construites, pour la seconde passe
 
   // `outer` : côté extérieur hérité de la lignée (−1 gauche, +1 droite). Les belles-familles d'une branche vont
   // toutes du même côté, celui où la branche est au bord de l'arbre, pour ne pas se poser entre deux familles.
@@ -298,11 +318,6 @@ function layoutOnce(graphData, referenceId, forcedSide) {
     for (const id of chain) {
       if (byId.get(id)._type !== 'union') continue
       for (const k of (childrenOfUnion.get(id) || [])) kidsOfChain.push({ unionId: id, kid: k })
-    }
-    if (anchor && kidsOfChain.length > 1 && kidsOfChain.some(k => k.kid === anchor.kid)) {
-      const idx = kidsOfChain.findIndex(k => k.kid === anchor.kid)
-      if ((anchor.end === 'right' && idx === 0) || (anchor.end === 'left' && idx === kidsOfChain.length - 1)) kidsOfChain.reverse()
-      anchor = null
     }
     // Remariage : les enfants de chaque union restent groupés dans l'ordre des unions de la chaîne, et une
     // belle-famille va du côté de son union (gauche pour la première, droite pour la dernière), jamais au-delà
@@ -321,7 +336,7 @@ function layoutOnce(graphData, referenceId, forcedSide) {
         return
       }
       const side = sideOfUnion(unionId) || outer || (i < (kidsOfChain.length - 1) / 2 ? -1 : 1)
-      childBlocks.push({ ...buildBlock(kc, unionId, side), unionId })
+      childBlocks.push({ ...buildBlock(kc, unionId, side), unionId, kid })
     })
     // Un enfant dont le conjoint amène sa famille va au bout de la fratrie, de son côté : sa belle-famille,
     // qui fait partie de son bloc, se retrouve au bord, sans survoler ses frères et sœurs. L'ordre de
@@ -330,6 +345,11 @@ function layoutOnce(graphData, referenceId, forcedSide) {
       const group = childBlocks.filter(b => b.unionId === u)
       return [...group.filter(b => b.attachSide < 0), ...group.filter(b => !b.attachSide), ...group.filter(b => b.attachSide > 0)]
     })
+    // La branche qui mène au conjoint d'une autre famille va au bout, du côté de cette famille
+    if (anchor) {
+      const i = kids.findIndex(b => b.kid != null && anchor.path.has(chainOf.get(b.kid)))
+      if (i >= 0) { const [b] = kids.splice(i, 1); if (anchor.end === 'right') kids.push(b); else kids.unshift(b) }
+    }
     childBlocks.length = 0
     childBlocks.push(...kids)
     const packed = packBlocks(childBlocks, FAMILY_GAP)
@@ -357,7 +377,7 @@ function layoutOnce(graphData, referenceId, forcedSide) {
       const saved = anchor
       const clustersBefore = clusters.length
       const externalBefore = new Set(externalEdges)
-      anchor = { kid: id, end: side < 0 ? 'right' : 'left' }
+      anchor = { kid: id, end: side < 0 ? 'right' : 'left', path: pathOf(id) }
       let block = buildBlock(top, null, side)
       anchor = saved
       if (block.width > CLUSTER_PX) {
@@ -370,7 +390,7 @@ function layoutOnce(graphData, referenceId, forcedSide) {
         for (const e of [...externalEdges]) if (!externalBefore.has(e)) externalEdges.delete(e)
         const savedCard = cardUnder
         cardUnder = id
-        anchor = { kid: id, end: side < 0 ? 'right' : 'left' }
+        anchor = { kid: id, end: side < 0 ? 'right' : 'left', path: pathOf(id) }
         block = buildBlock(top, null, side)
         anchor = saved
         cardUnder = savedCard
@@ -517,6 +537,7 @@ function layoutOnce(graphData, referenceId, forcedSide) {
       attachedEdges.add(`${parentUnionOf.get(a.anchorId)}>${a.anchorId}`)
     }
     const attachSide = built.length ? (built.every(p => p.side < 0) ? -1 : built.every(p => p.side > 0) ? 1 : 0) : 0
+    for (const p of built) inlaws.push({ anchorId: p.anchorId, side: p.side })
 
     const members = new Set(chain)
     for (const b of childBlocks) { for (const m of b.members) members.add(m); external.push(...b.external) }
@@ -725,6 +746,7 @@ function layoutOnce(graphData, referenceId, forcedSide) {
   ].filter(f => f.bbox)
   families.forEach(f => { f.spread = { x: (f.bbox.x0 + f.bbox.x1) / 2, y: (f.bbox.y0 + f.bbox.y1) / 2 } })
   result.families = families
+  result._inlaws = inlaws
 
   return result
 }
