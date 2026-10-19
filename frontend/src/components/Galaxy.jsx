@@ -58,8 +58,22 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   useEffect(() => { startRefRef.current = focusPersonId; setActiveKey(focusPersonId != null ? String(focusPersonId) : null) }, [focusPersonId])
   // Lu au calcul du cadrage et par le réordonnancement : la référence de l'arbre affiché
   const focusPersonIdRef = useRef(focusPersonId)
-  // Sur téléphone, la barre défile : l'onglet ouvert par un badge se met en vue, sans animation
-  useEffect(() => { document.querySelector('.family-tab.is-active')?.scrollIntoView({ behavior: 'auto', inline: 'nearest', block: 'nearest' }) }, [activeKey, tabs])
+  // La barre défile quand les onglets débordent : l'onglet ouvert se met en vue (sans animation) et les bords
+  // coupés se signalent par un fondu
+  const tabsBarRef = useRef(null)
+  const [tabsEdges, setTabsEdges] = useState('')
+  const updateTabsEdges = useCallback(() => {
+    const el = tabsBarRef.current
+    if (!el) return
+    const left = el.scrollLeft > 2, right = el.scrollLeft + el.clientWidth < el.scrollWidth - 2
+    setTabsEdges(`${left ? ' has-left' : ''}${right ? ' has-right' : ''}`)
+  }, [])
+  useEffect(() => {
+    document.querySelector('.family-tab.is-active')?.scrollIntoView({ behavior: 'auto', inline: 'nearest', block: 'nearest' })
+    updateTabsEdges()
+    window.addEventListener('resize', updateTabsEdges)
+    return () => window.removeEventListener('resize', updateTabsEdges)
+  }, [activeKey, tabs, updateTabsEdges])
   // Clic sur un badge : l'onglet de cette famille (ou, depuis un onglet, celui d'où l'on vient)
   const openFamily = useCallback((tabKey) => { if (tabKey != null) setActiveKey(String(tabKey)) }, [])
   // Propriétaire : un portrait vide survolé montre « + photo »
@@ -1076,7 +1090,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       <div className="path-label-overlay">{displayLabel}</div>
     )}
     {familyTabs && tabs.length > 1 && (
-      <nav className={`family-tabs${annotationHandlers ? ' family-tabs--lowered' : ''}`} aria-label={tr('Familles')}>
+      <nav ref={tabsBarRef} onScroll={updateTabsEdges} className={`family-tabs${annotationHandlers ? ' family-tabs--lowered' : ''}${tabsEdges}`} aria-label={tr('Familles')}>
         {tabs.map((tb) => {
           const active = tb.key === (tabs.some((x) => x.key === activeKey) ? activeKey : tabs[0].key)
           return (

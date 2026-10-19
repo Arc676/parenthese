@@ -58,7 +58,10 @@ export function filCroiseAutreFamille(nodes, childrenOfUnion, spouseKeysOf, u, c
   const fratrie = [...new Set([c, ...(childrenOfUnion.get(u) || [])])]
   const excluded = new Set([...fratrie, ...fratrie.flatMap(k => [...(spouseKeysOf.get(k) || [])])])
   const lo = Math.min(cx(u), cx(c)), hi = Math.max(cx(u), cx(c))
-  return nodes.some(n => n._type === 'person' && n._generation === kid._generation && !excluded.has(n.id)
+  const un = byIdLocal.get(u)
+  const parents = new Set([un?._data?.p1Key, un?._data?.p2Key].filter(Boolean))
+  return nodes.some(n => n._type === 'person' && !excluded.has(n.id) && !parents.has(n.id)
+    && (n._generation === kid._generation || n._generation === kid._generation - 1)
     && n.x + n.width > lo && n.x < hi)
 }
 
@@ -320,7 +323,10 @@ function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
     }
     kidsOfChain.forEach(({ unionId, kid }, i) => {
       const kc = chainOf.get(kid)
-      if (placed.has(kc) || tabOfChain.has(kc)) {
+      // Belle-famille en construction : une chaîne dont aucun membre du sang n'est enfant de cette union, mais
+      // dont un membre du sang a ses parents ailleurs, ira sous ces parents-là (le sang de la référence gagne)
+      const duSang = anchor && !kc.some(id => blood.has(id) && parentUnionOf.get(id) === unionId) && kc.some(id => blood.has(id) && byId.get(id)._type === 'person' && parentUnionOf.has(id))
+      if (placed.has(kc) || tabOfChain.has(kc) || duSang) {
         external.push({ kid, unionId })
         externalEdges.add(`${unionId}>${kid}`)
         childBlocks.push({ ...ghostBlock(kid), unionId })

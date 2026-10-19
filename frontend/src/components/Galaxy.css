@@ -61,6 +61,10 @@
   padding: 4px;
 }
 .family-tabs::-webkit-scrollbar { display: none; }
+/* Bords coupés : un fondu de chaque côté qui défile encore */
+.family-tabs.has-left { mask-image: linear-gradient(to right, transparent, #000 36px); -webkit-mask-image: linear-gradient(to right, transparent, #000 36px); }
+.family-tabs.has-right { mask-image: linear-gradient(to left, transparent, #000 36px); -webkit-mask-image: linear-gradient(to left, transparent, #000 36px); }
+.family-tabs.has-left.has-right { mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent); -webkit-mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
 
 .family-tab {
   flex: 0 0 auto;
