@@ -17,6 +17,7 @@ import { formatPlace } from '../utils/place.js'
 import { firstNameLabel, fullNameLabel, isFirstNameUnknown } from '../utils/personName.js'
 import { isYearOnly } from '../utils/dateInput.js'
 import DateField from './DateField.jsx'
+import { runOnce } from '../utils/saveOnLeave.js'
 
 // Aucune modification en cours (référence stable)
 const NO_EDITS = Object.freeze({})
@@ -70,6 +71,7 @@ const PersonCard = ({
   onMoveSibling,
   onUploadMomentFile,
   onMomentSaved,
+  saveOnLeaveRef = null,
 }) => {
   // Souvenirs d'abord quand il y en a, ou quand on peut en ajouter : c'est là qu'est le bouton
   const [tab, setTab] = useState(() => (getPersonMedias(person.id).length > 0 || canManageMedia ? 'medias' : 'infos'))
@@ -114,6 +116,9 @@ const PersonCard = ({
   const [lastNameMissing, setLastNameMissing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  // Enregistrement en cours : un second appel (bouton, puis changement de fiche) reçoit la même promesse
+  const saveInFlight = useRef(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showImmichPanel, setShowImmichPanel] = useState(false)
   // null : connexion Immich de l'arbre inconnue, puis booléen. Le menu de source ne se propose
@@ -149,6 +154,7 @@ const PersonCard = ({
     setActiveRelationSearch(null)
     setRelationSearchQuery('')
     setSaveSuccess(false)
+    setSaveError('')
     setShowSourceMenu(false)
     setMomentSheet(null)
     setLifeNotice('')
@@ -313,29 +319,53 @@ const PersonCard = ({
   ]
   const emptyChips = editMode ? chipCandidates.filter((c) => c.relevant && !c.filled && !openedHas(c.field)) : []
 
-  const handleSave = async () => {
-    if (!hasChanges || !onSave) return
+  // Enregistre les modifications de cette fiche (bouton « Enregistrer » et départ de la fiche).
+  // Résultat : 'saved', 'unchanged' (rien à enregistrer) ou 'blocked' (validation, ou échec réseau :
+  // le message reste sur la fiche, la saisie n'est pas jetée).
+  const persistEdits = () => runOnce(saveInFlight, async () => {
+    if (!hasChanges || !onSave) return 'unchanged'
     if (!unknownFirstName && 'firstName' in edits && !String(edits.firstName).trim()) {
       setFirstNameMissing(true)
-      return
+      return 'blocked'
     }
     // Prénom inconnu : il faut alors un nom de famille
     if (unknownFirstName && !String(getEditValue('lastName', person.lastName) ?? '').trim()) {
       setLastNameMissing(true)
-      return
+      return 'blocked'
     }
+    const savedFor = person.id
     setSaving(true)
+    setSaveError('')
     try {
-      const savedFor = person.id
       await onSave(savedFor, edits)
       setEditState(prev => (prev.personId === savedFor ? { ...prev, changed: false } : prev))
       setOpenedFields([])
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 2000)
+      return 'saved'
+    } catch (error) {
+      // Serveur injoignable (status 0, message traduit par le client) ; sinon un texte clair, jamais un message technique
+      setSaveError(error?.status === 0 ? error.message : t("L'enregistrement a échoué. Vos modifications sont gardées, réessayez."))
+      return 'blocked'
     } finally {
       setSaving(false)
     }
-  }
+  })
+
+  // App enregistre la fiche avant de la quitter (changement de personne, fermeture, sortie du mode
+  // modification) : la référence suit toujours la dernière version de persistEdits
+  useEffect(() => {
+    if (!saveOnLeaveRef) return undefined
+    saveOnLeaveRef.current = persistEdits
+    return () => { if (saveOnLeaveRef.current === persistEdits) saveOnLeaveRef.current = null }
+  })
+
+  // Sortie du mode modification : les modifications restantes (abandonnées) ne reviennent pas à la prochaine entrée
+  useEffect(() => {
+    if (!editMode) setEditState({ personId: person.id, values: {}, changed: false })
+  }, [editMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSave = () => { persistEdits() }
 
   const handleDelete = () => {
     if (!onDelete) return
@@ -436,6 +466,8 @@ const PersonCard = ({
     unions: personUnions.map((union) => ({
       ...union,
       partner: persons.find((p) => p.id === (union.partner1Id === person.id ? union.partner2Id : union.partner1Id)) || null,
+      // Enfants du couple : placent dans la frise une union dont la date manque
+      childIds: filiations.filter((f) => f.unionId && String(f.unionId) === String(union.id)).map((f) => f.childId),
     })),
   }
 
@@ -998,6 +1030,7 @@ const PersonCard = ({
       </div>
 
       {/* ── Actions d'édition ── */}
+      {editMode && saveError && <p className="pc-save-error" role="alert">{saveError}</p>}
       {editMode && (
         <footer className="pc-foot">
           {showDeleteConfirm ? (

@@ -176,6 +176,7 @@ export default {
   'Marie': 'Mary',
   'Dupont': 'Smith',
   'Il faut au moins un prénom.': 'A first name is required.',
+  "L'enregistrement a échoué. Vos modifications sont gardées, réessayez.": 'Saving failed. Your changes are kept, try again.',
   'si différent': 'if different',
   'Martin': 'Johnson',
   'Place dans la famille': 'Place in the family',
