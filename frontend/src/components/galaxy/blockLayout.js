@@ -40,8 +40,8 @@ export function filCroiseAutreFamille(nodes, childrenOfUnion, spouseKeysOf, u, c
     && n.x + n.width > lo && n.x < hi)
 }
 
-export function computeBlockLayout(graphData = null) {
-  const result = computeLayout(graphData)
+export function computeBlockLayout(graphData = null, referenceId = null) {
+  const result = computeLayout(graphData, referenceId)
   const nodes = result.children
   const byId = new Map(nodes.map(n => [n.id, n]))
 
