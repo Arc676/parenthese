@@ -270,6 +270,7 @@
 .pc-unknown-first { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin: -4px 0 0; font: 400 12.5px var(--pz-sans); color: var(--pz-ink-2); cursor: pointer; white-space: nowrap; }
 .pc-unknown-first input { width: 15px; height: 15px; accent-color: var(--pz-a500); }
 .pc-name-error { margin: 6px 0 0; font: 500 12.5px var(--pz-sans); color: var(--pz-danger); }
+.pc-save-error { margin: 0; font: 500 12.5px/1.4 var(--pz-sans); color: var(--pz-danger); }
 
 /* Modification de l'onglet Infos : pastilles des champs vides (DA terracotta, sans nouvelle couleur) */
 .pc-fill-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }

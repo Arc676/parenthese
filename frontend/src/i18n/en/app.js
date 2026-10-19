@@ -101,4 +101,6 @@ export default {
   'Conflit détecté (email ou slug déjà utilisé).': 'Conflict detected (email or slug already in use).',
   "Erreur backend. Vérifiez que l'API et la base sont lancées.": 'Server error. Check that the API and database are running.',
   'Le serveur ne répond pas. Vérifiez la connexion et réessayez.': 'The server is not responding. Check your connection and try again.',
+  // App.jsx : enregistrement automatique en quittant une fiche
+  'Modifications de {name} enregistrées': 'Changes to {name} saved',
 }
