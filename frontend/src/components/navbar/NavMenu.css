@@ -44,8 +44,10 @@
   box-shadow: 0 -12px 40px rgba(42, 38, 34, 0.16);
   /* Pas de fill-mode : une fois l'entrée finie, le glisser (style inline) reprend la main */
   animation: navmSheetIn 320ms var(--pz-ease-drawer);
+  transition: transform 240ms var(--pz-ease-drawer);
   overscroll-behavior: contain;
 }
+.navm-sheet[data-dragging] { transition: none; }
 @keyframes navmSheetIn {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
@@ -155,4 +157,5 @@
 
 @media (prefers-reduced-motion: reduce) {
   .navm-pop, .navm-sheet, .navm-scrim { animation-duration: 1ms; }
+  .navm-sheet { transition-duration: 1ms; }
 }
