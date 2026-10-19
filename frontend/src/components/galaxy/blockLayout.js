@@ -362,9 +362,14 @@ function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
     // Un enfant dont le conjoint amène sa famille va au bout de la fratrie, de son côté : sa belle-famille,
     // qui fait partie de son bloc, se retrouve au bord, sans survoler ses frères et sœurs. L'ordre de
     // naissance s'efface pour lui (choix de Patch, 19/10).
+    // Et un enfant dont le couple est au bord d'un large bloc de descendants va du côté où son bloc déborde
+    // le moins : les couples de la fratrie restent groupés sous leurs parents, le gros bloc part au-delà
+    // (Patch, 20/10 : « Antoine devrait être juste en dessous de ses parents »)
+    const offCenter = (b) => (b.chain[0] + b.chain[1]) / 2 - b.width / 2
+    const byOffCenter = (list) => [...list].sort((a, b) => offCenter(b) - offCenter(a))
     const kids = unionsOfChain.flatMap(u => {
       const group = childBlocks.filter(b => b.unionId === u)
-      return [...group.filter(b => b.attachSide < 0), ...group.filter(b => !b.attachSide), ...group.filter(b => b.attachSide > 0)]
+      return [...byOffCenter(group.filter(b => b.attachSide < 0)), ...byOffCenter(group.filter(b => !b.attachSide)), ...byOffCenter(group.filter(b => b.attachSide > 0))]
     })
     // La branche qui mène au conjoint d'une autre famille va au bout, du côté de cette famille
     if (anchor) {
