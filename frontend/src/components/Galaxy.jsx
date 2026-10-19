@@ -47,14 +47,26 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   // Onglets de familles : la personne de référence de l'arbre affiché (celle de départ, puis le conjoint
   // dont on ouvre la famille), et la liste des familles rencontrées, dans l'ordre des mariages
   const layoutDataRef = useRef(null)
+  // Mode « par famille » (onglets) ou « tout l'arbre » (une belle-famille trop large reste dessinée) : choix
+  // du spectateur, gardé dans son navigateur
+  const [familyMode, setFamilyModeState] = useState(() => { try { return localStorage.getItem('parenthese.familyMode') === 'tree' ? 'tree' : 'tabs' } catch { return 'tabs' } })
+  const familyModeRef = useRef(familyMode)
   const [activeRef, setActiveRef] = useState(focusPersonId)
   const [tabs, setTabs] = useState([])
+  const [familiesCount, setFamiliesCount] = useState(0) // familles de l'arbre affiché, onglets compris : la barre apparaît dès 2
   const startRefRef = useRef(focusPersonId)
   useEffect(() => { startRefRef.current = focusPersonId; setActiveRef(focusPersonId); setTabs([]) }, [focusPersonId])
   // Lu au calcul du cadrage seulement : changer de personne de départ ne recadre pas une vue en cours
   const focusPersonIdRef = useRef(focusPersonId)
   // Mis à jour hors du rendu, avant l'effet de cadrage déclaré plus bas (même phase, ordre de déclaration)
   useEffect(() => { focusPersonIdRef.current = activeRef }, [activeRef])
+  const setFamilyMode = useCallback((mode) => {
+    familyModeRef.current = mode
+    setFamilyModeState(mode)
+    try { localStorage.setItem('parenthese.familyMode', mode) } catch { /* navigateur sans stockage */ }
+    setTabs([])
+    setActiveRef(startRefRef.current)
+  }, [])
   // Sur téléphone, la barre défile : l'onglet ouvert par un badge se met en vue, sans animation
   useEffect(() => { document.querySelector('.family-tab.is-active')?.scrollIntoView({ behavior: 'auto', inline: 'nearest', block: 'nearest' }) }, [activeRef, tabs])
   // Clic sur un badge : l'onglet de cette famille s'il existe déjà (la même famille vue depuis un autre
@@ -206,7 +218,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       unions: graphUnions,
       filiations: filiationsWithOrder(graphFiliations, graphUnions, group.source, order),
     }
-    const result = computeBlockLayout(graph, focusPersonIdRef.current)
+    const result = computeBlockLayout(graph, focusPersonIdRef.current, { familyTabs: familyModeRef.current === 'tabs' })
     const baseSource = base.children.find((n) => n.id === group.source)
     const source = result.children.find((n) => n.id === group.source)
     const shift = baseSource && source ? baseSource.x - source.x : 0
@@ -446,7 +458,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   // Layout
   useEffect(() => {
     // La personne de départ sert de référence aux rangées (génération de parenté depuis elle)
-    const result = USE_BLOCK_LAYOUT ? computeBlockLayout(null, focusPersonIdRef.current) : computeLayout(null, focusPersonIdRef.current)
+    const result = USE_BLOCK_LAYOUT ? computeBlockLayout(null, focusPersonIdRef.current, { familyTabs: familyMode === 'tabs' }) : computeLayout(null, focusPersonIdRef.current)
 
     const canvas = canvasRef.current
     if (!canvas) return
@@ -493,7 +505,8 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     if (focusNode && fitScale < FOCUS_MIN_READABLE_SCALE) {
       scale = FOCUS_SCALE
       offsetX = cssW / 2 - (focusNode.x + focusNode.width / 2) * scale
-      offsetY = cssH * 0.42 - (focusNode.y + focusNode.height / 2) * scale
+      // Sur un écran étroit, la barre des familles couvre le haut : la personne de départ un peu plus bas
+      offsetY = cssH * (cssW < 768 ? 0.56 : 0.42) - (focusNode.y + focusNode.height / 2) * scale
     }
 
     const init = { x: offsetX, y: offsetY, scale }
@@ -579,6 +592,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     // Onglets : la famille affichée d'abord, puis chaque belle-famille rencontrée, sans doublon (une famille déjà
     // en onglet se reconnaît à sa personne de référence parmi les membres)
     const fams = result.families || []
+    setFamiliesCount(fams.length)
     if (fams.length) setTabs((prev) => {
       // La liste commence toujours par la famille de départ ; un placement calculé pour une autre référence
       // avant qu'elle soit connue (arbre chargé avant sa personne de départ) ne compte pas
@@ -588,12 +602,13 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       if (!next.length && String(main.referenceId) !== start) return prev
       if (!next.some((tb) => String(tb.referenceId) === String(main.referenceId))) next.push({ referenceId: main.referenceId, label: main.label, count: main.count })
       for (const f of fams.slice(1)) {
+        if (f.drawn) continue
         if (next.some((tb) => `p-${tb.referenceId}` === String(f.anchorId) || f.members.includes(String(tb.referenceId)))) continue
         next.push({ referenceId: String(f.anchorId).replace(/^p-/, ''), label: f.label, count: f.count })
       }
       return next
     })
-  }, [graphRevision, activeRef])
+  }, [graphRevision, activeRef, familyMode])
 
   // Sync selectedPersonId
   useEffect(() => {
@@ -1069,9 +1084,13 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     {displayLabel && (
       <div className="path-label-overlay">{displayLabel}</div>
     )}
-    {tabs.length > 1 && (
-      <nav className="family-tabs" aria-label={tr('Familles')}>
-        {tabs.map((tb) => (
+    {(tabs.length > 1 || familiesCount > 1) && (
+      <nav className={`family-tabs${annotationHandlers ? ' family-tabs--lowered' : ''}`} aria-label={tr('Familles')}>
+        <div className="family-mode" role="group" aria-label={tr('Affichage des familles')}>
+          <button type="button" className={`family-mode-btn${familyMode === 'tree' ? ' is-active' : ''}`} aria-pressed={familyMode === 'tree'} onClick={() => familyMode !== 'tree' && setFamilyMode('tree')}>{tr('Tout l’arbre')}</button>
+          <button type="button" className={`family-mode-btn${familyMode === 'tabs' ? ' is-active' : ''}`} aria-pressed={familyMode === 'tabs'} onClick={() => familyMode !== 'tabs' && setFamilyMode('tabs')}>{tr('Par famille')}</button>
+        </div>
+        {familyMode === 'tabs' && tabs.map((tb) => (
           <button
             key={String(tb.referenceId)}
             type="button"

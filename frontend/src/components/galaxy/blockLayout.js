@@ -90,9 +90,11 @@ const overlaps = (l, r, list, gap) => list.some(([a, b]) => l < b + gap && r > a
 // Règle globale (Patch, 19/10) : l'arbre s'ouvre à partir de la personne de référence. Toute belle-famille,
 // grosse ou petite, part du côté opposé à la référence (à droite pour un conjoint à sa droite), le couple se
 // tourne vers elle. Ce côté ne se connaît qu'une fois la lignée posée, d'où une seconde passe.
-export function computeBlockLayout(graphData = null, referenceId = null) {
+// `familyTabs` : vrai, une belle-famille trop large devient un onglet ; faux, tout l'arbre est dessiné d'un
+// tenant (mode « tout l'arbre »), les grandes familles sont seulement signalées dans `families`.
+export function computeBlockLayout(graphData = null, referenceId = null, { familyTabs = true } = {}) {
   const forced = new Map()
-  let result = layoutOnce(graphData, referenceId, forced)
+  let result = layoutOnce(graphData, referenceId, forced, familyTabs)
   // Chaque passe fixe le côté des belles-familles d'après la passe précédente ; on s'arrête dès que plus rien
   // ne change, ou après quatre passes (les positions bougent d'une passe à l'autre)
   for (let pass = 0; pass < 4 && result._inlaws?.length; pass++) {
@@ -108,12 +110,12 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
       if (want !== side && forced.get(anchorId) !== want) { forced.set(anchorId, want); changed = true }
     }
     if (!changed) break
-    result = layoutOnce(graphData, referenceId, forced)
+    result = layoutOnce(graphData, referenceId, forced, familyTabs)
   }
   return result
 }
 
-function layoutOnce(graphData, referenceId, forcedSide) {
+function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
   const result = computeLayout(graphData, referenceId)
   const nodes = result.children
   const byId = new Map(nodes.map(n => [n.id, n]))
@@ -224,6 +226,7 @@ function layoutOnce(graphData, referenceId, forcedSide) {
   const detached = [] // familles qu'on n'a pas pu coller à leur enfant (trop loin) : posées à part, renvoi
   const tabs = [] // belles-familles trop larges pour cet arbre, devenues onglets : { anchorId, pu, label, count, members }
   const hiddenChains = new Set() // chaînes des familles devenues onglets : pas dessinées dans cet arbre
+  const bigFamilies = [] // mode « tout l'arbre » : les familles qui seraient des onglets, dessinées quand même
   const attachedEdges = new Set() // `${union}>${enfant}` : fil d'une famille collée à son enfant, toujours dessiné
 
   // Imbrique des blocs de gauche à droite, rangée par rangée
@@ -364,7 +367,11 @@ function layoutOnce(graphData, referenceId, forcedSide) {
       anchor = { kid: id, end: side < 0 ? 'right' : 'left', path: pathOf(id) }
       const block = buildBlock(top, null, side)
       anchor = saved
-      if (block.width > FAMILY_TAB_PX) {
+      if (block.width > FAMILY_TAB_PX && !familyTabs) {
+        const A = byId.get(id)
+        bigFamilies.push({ anchorId: id, label: A._data?.birthName || A._data?.lastName || '', count: [...block.members].filter(m => byId.get(m)?._type === 'person').length })
+      }
+      if (block.width > FAMILY_TAB_PX && familyTabs) {
         // Trop large pour cet arbre : la famille devient un onglet et n'est pas dessinée ici. Sa construction ne
         // laisse aucune trace (onglets imbriqués, chaînes posées, arêtes externes), et le fil de ses parents
         // vers le conjoint est caché : c'est le badge du conjoint qui dit où est sa famille.
@@ -686,6 +693,7 @@ function layoutOnce(graphData, referenceId, forcedSide) {
   result.families = [
     { id: 'main', label: referenceNode?._data?.lastName || drawn[0]?._data?.lastName || '', count: drawn.length, referenceId: result.referenceId ?? null },
     ...tabs.map(tb => ({ id: tb.anchorId, anchorId: tb.anchorId, label: tb.label, count: tb.count, members: [...tb.members].map(m => m.replace(/^p-/, '')) })),
+    ...bigFamilies.map(f => ({ id: f.anchorId, anchorId: f.anchorId, label: f.label, count: f.count, members: [], drawn: true })),
   ]
   result._inlaws = inlaws
 

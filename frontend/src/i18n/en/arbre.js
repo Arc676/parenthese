@@ -3,6 +3,9 @@ export default {
   'Famille {name}': 'The {name} family',
   'Famille': 'Family',
   'Familles': 'Families',
+  'Affichage des familles': 'Family display',
+  'Tout l’arbre': 'Whole tree',
+  'Par famille': 'By family',
   // Arbre sur canvas (components/galaxy/renderers.js)
   'Voir les parents': 'See parents',
   'Voir {firstName}': 'See {firstName}',
