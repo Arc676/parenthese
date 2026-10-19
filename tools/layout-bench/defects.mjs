@@ -36,7 +36,7 @@ export function computeDefects(result, coupleBarMeta, graph, referenceId = null)
     const u = byId.get(uid)
     const ks = kids.map((k) => byId.get(k)).filter(Boolean)
     if (!u || !ks.length) continue
-    const sx = cx(u), sy = u.y + u.height / 2, by = sy + BUS_DY + (u._railLift != null ? -8 * u._railLift : busOffset(uid))
+    const sx = cx(u), sy = u.y + u.height / 2, by = sy + BUS_DY + (u._railLift != null ? -6 * u._railLift : busOffset(uid))
     let l = sx, r = sx
     for (const k of ks) {
       const ex = cx(k)

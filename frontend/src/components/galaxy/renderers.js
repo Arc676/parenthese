@@ -109,7 +109,7 @@ const SIB_STRAIGHT_DX = SIB_R * 2
 
 // Les lignes de fratrie s'emboîtent : une famille collée au conjoint d'un enfant dessine sa ligne sous celle
 // de la famille qui l'entoure. Le placement pose le niveau (_railLift, 0 = la plus proche des enfants).
-const RAIL_STEP = 8
+const RAIL_STEP = 6
 function busY(lift, sy) {
   return sy + BUS_DY - RAIL_STEP * (lift || 0)
 }
