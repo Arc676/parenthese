@@ -7,19 +7,37 @@ export const DEFAULT_CROP = { x: 0.5, y: 0.5, zoom: 1 }
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
+// Formes qu'on choisit au recadrage, gardées dans le cadrage (crop.shape). Sans choix, la forme suit la photo
+// (très large ou très haute) ou le cadre tiré au hasard pour la personne.
+export const FRAME_SHAPES = ['round', 'square', 'polaroid', 'portrait', 'landscape']
+export const cropShape = (crop) => (FRAME_SHAPES.includes(crop?.shape) ? crop.shape : null)
+
 // Forme du cadre dans le canevas : même règle que resolveFrameType et drawFrame (renderers.js).
-// Une photo très large ou très haute change la forme ; sinon le cadre tiré pour la personne (frameType) reste.
-export function resolveFrameKind(frameType, imageRatio) {
+// La forme choisie l'emporte ; sinon une photo très large ou très haute change la forme, et à défaut
+// le cadre tiré pour la personne (frameType) reste.
+export function resolveFrameKind(frameType, imageRatio, shape = null) {
+  if (shape) return shape === 'portrait' || shape === 'landscape' ? 'rect' : shape
   if (imageRatio >= 1.28) return 'rect'
   if (imageRatio <= 0.78) return 'polaroid'
   return frameType || 'round'
 }
 
+// Cadre rectangle : couché si on l'a choisi, sinon selon la photo (carrée : debout, le visage reste entier)
+export function isLandscapeRect(imageRatio, shape = null) {
+  return shape ? shape === 'landscape' : imageRatio > 1.05
+}
+
+// Nom de la forme affichée, pour le sélecteur
+export function shapeOfKind(frameKind, imageRatio) {
+  if (frameKind !== 'rect') return frameKind
+  return isLandscapeRect(imageRatio) ? 'landscape' : 'portrait'
+}
+
 // Rapport largeur / hauteur de la zone visible, comme drawFrame le dessine.
-export function frameAspect(frameKind, imageRatio) {
+export function frameAspect(frameKind, imageRatio, shape = null) {
   if (frameKind === 'rect') {
     // Paysage : 80 x 40 ; portrait : 60 x 68 (renderers.js, drawFrame)
-    return imageRatio > 1.05 ? 2 : 60 / 68
+    return isLandscapeRect(imageRatio, shape) ? 2 : 60 / 68
   }
   // round, polaroid et square : la zone photo est carrée
   return 1
@@ -32,7 +50,8 @@ export function normalizeCrop(crop) {
   const y = Number(crop.y)
   const zoom = Number(crop.zoom)
   if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(zoom)) return DEFAULT_CROP
-  return { x: clamp(x, 0, 1), y: clamp(y, 0, 1), zoom: clamp(zoom, 1, CROP_MAX_ZOOM) }
+  const shape = cropShape(crop)
+  return { x: clamp(x, 0, 1), y: clamp(y, 0, 1), zoom: clamp(zoom, 1, CROP_MAX_ZOOM), ...(shape ? { shape } : {}) }
 }
 
 // Zone de l'image visible dans le cadre, en pixels de l'image. Le centre est borné pour qu'il n'y ait jamais
@@ -77,11 +96,13 @@ export function imagePlacement(imageW, imageH, aspect, crop, windowW = 1, window
   }
 }
 
-// Ce qu'il faut à l'enregistrement : null pour le cadrage par défaut, sinon le cadrage borné.
-export function cropForSave(imageW, imageH, aspect, crop) {
+// Ce qu'il faut à l'enregistrement : null pour le cadrage par défaut sans forme choisie, sinon le cadrage
+// borné, avec la forme quand on l'a choisie.
+export function cropForSave(imageW, imageH, aspect, crop, shape = null) {
   const c = clampCrop(imageW, imageH, aspect, crop)
   const round = (value) => Math.round(value * 10000) / 10000
   const normalized = { x: round(c.x), y: round(c.y), zoom: round(c.zoom) }
+  if (shape) return { ...normalized, shape }
   if (normalized.x === 0.5 && normalized.y === 0.5 && normalized.zoom === 1) return null
   return normalized
 }

@@ -53,6 +53,10 @@ const PersonCard = ({
   onAvatarUpload,
   onAvatarDelete,
   onAvatarCrop,
+  pendingPortraitCrop = null,
+  onPendingPortraitCropDone = null,
+  photoSourceRequest = null,
+  onPhotoSourceRequestDone = null,
   treeId = null,
   immichToken = null,
   onImmichChange,
@@ -180,16 +184,19 @@ const PersonCard = ({
   // Connexion Immich de l'arbre : métadonnées sans clé. Une erreur (rôle périmé, réseau) se
   // traduit par « non configuré » : la fiche reste utilisable, simplement sans choix de source.
   // Seul un administrateur de l'arbre voit l'option Immich, comme côté serveur.
+  // Dépend de la présence de onImmichChange, pas de sa valeur : App le recrée à chaque rendu, ce qui
+  // relançait la lecture de la config et refermait le menu des sources juste après son ouverture
+  const canChangeImmich = Boolean(onImmichChange)
   useEffect(() => {
     let cancelled = false
     setImmichConfigured(null)
     setShowSourceMenu(false)
-    if (!editMode || !isAdmin || !treeId || !onImmichChange || !immichToken) return undefined
+    if (!editMode || !isAdmin || !treeId || !canChangeImmich || !immichToken) return undefined
     fetchImmichConfig(treeId, immichToken)
       .then(({ config }) => { if (!cancelled) setImmichConfigured(Boolean(config?.configured)) })
       .catch(() => { if (!cancelled) setImmichConfigured(false) })
     return () => { cancelled = true }
-  }, [editMode, isAdmin, treeId, immichToken, onImmichChange])
+  }, [editMode, isAdmin, treeId, immichToken, canChangeImmich])
 
   useEffect(() => {
     if (!showSourceMenu) return undefined
@@ -249,6 +256,21 @@ const PersonCard = ({
   }
   const chooseFileSource = () => { setShowSourceMenu(false); avatarInputRef.current?.click() }
   const chooseImmichSource = () => { setShowSourceMenu(false); setShowImmichPanel(true) }
+
+  // Clic sur « + photo » dans l'arbre : la photo vient d'être envoyée, le recadrage s'ouvre tout de suite
+  useEffect(() => {
+    if (!pendingPortraitCrop || String(pendingPortraitCrop.personId) !== String(person.id)) return
+    setCropState({ src: pendingPortraitCrop.src, mode: 'new', ownsUrl: true })
+    onPendingPortraitCropDone?.()
+  }, [pendingPortraitCrop, person.id, onPendingPortraitCropDone])
+
+  // Clic sur « + photo » dans l'arbre, en modification avec Immich : même menu que le badge, sans clic de plus
+  useEffect(() => {
+    if (!photoSourceRequest || String(photoSourceRequest.personId) !== String(person.id)) return
+    if (immichConfigured === null) return
+    onPhotoSourceRequestDone?.()
+    if (immichUsable) openAvatarPicker()
+  }, [photoSourceRequest, person.id, immichConfigured, immichUsable, onPhotoSourceRequestDone]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Focus search input when relation search opens
   useEffect(() => {

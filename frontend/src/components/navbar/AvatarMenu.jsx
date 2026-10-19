@@ -86,13 +86,16 @@ function AvatarMenu({
       <NavMenuSep />
       <NavMenuGroup label={t('Mes arbres')}>
         {trees.length > 1 ? trees.map((tree) => {
+          // L'arbre en cours : affiché comme courant (coche terracotta), non cliquable, pas grisé
           const isActive = String(tree.id) === String(activeTreeId)
           return (
             <NavMenuItem
               key={tree.id}
               icon={<span className="navm-tree-mono" aria-hidden="true">{(tree.name || '?').trim().charAt(0).toUpperCase()}</span>}
               label={tree.name}
-              onSelect={() => { onClose(); onSelectTree?.(tree.id) }}
+              onSelect={isActive ? undefined : () => { onClose(); onSelectTree?.(tree.id) }}
+              disabled={isActive}
+              className={isActive ? 'navm-current' : undefined}
               right={isActive ? <Check size={16} aria-hidden="true" className="navm-check" /> : null}
             />
           )
@@ -102,6 +105,7 @@ function AvatarMenu({
             label={currentTreeName}
             disabled
             className="navm-current"
+            right={<Check size={16} aria-hidden="true" className="navm-check" />}
           />
         )}
         <NavMenuItem icon={<Plus {...ICON} />} label={t('Créer un nouvel arbre')} onSelect={() => { onClose(); onCreateTree?.() }} />
