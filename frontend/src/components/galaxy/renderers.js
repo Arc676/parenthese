@@ -676,7 +676,7 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
     ctx.stroke()
     ctx.fillStyle = '#93402A'
     ctx.fillText(text, 0, by + 0.5)
-    if (nodeProgress * labelAlpha > 0.5) familyHitAreas.push({ x0: cx - w / 2, y0: cy + labelOffsetY + by - h / 2, x1: cx + w / 2, y1: cy + labelOffsetY + by + h / 2, anchorId: tab.anchorId })
+    if (nodeProgress * labelAlpha > 0.5) familyHitAreas.push({ x0: cx - w / 2, y0: cy + labelOffsetY + by - h / 2, x1: cx + w / 2, y1: cy + labelOffsetY + by + h / 2, anchorId: tab.anchorId, tabKey: tab.tabKey })
   }
 
   ctx.restore()

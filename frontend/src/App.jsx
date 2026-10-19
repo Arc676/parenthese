@@ -508,6 +508,9 @@ function App() {
   })
 
   const [adminPanelVisible, setAdminPanelVisible] = useState(false)
+  // Grandes belles-familles dans des onglets (réglage de ce navigateur, voir Paramètres de l'arbre)
+  const [familyTabs, setFamilyTabsState] = useState(() => { try { return localStorage.getItem('parenthese.familyTabs') !== 'off' } catch { return true } })
+  const setFamilyTabs = useCallback((on) => { setFamilyTabsState(on); try { localStorage.setItem('parenthese.familyTabs', on ? 'on' : 'off') } catch { /* navigateur sans stockage */ } }, [])
   // Premiers visages : fenêtre ouverte après un import GEDCOM, ou depuis les paramètres de l'arbre
   const [photoStart, setPhotoStart] = useState({ visible: false, personsImported: null, refs: [], mediaRefs: [], faces: [], bundledFiles: [] })
   const photoStartDirtyRef = useRef(false)
@@ -3183,6 +3186,7 @@ function App() {
         onPhotoPlaceholderClick={tree.canEditCurrentTree ? handlePhotoPlaceholderClick : null}
         reorderEnabled={canReorderSiblings}
         onReorderSiblings={handleReorderSiblings}
+        familyTabs={familyTabs}
       />
       <ZoomControl zoomApiRef={galaxyZoomApiRef} />
       {tree.canEditCurrentTree && (
@@ -3296,6 +3300,8 @@ function App() {
         onGedcomImported={handleGedcomImported}
         onOpenPhotoStart={() => { setAdminPanelVisible(false); openPhotoStart() }}
         onClose={() => setAdminPanelVisible(false)}
+        familyTabs={familyTabs}
+        onFamilyTabsChange={setFamilyTabs}
       />
       <PhotoStartPanel
         visible={photoStart.visible}

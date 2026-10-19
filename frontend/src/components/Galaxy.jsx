@@ -3,7 +3,7 @@ import { getPersonMedias, getParents, getChildren, getPersonUnions, persons as g
 import { PERSON_R, FLOAT_SPEED, FLOAT_AMPLITUDE, REPULSION_RADIUS, REPULSION_STRENGTH, MAX_ORBIT_MEDIAS, ENTRANCE_GEN_DELAY, ENTRANCE_NODE_DURATION, ENTRANCE_NODE_STAGGER, ENTRANCE_MAX_GEN_SPAN, ENTRANCE_MAX_NODE_SPAN, ENTRANCE_LINE_DELAY, ENTRANCE_LINE_DURATION, ENTRANCE_ORBIT_DELAY, ENTRANCE_ORBIT_DURATION, ENTRANCE_ORBIT_STAGGER } from './galaxy/constants'
 import { easeOutCubic } from './galaxy/utils'
 import { computeLayout, generateNodeRandomData, coupleBarMeta } from './galaxy/elkLayout'
-import { computeBlockLayout } from './galaxy/blockLayout'
+import { computeBlockLayout, familyTabsOf, subgraphOf } from './galaxy/blockLayout'
 
 // Placement par blocs familiaux par défaut (mesures : tools/layout-bench). ?layout=sugiyama = placement Sugiyama.
 const USE_BLOCK_LAYOUT = typeof window === 'undefined' || new URLSearchParams(window.location.search).get('layout') !== 'sugiyama'
@@ -42,40 +42,26 @@ const DROP_SPRING = { stiffness: 480, dampingRatio: 0.72 }
 const centerX = (node) => node.x + node.width / 2
 const prefersReducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, photoHint = false, onPhotoPlaceholderClick = null, reorderEnabled = false, onReorderSiblings = null }) => {
+const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, photoHint = false, onPhotoPlaceholderClick = null, reorderEnabled = false, onReorderSiblings = null, familyTabs = true }) => {
   const canvasRef = useRef(null)
-  // Onglets de familles : la personne de référence de l'arbre affiché (celle de départ, puis le conjoint
-  // dont on ouvre la famille), et la liste des familles rencontrées, dans l'ordre des mariages
   const layoutDataRef = useRef(null)
-  // Mode « par famille » (onglets) ou « tout l'arbre » (une belle-famille trop large reste dessinée) : choix
-  // du spectateur, gardé dans son navigateur
-  const [familyMode, setFamilyModeState] = useState(() => { try { return localStorage.getItem('parenthese.familyMode') === 'tree' ? 'tree' : 'tabs' } catch { return 'tabs' } })
-  const familyModeRef = useRef(familyMode)
-  const [activeRef, setActiveRef] = useState(focusPersonId)
+  // Onglets de familles (réglage `familyTabs`) : la liste des familles de l'arbre, calculée une fois par
+  // version du graphe et par personne de départ, et l'onglet ouvert. Un onglet est le sous-arbre d'une
+  // grande belle-famille, posé avec le conjoint charnière comme référence.
   const [tabs, setTabs] = useState([])
-  const [familiesCount, setFamiliesCount] = useState(0) // familles de l'arbre affiché, onglets compris : la barre apparaît dès 2
+  const [activeKey, setActiveKey] = useState(focusPersonId != null ? String(focusPersonId) : null)
+  const tabsCacheRef = useRef({ rev: -1, start: undefined, tabs: [] })
+  const activeTabRef = useRef(null)
+  const familyTabsRef = useRef(familyTabs)
+  useEffect(() => { familyTabsRef.current = familyTabs }, [familyTabs])
   const startRefRef = useRef(focusPersonId)
-  useEffect(() => { startRefRef.current = focusPersonId; setActiveRef(focusPersonId); setTabs([]) }, [focusPersonId])
-  // Lu au calcul du cadrage seulement : changer de personne de départ ne recadre pas une vue en cours
+  useEffect(() => { startRefRef.current = focusPersonId; setActiveKey(focusPersonId != null ? String(focusPersonId) : null) }, [focusPersonId])
+  // Lu au calcul du cadrage et par le réordonnancement : la référence de l'arbre affiché
   const focusPersonIdRef = useRef(focusPersonId)
-  // Mis à jour hors du rendu, avant l'effet de cadrage déclaré plus bas (même phase, ordre de déclaration)
-  useEffect(() => { focusPersonIdRef.current = activeRef }, [activeRef])
-  const setFamilyMode = useCallback((mode) => {
-    familyModeRef.current = mode
-    setFamilyModeState(mode)
-    try { localStorage.setItem('parenthese.familyMode', mode) } catch { /* navigateur sans stockage */ }
-    setTabs([])
-    setActiveRef(startRefRef.current)
-  }, [])
   // Sur téléphone, la barre défile : l'onglet ouvert par un badge se met en vue, sans animation
-  useEffect(() => { document.querySelector('.family-tab.is-active')?.scrollIntoView({ behavior: 'auto', inline: 'nearest', block: 'nearest' }) }, [activeRef, tabs])
-  // Clic sur un badge : l'onglet de cette famille s'il existe déjà (la même famille vue depuis un autre
-  // conjoint), sinon un nouvel onglet avec ce conjoint comme référence
-  const openFamily = useCallback((anchorId) => {
-    const fam = layoutDataRef.current?.families?.find((f) => f.anchorId === anchorId)
-    const known = fam && tabs.find((tb) => `p-${tb.referenceId}` === String(anchorId) || fam.members.includes(String(tb.referenceId)))
-    setActiveRef(known ? known.referenceId : String(anchorId).replace(/^p-/, ''))
-  }, [tabs])
+  useEffect(() => { document.querySelector('.family-tab.is-active')?.scrollIntoView({ behavior: 'auto', inline: 'nearest', block: 'nearest' }) }, [activeKey, tabs])
+  // Clic sur un badge : l'onglet de cette famille (ou, depuis un onglet, celui d'où l'on vient)
+  const openFamily = useCallback((tabKey) => { if (tabKey != null) setActiveKey(String(tabKey)) }, [])
   // Propriétaire : un portrait vide survolé montre « + photo »
   const photoHintRef = useRef(photoHint)
   useEffect(() => { photoHintRef.current = photoHint }, [photoHint])
@@ -213,12 +199,14 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
 
   // Placement complet pour un ordre de la fratrie, recalé sur la source (les parents ne bougent pas)
   const layoutForOrder = useCallback((group, order, base) => {
+    const tab = activeTabRef.current
+    const src = tab?.personIds ? subgraphOf(tab.personIds) : { persons: graphPersons, unions: graphUnions, filiations: graphFiliations }
     const graph = {
-      persons: graphPersons,
-      unions: graphUnions,
-      filiations: filiationsWithOrder(graphFiliations, graphUnions, group.source, order),
+      persons: src.persons,
+      unions: src.unions,
+      filiations: filiationsWithOrder(src.filiations, src.unions, group.source, order),
     }
-    const result = computeBlockLayout(graph, focusPersonIdRef.current, { familyTabs: familyModeRef.current === 'tabs' })
+    const result = computeBlockLayout(graph, focusPersonIdRef.current, { familyTabs: familyTabsRef.current })
     const baseSource = base.children.find((n) => n.id === group.source)
     const source = result.children.find((n) => n.id === group.source)
     const shift = baseSource && source ? baseSource.x - source.x : 0
@@ -457,8 +445,30 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
 
   // Layout
   useEffect(() => {
-    // La personne de départ sert de référence aux rangées (génération de parenté depuis elle)
-    const result = USE_BLOCK_LAYOUT ? computeBlockLayout(null, focusPersonIdRef.current, { familyTabs: familyMode === 'tabs' }) : computeLayout(null, focusPersonIdRef.current)
+    // Onglets : la liste des familles, une fois par version du graphe et par personne de départ. Calculée
+    // avant l'arbre affiché, parce que chaque calcul de placement remplit les couples du module (coupleBarMeta)
+    const start = startRefRef.current != null ? String(startRefRef.current) : null
+    const cache = tabsCacheRef.current
+    if (USE_BLOCK_LAYOUT && familyTabs && (cache.rev !== graphRevision || cache.start !== start)) {
+      tabsCacheRef.current = { rev: graphRevision, start, tabs: familyTabsOf(null, startRefRef.current) }
+      setTabs(tabsCacheRef.current.tabs)
+    }
+    if (!familyTabs && tabsCacheRef.current.tabs.length) { tabsCacheRef.current = { rev: -1, start: undefined, tabs: [] }; setTabs([]) }
+    const tab = familyTabs ? (tabsCacheRef.current.tabs.find((tb) => tb.key === activeKey) || tabsCacheRef.current.tabs[0] || null) : null
+    activeTabRef.current = tab
+    // La personne de départ (ou la charnière de l'onglet) sert de référence aux rangées
+    focusPersonIdRef.current = tab ? tab.referenceId : startRefRef.current
+    const graph = tab?.personIds ? subgraphOf(tab.personIds) : null
+    const result = USE_BLOCK_LAYOUT ? computeBlockLayout(graph, focusPersonIdRef.current, { familyTabs }) : computeLayout(null, focusPersonIdRef.current)
+    // Dans l'onglet d'une belle-famille, chaque charnière (conjoint marié dans la famille d'où l'on vient)
+    // porte le badge de retour
+    if (tab?.parentKey) {
+      const parent = tabsCacheRef.current.tabs.find((tb) => tb.key === tab.parentKey)
+      for (const h of (tab.hinges || [tab.referenceId])) {
+        const node = result.children.find((n) => n.id === `p-${h}`)
+        if (parent && node) node._familyTab = { anchorId: node.id, label: parent.label, count: parent.count, tabKey: parent.key }
+      }
+    }
 
     const canvas = canvasRef.current
     if (!canvas) return
@@ -589,26 +599,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     layoutDataRef.current = result
     needsRedrawRef.current = true
     setLayoutReady(true)
-    // Onglets : la famille affichée d'abord, puis chaque belle-famille rencontrée, sans doublon (une famille déjà
-    // en onglet se reconnaît à sa personne de référence parmi les membres)
-    const fams = result.families || []
-    setFamiliesCount(fams.length)
-    if (fams.length) setTabs((prev) => {
-      // La liste commence toujours par la famille de départ ; un placement calculé pour une autre référence
-      // avant qu'elle soit connue (arbre chargé avant sa personne de départ) ne compte pas
-      const start = String(startRefRef.current)
-      const next = prev[0] && String(prev[0].referenceId) === start ? [...prev] : []
-      const main = fams[0]
-      if (!next.length && String(main.referenceId) !== start) return prev
-      if (!next.some((tb) => String(tb.referenceId) === String(main.referenceId))) next.push({ referenceId: main.referenceId, label: main.label, count: main.count })
-      for (const f of fams.slice(1)) {
-        if (f.drawn) continue
-        if (next.some((tb) => `p-${tb.referenceId}` === String(f.anchorId) || f.members.includes(String(tb.referenceId)))) continue
-        next.push({ referenceId: String(f.anchorId).replace(/^p-/, ''), label: f.label, count: f.count })
-      }
-      return next
-    })
-  }, [graphRevision, activeRef, familyMode])
+  }, [graphRevision, activeKey, familyTabs])
 
   // Sync selectedPersonId
   useEffect(() => {
@@ -1084,24 +1075,23 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     {displayLabel && (
       <div className="path-label-overlay">{displayLabel}</div>
     )}
-    {(tabs.length > 1 || familiesCount > 1) && (
+    {familyTabs && tabs.length > 1 && (
       <nav className={`family-tabs${annotationHandlers ? ' family-tabs--lowered' : ''}`} aria-label={tr('Familles')}>
-        <div className="family-mode" role="group" aria-label={tr('Affichage des familles')}>
-          <button type="button" className={`family-mode-btn${familyMode === 'tree' ? ' is-active' : ''}`} aria-pressed={familyMode === 'tree'} onClick={() => familyMode !== 'tree' && setFamilyMode('tree')}>{tr('Tout l’arbre')}</button>
-          <button type="button" className={`family-mode-btn${familyMode === 'tabs' ? ' is-active' : ''}`} aria-pressed={familyMode === 'tabs'} onClick={() => familyMode !== 'tabs' && setFamilyMode('tabs')}>{tr('Par famille')}</button>
-        </div>
-        {familyMode === 'tabs' && tabs.map((tb) => (
-          <button
-            key={String(tb.referenceId)}
-            type="button"
-            className={`family-tab${String(tb.referenceId) === String(activeRef) ? ' is-active' : ''}`}
-            aria-current={String(tb.referenceId) === String(activeRef) ? 'page' : undefined}
-            onClick={() => setActiveRef(tb.referenceId)}
-          >
-            <span className="family-tab-name">{tb.label ? tr('Famille {name}', { name: tb.label }) : tr('Famille')}</span>
-            <span className="family-tab-count">{tb.count}</span>
-          </button>
-        ))}
+        {tabs.map((tb) => {
+          const active = tb.key === (tabs.some((x) => x.key === activeKey) ? activeKey : tabs[0].key)
+          return (
+            <button
+              key={tb.key}
+              type="button"
+              className={`family-tab${active ? ' is-active' : ''}`}
+              aria-current={active ? 'page' : undefined}
+              onClick={() => setActiveKey(tb.key)}
+            >
+              <span className="family-tab-name">{tb.label ? tr('Famille {name}', { name: tb.label }) : tr('Famille')}</span>
+              <span className="family-tab-count">{tb.count}</span>
+            </button>
+          )
+        })}
       </nav>
     )}
     </>

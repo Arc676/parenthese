@@ -88,31 +88,6 @@
 }
 .family-tab.is-active .family-tab-count { color: #EDB6A4; }
 
-/* Bascule « Tout l'arbre / Par famille », en tête de la barre */
-.family-mode {
-  flex: 0 0 auto;
-  display: inline-flex;
-  padding: 3px;
-  border-radius: 999px;
-  background: #F2EFEA;
-  margin-right: 6px;
-}
-.family-mode-btn {
-  border: 0;
-  background: transparent;
-  color: #6F675F;
-  font-family: "DM Sans", system-ui, sans-serif;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1;
-  padding: 7px 11px;
-  border-radius: 999px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.family-mode-btn:focus-visible { outline: 2px solid #C9553D; outline-offset: 2px; }
-.family-mode-btn.is-active { background: #FFFFFF; color: #2A2622; box-shadow: 0 1px 2px rgba(42, 38, 34, 0.08); }
-
 /* En mode modification, le message « Vous proposez des changements » occupe le haut au centre : la barre
    se limite à la moitié gauche sur grand écran et descend sous le message sur téléphone */
 .family-tabs--lowered { max-width: calc(50vw - 200px); }

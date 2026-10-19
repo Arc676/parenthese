@@ -1,4 +1,5 @@
 import { computeLayout, componentOrderPerGen, chainGap } from './elkLayout'
+import { persons as globalPersons, unions as globalUnions, filiations as globalFiliations } from '../../data/mockData'
 
 // ============================================================
 // Layout par blocs familiaux (Reingold-Tilford adapté aux couples)
@@ -226,6 +227,7 @@ function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
   const detached = [] // familles qu'on n'a pas pu coller à leur enfant (trop loin) : posées à part, renvoi
   const tabs = [] // belles-familles trop larges pour cet arbre, devenues onglets : { anchorId, pu, label, count, members }
   const hiddenChains = new Set() // chaînes des familles devenues onglets : pas dessinées dans cet arbre
+  const tabOfChain = new Map() // chaîne cachée → son onglet : un second conjoint de la même famille renvoie au même onglet
   const bigFamilies = [] // mode « tout l'arbre » : les familles qui seraient des onglets, dessinées quand même
   const attachedEdges = new Set() // `${union}>${enfant}` : fil d'une famille collée à son enfant, toujours dessiné
 
@@ -317,7 +319,7 @@ function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
     }
     kidsOfChain.forEach(({ unionId, kid }, i) => {
       const kc = chainOf.get(kid)
-      if (placed.has(kc)) {
+      if (placed.has(kc) || tabOfChain.has(kc)) {
         external.push({ kid, unionId })
         externalEdges.add(`${unionId}>${kid}`)
         childBlocks.push({ ...ghostBlock(kid), unionId })
@@ -360,6 +362,15 @@ function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
       if (placed.has(pc)) continue
       const top = topChainOf(pc)
       if (placed.has(top)) continue
+      const owner = tabOfChain.get(top) || tabOfChain.get(pc)
+      if (owner) {
+        // Sa famille est déjà un onglet (un autre conjoint l'a amenée) : même badge, même onglet
+        const A = byId.get(id)
+        A._familyTab = { anchorId: owner.anchorId, label: owner.label, count: owner.count, tabKey: owner.anchorId.replace(/^p-/, '') }
+        owner.hinges.push(id)
+        owner.hingeEdges.push([pu, id])
+        continue
+      }
       const side = forcedSide.get(id) ?? (chain.length > 3 ? (chain.indexOf(id) < chain.length / 2 ? -1 : 1) : (outer || (chain.indexOf(id) < chain.length / 2 ? -1 : 1)))
       const saved = anchor
       const tabsBefore = tabs.length
@@ -376,17 +387,26 @@ function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
         // laisse aucune trace (onglets imbriqués, chaînes posées, arêtes externes), et le fil de ses parents
         // vers le conjoint est caché : c'est le badge du conjoint qui dit où est sa famille.
         const chainsOf = (members) => new Set([...members].map(m => chainOf.get(m)).filter(Boolean))
-        const unplace = (members) => { for (const ch of chainsOf(members)) { placed.delete(ch); hiddenChains.delete(ch) } }
-        for (const tb of tabs.splice(tabsBefore)) { unplace(tb.members); byId.get(tb.anchorId)._familyTab = null }
+        const unplace = (members) => { for (const ch of chainsOf(members)) { placed.delete(ch); hiddenChains.delete(ch); tabOfChain.delete(ch) } }
+        // Les onglets nés pendant cette construction (familles emboîtées) rejoignent celle-ci : son onglet les
+        // retrouvera en se dessinant, avec ses propres onglets
+        const nested = new Set()
+        for (const tb of tabs.splice(tabsBefore)) {
+          unplace(tb.members)
+          for (const m of tb.members) nested.add(m)
+          for (const h of tb.hinges) { byId.get(h)._familyTab = null; nested.add(h) }
+          byId.get(tb.anchorId)._familyTab = null
+        }
         unplace(block.members)
         for (const e of [...externalEdges]) if (!externalBefore.has(e)) externalEdges.delete(e)
-        for (const ch of chainsOf(block.members)) hiddenChains.add(ch)
         const A = byId.get(id)
         const partners = [byId.get(pu)?._data?.p1Key, byId.get(pu)?._data?.p2Key].map(k => byId.get(k)?._data).filter(Boolean)
         const label = A._data?.birthName || partners.find(d => d.lastName)?.lastName || A._data?.lastName || ''
-        const members = new Set([...block.members].filter(m => byId.get(m)?._type === 'person'))
-        tabs.push({ anchorId: id, pu, label, count: members.size, members })
-        A._familyTab = { anchorId: id, label, count: members.size }
+        const members = new Set([...[...block.members].filter(m => byId.get(m)?._type === 'person'), ...nested])
+        const tab = { anchorId: id, pu, label, count: members.size, members, hinges: [], hingeEdges: [[pu, id]] }
+        tabs.push(tab)
+        for (const ch of chainsOf(members)) { hiddenChains.add(ch); tabOfChain.set(ch, tab) }
+        A._familyTab = { anchorId: id, label, count: members.size, tabKey: id.replace(/^p-/, '') }
         continue
       }
       built.push({ block, anchorId: id, side })
@@ -594,7 +614,7 @@ function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
   free.forEach((b, i) => b.place(forest.xs[i]))
   const referenceNode = result.referenceId != null ? byId.get(`p-${result.referenceId}`) : null
   // Le fil des parents d'un conjoint dont la famille est un onglet n'est pas dessiné : son badge dit où elle est
-  for (const tb of tabs) for (const e of result.edges) if (e.sources[0] === tb.pu && e.targets[0] === tb.anchorId) e._hidden = true
+  for (const tb of tabs) for (const [pu, id] of tb.hingeEdges) for (const e of result.edges) if (e.sources[0] === pu && e.targets[0] === id) e._hidden = true
 
   // Les familles devenues onglets sortent de cet arbre : leurs nœuds et leurs arêtes ne sont pas dessinés
   if (hiddenChains.size) {
@@ -603,6 +623,7 @@ function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
     result.children = nodes.filter(n => !hidden.has(n.id))
     // Un onglet se propose depuis le badge d'un conjoint dessiné : ceux dont le conjoint est caché avec sa famille tombent
     for (let i = tabs.length - 1; i >= 0; i--) if (hidden.has(tabs[i].anchorId)) tabs.splice(i, 1)
+    for (const tb of tabs) tb.hinges = tb.hinges.filter(h => !hidden.has(h))
     result.edges = result.edges.filter(e => !hidden.has(e.sources[0]) && !hidden.has(e.targets[0]))
     nodes.length = 0
     nodes.push(...result.children)
@@ -692,10 +713,48 @@ function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
   const drawn = nodes.filter(n => n._type === 'person')
   result.families = [
     { id: 'main', label: referenceNode?._data?.lastName || drawn[0]?._data?.lastName || '', count: drawn.length, referenceId: result.referenceId ?? null },
-    ...tabs.map(tb => ({ id: tb.anchorId, anchorId: tb.anchorId, label: tb.label, count: tb.count, members: [...tb.members].map(m => m.replace(/^p-/, '')) })),
+    ...tabs.map(tb => ({ id: tb.anchorId, anchorId: tb.anchorId, label: tb.label, count: tb.count, members: [...tb.members].map(m => m.replace(/^p-/, '')), hinges: [tb.anchorId, ...tb.hinges].map(m => m.replace(/^p-/, '')) })),
     ...bigFamilies.map(f => ({ id: f.anchorId, anchorId: f.anchorId, label: f.label, count: f.count, members: [], drawn: true })),
   ]
   result._inlaws = inlaws
 
   return result
+}
+
+// ============================================================
+// Onglets de familles
+// ============================================================
+// Le sous-graphe d'un ensemble de personnes : leurs unions entre elles et leurs filiations entre elles.
+export function subgraphOf(personIds, graphData = null) {
+  const keep = new Set([...personIds].map(String))
+  const persons = (graphData?.persons || globalPersons).filter(p => keep.has(String(p.id)))
+  const unions = (graphData?.unions || globalUnions).filter(u => keep.has(String(u.partner1Id)) && keep.has(String(u.partner2Id)))
+  const unionIds = new Set(unions.map(u => String(u.id)))
+  const filiations = (graphData?.filiations || globalFiliations).filter(f => keep.has(String(f.childId)) && (f.unionId ? unionIds.has(String(f.unionId)) : keep.has(String(f.parentId))))
+  return { persons, unions, filiations }
+}
+
+// Toutes les familles d'un arbre, de proche en proche : l'arbre de la personne de départ, puis chaque grande
+// belle-famille qu'il cache (un onglet = ce bloc caché plus le conjoint charnière, posé avec lui comme
+// référence), puis celles que ces onglets cachent à leur tour. Chaque personne est dans un seul onglet, sauf
+// la charnière qui est des deux côtés. Ordre : celui de la découverte, la famille de départ en premier.
+export function familyTabsOf(graphData = null, referenceId = null) {
+  const root = { key: referenceId != null ? String(referenceId) : 'root', referenceId, parentKey: null, personIds: null, label: '', count: 0 }
+  const tabs = [root]
+  const seen = new Set([root.key])
+  for (let i = 0; i < tabs.length; i++) {
+    const tab = tabs[i]
+    const graph = tab.personIds ? subgraphOf(tab.personIds, graphData) : graphData
+    const result = computeBlockLayout(graph, tab.referenceId, { familyTabs: true })
+    const fams = result.families || []
+    if (fams[0]) { tab.label = fams[0].label; tab.count = fams[0].count }
+    for (const f of fams.slice(1)) {
+      if (f.drawn) continue
+      const key = String(f.anchorId).replace(/^p-/, '')
+      if (seen.has(key)) continue
+      seen.add(key)
+      tabs.push({ key, referenceId: key, parentKey: tab.key, personIds: new Set([...f.members, ...f.hinges]), hinges: f.hinges, label: f.label, count: f.count })
+    }
+  }
+  return tabs
 }

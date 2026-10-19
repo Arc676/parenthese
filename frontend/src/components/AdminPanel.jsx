@@ -33,6 +33,8 @@ function normalizeSlug(value) {
 }
 
 const AdminPanel = ({
+  familyTabs = true,
+  onFamilyTabsChange = null,
   visible,
   treeId,
   authToken,
@@ -472,6 +474,22 @@ const AdminPanel = ({
                       <span className="ts-choice-text">
                         <strong>{t("Les modifications s'appliquent tout de suite")}</strong>
                         <small>{t("La famille modifie l'arbre sans attendre. Vous gardez l'historique.")}</small>
+                      </span>
+                    </label>
+                  </fieldset>
+
+                  <fieldset className="ts-policy">
+                    <legend className="pz-eyebrow">{t('Affichage')}</legend>
+                    <label className={`ts-choice ${familyTabs ? 'is-active' : ''}`}>
+                      <input
+                        type="checkbox"
+                        name="familyTabs"
+                        checked={familyTabs}
+                        onChange={(event) => onFamilyTabsChange?.(event.target.checked)}
+                      />
+                      <span className="ts-choice-text">
+                        <strong>{t('Les grandes familles par alliance dans des onglets')}</strong>
+                        <small>{t("Une belle-famille plus large qu'un écran s'ouvre dans son propre onglet au lieu d'être dessinée dans l'arbre. Réglage de ce navigateur.")}</small>
                       </span>
                     </label>
                   </fieldset>

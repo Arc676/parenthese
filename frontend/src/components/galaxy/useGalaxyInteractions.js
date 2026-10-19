@@ -287,7 +287,7 @@ export function useGalaxyInteractions({
 
     // Badge de famille : ouvre l'onglet de cette famille
     const fam = hitFamily(clickX, clickY)
-    if (fam) { onOpenFamily?.(fam.anchorId); return }
+    if (fam) { onOpenFamily?.(fam.tabKey); return }
 
     // Renvoi : on glisse vers l'autre extrémité (parents ou enfant), sans dézoomer en dessous de la lecture des prénoms
     const renvoi = hitRenvoi(clickX, clickY)
