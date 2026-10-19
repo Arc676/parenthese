@@ -319,63 +319,113 @@ function drawFamilyCard(ctx, node, pos, posMap, progress, view) {
 }
 
 // ============================================================
-// Carte des familles (maquette J, 19/10). Passé un seuil de dézoom, chaque famille par alliance se replie en
-// son bloc, qui glisse de sa place réelle vers sa place sur la carte (calculée par le placement, en coordonnées
-// de l'arbre). Plus bas encore, la famille principale se replie aussi. Les mariages entre familles sont des
-// traits de bloc à bloc, avec les deux prénoms. Pas d'animation, pas de clic : le zoom est la navigation.
+// Le nom de la famille où l'on est, écrit en grand à l'écran (en haut à gauche) : celle dont le bloc contient
+// le centre de la vue, sinon la plus proche. Coordonnées d'écran, lisible à tout zoom.
 // ============================================================
-export function familyTileSize(scale) { return { w: 290 / scale, h: 112 / scale } }
-export function drawFamilyMap(ctx, families, view, offsets, progress) {
-  if (!families?.length || progress <= 0) return
-  const s = view?.scale || 1
-  const px = (v) => v / s
-  const { w, h } = familyTileSize(s)
-  const shown = families.filter((f) => f.id !== 'main' || progress >= 1)
-  const at = (f) => { const o = offsets.get(f.id) || { x: 0, y: 0 }; return { x: f.spread.x + o.x, y: f.spread.y + o.y } }
+export function familyAt(families, view) {
+  if (!families?.length || !view) return null
+  const cx = (view.x0 + view.x1) / 2, cy = (view.y0 + view.y1) / 2
+  const dist = (f) => Math.hypot(Math.max(f.bbox.x0 - cx, 0, cx - f.bbox.x1), Math.max(f.bbox.y0 - cy, 0, cy - f.bbox.y1))
+  return families.reduce((best, f) => (f.bbox && (!best || dist(f) < dist(best)) ? f : best), null)
+}
+export function drawFamilyBanner(ctx, family) {
+  if (!family) return
   ctx.save()
+  ctx.font = '500 30px "Newsreader", Georgia, serif'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  const title = family.label ? t('Famille {name}', { name: family.label }) : t('Famille')
+  // Un voile de la couleur du fond, pour rester lisible quand l'arbre passe dessous au dézoom
+  const w = ctx.measureText(title).width + 56
+  const plate = ctx.createLinearGradient(0, 0, w + 60, 0)
+  plate.addColorStop(0, 'rgba(251, 250, 247, 0.92)')
+  plate.addColorStop(1, 'rgba(251, 250, 247, 0)')
+  ctx.fillStyle = plate
+  ctx.fillRect(0, 0, w + 60, 100)
+  ctx.fillStyle = COLORS.text
+  ctx.fillText(title, 28, 56)
+  ctx.fillStyle = COLORS.textLight
+  ctx.font = '400 13px "DM Sans", system-ui, sans-serif'
+  ctx.fillText(t('{n} personnes', { n: family.count }), 29, 78)
+  ctx.restore()
+}
+
+// ============================================================
+// Carte des familles (maquette J, 19/10). Passé un seuil de dézoom, l'arbre laisse la place à la carte :
+// chaque famille est un bloc (nom, portraits, nombre), les blocs se rangent côte à côte au milieu de l'écran,
+// la famille principale au centre, les familles par alliance de leur côté, et chaque mariage entre familles
+// est un trait de bloc à bloc avec les deux prénoms. Coordonnées d'écran : la carte ne bouge plus avec le zoom.
+// ============================================================
+export function drawFamilyMap(ctx, families, cssW, cssH) {
+  if (!families?.length) return
+  const W = 290, H = 112, GAPX = 170
+  const main = families.find((f) => f.id === 'main') || families[0]
+  const left = families.filter((f) => f !== main && f.side < 0)
+  const right = families.filter((f) => f !== main && !(f.side < 0))
+  const cy = cssH / 2
+  // La famille principale au milieu ; de chaque côté, les familles par alliance en colonne, chacune reliée
+  // en droite ligne au bloc principal. Aucun trait ne passe derrière un bloc.
+  const ROWY = H + 44
+  const posOf = new Map([[main.id, { x: 0, y: cy }]])
+  const place = (list, dir) => list.forEach((f, k) => posOf.set(f.id, { x: dir * (W + GAPX), y: cy + (k - (list.length - 1) / 2) * ROWY }))
+  place(left, -1); place(right, 1)
+  // Le groupe entier est centré à l'écran et réduit s'il déborde
+  const xs = [...posOf.values()].map((c) => c.x)
+  const x0 = Math.min(...xs) - W / 2, x1 = Math.max(...xs) + W / 2
+  const ys = [...posOf.values()].map((c) => c.y)
+  const fit = Math.min(1, (cssW - 48) / (x1 - x0), (cssH - 160) / (Math.max(...ys) - Math.min(...ys) + H))
+  ctx.save()
+  ctx.translate(cssW / 2, cy)
+  ctx.scale(fit, fit)
+  ctx.translate(-(x0 + x1) / 2, -cy)
   ctx.lineCap = 'round'
-  // Traits de bloc à bloc : du bord du bloc au bord de l'autre, ou jusqu'au centre de la famille encore dépliée
-  for (const f of shown) for (const l of (f.links || [])) {
+  const labels = []
+  for (const f of families) for (const l of (f.links || [])) {
     const g = families.find((x) => x.id === l.to)
-    if (!g) continue
-    const a = at(f), b = shown.includes(g) ? at(g) : g.spread
+    const a = posOf.get(f.id), b = g && posOf.get(g.id)
+    if (!a || !b) continue
     const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1
     const ux = dx / len, uy = dy / len
-    const clip = (c, toward) => { const kx = Math.abs(toward.x) > 1e-6 ? (w / 2) / Math.abs(toward.x) : Infinity; const ky = Math.abs(toward.y) > 1e-6 ? (h / 2) / Math.abs(toward.y) : Infinity; const k = Math.min(kx, ky); return { x: c.x + toward.x * k, y: c.y + toward.y * k } }
-    const p1 = clip(a, { x: ux, y: uy })
-    const p2 = shown.includes(g) ? clip(b, { x: -ux, y: -uy }) : b
+    const clip = (c, tx, ty) => { const kx = Math.abs(tx) > 1e-6 ? (W / 2) / Math.abs(tx) : Infinity; const ky = Math.abs(ty) > 1e-6 ? (H / 2) / Math.abs(ty) : Infinity; const k = Math.min(kx, ky); return { x: c.x + tx * k, y: c.y + ty * k } }
+    const p1 = clip(a, ux, uy), p2 = clip(b, -ux, -uy)
     ctx.strokeStyle = FIL.color
-    ctx.lineWidth = px(1.6)
+    ctx.lineWidth = 1.6
     ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke()
-    if (l.label) {
-      ctx.fillStyle = COLORS.textLight
-      ctx.font = `400 ${px(11)}px "DM Sans", system-ui, sans-serif`
-      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'
-      ctx.fillText(l.label, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - px(6))
-    }
+    if (l.label) labels.push({ text: l.label, x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 })
   }
-  for (const f of shown) {
-    const c = at(f)
+  for (const f of families) {
+    const c = posOf.get(f.id)
+    if (!c) continue
     ctx.fillStyle = '#FFFFFF'
     ctx.strokeStyle = '#E3DED6'
-    ctx.lineWidth = px(1)
-    ctx.beginPath(); ctx.roundRect(c.x - w / 2, c.y - h / 2, w, h, px(18)); ctx.fill(); ctx.stroke()
+    ctx.lineWidth = 1
+    ctx.beginPath(); ctx.roundRect(c.x - W / 2, c.y - H / 2, W, H, 18); ctx.fill(); ctx.stroke()
     ;(f.portraits || []).forEach((p, i) => {
-      const cx = c.x - w / 2 + px(24) + (i % 3) * px(30), cy = c.y - px(16) + Math.floor(i / 3) * px(30)
-      ctx.fillStyle = '#F2EFEA'; ctx.strokeStyle = '#E3DED6'; ctx.lineWidth = px(0.8)
-      ctx.beginPath(); ctx.roundRect(cx - px(11), cy - px(11), px(22), px(22), px(4)); ctx.fill(); ctx.stroke()
+      const px = c.x - W / 2 + 24 + (i % 3) * 30, py = c.y - 16 + Math.floor(i / 3) * 30
+      ctx.fillStyle = '#F2EFEA'; ctx.strokeStyle = '#E3DED6'; ctx.lineWidth = 0.8
+      ctx.beginPath(); ctx.roundRect(px - 11, py - 11, 22, 22, 4); ctx.fill(); ctx.stroke()
       ctx.fillStyle = COLORS.textLight
-      ctx.font = `400 ${px(9)}px "Newsreader", Georgia, serif`
+      ctx.font = '400 9px "Newsreader", Georgia, serif'
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-      ctx.fillText(`${(p.firstName || '')[0] || ''}${(p.lastName || '')[0] || ''}`, cx, cy + px(0.5))
+      ctx.fillText(`${(p.firstName || '')[0] || ''}${(p.lastName || '')[0] || ''}`, px, py + 0.5)
     })
     ctx.fillStyle = COLORS.text
-    ctx.font = `500 ${px(18)}px "Newsreader", Georgia, serif`
+    ctx.font = '500 18px "Newsreader", Georgia, serif'
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
-    ctx.fillText(f.label ? t('Famille {name}', { name: f.label }) : t('Famille'), c.x - w / 2 + px(118), c.y - px(12))
+    ctx.fillText(f.label ? t('Famille {name}', { name: f.label }) : t('Famille'), c.x - W / 2 + 118, c.y - 12)
     ctx.fillStyle = '#93402A'
-    ctx.font = `400 ${px(12)}px "DM Sans", system-ui, sans-serif`
-    ctx.fillText(t('{n} personnes', { n: f.count }), c.x - w / 2 + px(118), c.y + px(14))
+    ctx.font = '400 12px "DM Sans", system-ui, sans-serif'
+    ctx.fillText(t('{n} personnes', { n: f.count }), c.x - W / 2 + 118, c.y + 14)
+  }
+  // Les prénoms du mariage, sur le trait, au-dessus des blocs
+  ctx.font = '400 11px "DM Sans", system-ui, sans-serif'
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  for (const l of labels) {
+    const w = ctx.measureText(l.text).width + 12
+    ctx.fillStyle = '#FBFAF7'
+    ctx.beginPath(); ctx.roundRect(l.x - w / 2, l.y - 9, w, 18, 9); ctx.fill()
+    ctx.fillStyle = COLORS.textLight
+    ctx.fillText(l.text, l.x, l.y + 0.5)
   }
   ctx.restore()
 }

@@ -86,7 +86,27 @@ const extentOf = (rows) => {
 }
 const overlaps = (l, r, list, gap) => list.some(([a, b]) => l < b + gap && r > a - gap)
 
+// Les grosses belles-familles (clusters) se rangent du côté où leur conjoint se trouve dans la lignée
+// principale : gauche s'il est dans la moitié gauche, droite sinon. Ce côté ne se connaît qu'une fois la
+// lignée posée, d'où une seconde passe quand un cluster s'est construit du mauvais côté. Le couple se tourne
+// alors vers la famille, et la carte au-dessus du conjoint se pose de ce côté-là.
 export function computeBlockLayout(graphData = null, referenceId = null) {
+  const first = layoutOnce(graphData, referenceId, new Map())
+  const main = first.families?.find(f => f.id === 'main')
+  if (!main || !first.families.some(f => f.anchorId)) return first
+  const mid = (main.bbox.x0 + main.bbox.x1) / 2
+  const byId = new Map(first.children.map(n => [n.id, n]))
+  const forced = new Map()
+  for (const f of first.families) {
+    if (!f.anchorId) continue
+    const a = byId.get(f.anchorId)
+    const want = a.x + a.width / 2 < mid ? -1 : 1
+    if (want !== f.side) forced.set(f.anchorId, want)
+  }
+  return forced.size ? layoutOnce(graphData, referenceId, forced) : first
+}
+
+function layoutOnce(graphData, referenceId, forcedSide) {
   const result = computeLayout(graphData, referenceId)
   const nodes = result.children
   const byId = new Map(nodes.map(n => [n.id, n]))
@@ -237,9 +257,22 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
 
   // Place fantôme d'un enfant déjà dessiné ailleurs : il garde sa place dans l'ordre de la fratrie et
   // dans le centrage des parents, sans occuper de contour (c'est l'enfant réel qui l'occupe)
+  // Pendant la reconstruction d'un cluster, la place de la carte inverse est réservée sous le fantôme du conjoint
+  let cardUnder = null
   const ghostBlock = (kid) => {
     const n = byId.get(kid)
-    return { ghost: true, kid, rows: new Map([[n._generation, [[0, n.width]]]]), members: new Set(), external: [], gen: n._generation, chain: [0, n.width], rel: () => null, width: n.width, place() {} }
+    const rows = new Map([[n._generation, [[0, n.width]]]])
+    if (kid === cardUnder) rows.set(n._generation + 1, [[(n.width - FAMILY_CARD_W) / 2, (n.width + FAMILY_CARD_W) / 2]])
+    return { ghost: true, withCard: kid === cardUnder, kid, rows, members: new Set(), external: [], gen: n._generation, chain: [0, n.width], rel: () => null, width: n.width, place() {} }
+  }
+  const CARD_SIDE_PX = 400
+  const freeSpotNear = (desired, w, list, prefer = 0) => {
+    if (!overlaps(desired, desired + w, list, FAMILY_GAP)) return desired
+    const candidates = list.flatMap(([l, r]) => [r + FAMILY_GAP, l - FAMILY_GAP - w]).filter(c => !overlaps(c, c + w, list, FAMILY_GAP))
+    if (!candidates.length) return null
+    // Le côté de la famille est préféré tant qu'il ne coûte pas plus de CARD_SIDE_PX
+    const cost = (c) => Math.abs(c - desired) + (prefer && Math.sign(c - desired) === -prefer ? CARD_SIDE_PX : 0)
+    return candidates.reduce((best, c) => (cost(c) < cost(best) ? c : best))
   }
 
   // Famille attachée à un conjoint : l'enfant à coller (ancre) doit finir au bout de sa fratrie, du côté du
@@ -293,7 +326,8 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
     childBlocks.push(...kids)
     const packed = packBlocks(childBlocks, FAMILY_GAP)
     const rows = new Map()
-    childBlocks.forEach((b, i) => { if (!b.ghost) mergeRows(rows, b.rows, packed.xs[i]) })
+    // Un fantôme ne compte pas dans le contour, sauf s'il porte la carte inverse d'un cluster (l'écho y est dessiné)
+    childBlocks.forEach((b, i) => { if (!b.ghost || b.withCard) mergeRows(rows, b.rows, packed.xs[i]) })
 
     // Familles des conjoints de la chaîne pas encore dessinées : construites entières depuis leur ancêtre
     // le plus haut. Le couple se tourne vers cette famille (conjoint du côté où elle se pose). Une famille
@@ -308,13 +342,28 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
       if (placed.has(pc)) continue
       const top = topChainOf(pc)
       if (placed.has(top)) continue
-      const side = chain.length > 3 ? (chain.indexOf(id) < chain.length / 2 ? -1 : 1) : (outer || (chain.indexOf(id) < chain.length / 2 ? -1 : 1))
+      const side = forcedSide.get(id) ?? (chain.length > 3 ? (chain.indexOf(id) < chain.length / 2 ? -1 : 1) : (outer || (chain.indexOf(id) < chain.length / 2 ? -1 : 1)))
       const saved = anchor
+      const clustersBefore = clusters.length
+      const externalBefore = new Set(externalEdges)
       anchor = { kid: id, end: side < 0 ? 'right' : 'left' }
-      const block = buildBlock(top, null, side)
+      let block = buildBlock(top, null, side)
       anchor = saved
       if (block.width > CLUSTER_PX) {
-        // La famille devient un cluster ; ici, une carte de famille tient la place de ses parents
+        // La famille devient un cluster. On la reconstruit avec, sous le fantôme du conjoint, la place réservée
+        // de la carte inverse. La première construction ne laisse aucune trace : ses clusters imbriqués (et leurs
+        // chaînes), les chaînes qu'elle a posées et les arêtes externes qu'elle a notées sont oubliés avec elle.
+        const unplace = (members) => { for (const ch of new Set([...members].map(m => chainOf.get(m)).filter(Boolean))) placed.delete(ch) }
+        for (const c of clusters.splice(clustersBefore)) { const i = nodes.findIndex(n => n.id === c.cardId); if (i >= 0) nodes.splice(i, 1); byId.delete(c.cardId); unplace(c.block.members) }
+        unplace(block.members)
+        for (const e of [...externalEdges]) if (!externalBefore.has(e)) externalEdges.delete(e)
+        const savedCard = cardUnder
+        cardUnder = id
+        anchor = { kid: id, end: side < 0 ? 'right' : 'left' }
+        block = buildBlock(top, null, side)
+        anchor = saved
+        cardUnder = savedCard
+        // Ici, une carte de famille tient la place de ses parents, juste au-dessus de lui
         const A = byId.get(id)
         const cardId = `fam-${id}`, echoId = `echo-${id}`, mainCardId = `fam-main-${id}`
         const partners = [byId.get(pu)?._data?.p1Key, byId.get(pu)?._data?.p2Key].map(k => byId.get(k)?._data).filter(Boolean)
@@ -323,8 +372,8 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
         const portraits = [...people.filter(n => n._data?.photo), ...people.filter(n => !n._data?.photo)].slice(0, 4).map(n => n._data)
         nodes.push({ id: cardId, _type: 'family', width: FAMILY_CARD_W, height: FAMILY_CARD_H, _generation: gen - 1, y: A.y - rowStep + (PERSON_H - FAMILY_CARD_H) / 2, _data: { label, count: people.length, portraits, targetId: echoId, stem: 'down', stemTo: id } })
         byId.set(cardId, nodes[nodes.length - 1])
-        const card = { rows: new Map([[gen - 1, [[0, FAMILY_CARD_W]]]]), members: new Set([cardId]), external: [], gen: gen - 1, rel: (x) => (x === cardId ? 0 : null), chain: [0, FAMILY_CARD_W], width: FAMILY_CARD_W, place(x0) { pos.set(cardId, x0) } }
-        clusters.push({ block, anchorId: id, pu, cardId, echoId, mainCardId, label, people })
+        const card = { isCard: true, rows: new Map([[gen - 1, [[0, FAMILY_CARD_W]]]]), members: new Set([cardId]), external: [], gen: gen - 1, rel: (x) => (x === cardId ? 0 : null), chain: [0, FAMILY_CARD_W], width: FAMILY_CARD_W, place(x0) { pos.set(cardId, x0) } }
+        clusters.push({ block, anchorId: id, pu, cardId, echoId, mainCardId, label, people, side })
         built.push({ block: card, anchorId: id, side })
         if (chain.length === 3) orient(chain, chain[0] === id ? chain[2] : chain[0], side)
         continue
@@ -396,6 +445,7 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
       if (ownerUnion) mergeRows(trial, new Map([[gen - 1, [[rowX - FAMILY_GAP, rowX + rowW + FAMILY_GAP]]]]), 0)
       for (const p of built) {
         if (chain.length !== 3) break
+        if (p.block.isCard) continue
         const ideal = idealOf(p, rowX)
         const x = pushHybrid(p.block.rows, ideal, trial, p.side, gen, FAMILY_GAP)
         const other = -p.side
@@ -423,8 +473,8 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
       let maxPush = 0, sideOfMax = 0
       for (const p of built) {
         const ideal = idealOf(p, rx)
-        const x = pushHybrid(p.block.rows, ideal, r, p.side, gen, FAMILY_GAP)
-        if (Math.abs(x - ideal) > maxPush) { maxPush = Math.abs(x - ideal); sideOfMax = p.side }
+        const x = p.block.isCard ? (freeSpotNear(ideal, p.block.width, r.get(gen - 1) || [], p.side) ?? pushHybrid(p.block.rows, ideal, r, p.side, gen, FAMILY_GAP)) : pushHybrid(p.block.rows, ideal, r, p.side, gen, FAMILY_GAP)
+        if (!p.block.isCard && Math.abs(x - ideal) > maxPush) { maxPush = Math.abs(x - ideal); sideOfMax = p.side }
         list.push({ block: p.block, x, ideal, anchorId: p.anchorId, side: p.side })
         mergeRows(r, p.block.rows, x)
       }
@@ -522,17 +572,19 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
   free.push(...detached)
   // Clusters : chaque grosse belle-famille à part, sur les mêmes rangées. Le conjoint y apparaît dans sa fratrie
   // (écho de la même personne) avec, sous lui, la carte de la lignée qu'il a rejointe. Les deux cartes se répondent.
-  const clusterStart = free.length
-  free.push(...clusters.map(c => c.block))
-  const forest = packBlocks(free, FAMILY_GAP * 2)
-  free.forEach((b, i) => b.place(forest.xs[i]))
+  // Les clusters se rangent du côté de leur conjoint : à gauche de la lignée si le conjoint est dans la
+  // moitié gauche de sa fratrie, à droite sinon. L'orientation des gens et la place des familles se répondent.
+  const ordered = [...clusters.filter(c => c.side < 0).reverse().map(c => c.block), ...free, ...clusters.filter(c => c.side >= 0).map(c => c.block)]
+  const forest = packBlocks(ordered, FAMILY_GAP * 2)
+  ordered.forEach((b, i) => b.place(forest.xs[i]))
+  const xOfBlock = new Map(ordered.map((b, i) => [b, forest.xs[i]]))
   const referenceNode = result.referenceId != null ? byId.get(`p-${result.referenceId}`) : null
   const inCluster = new Set(clusters.flatMap(c => [...c.block.members]))
   const mainPeople = nodes.filter(n => n._type === 'person' && !inCluster.has(n.id) && !n._echo)
-  clusters.forEach((c, i) => {
+  clusters.forEach((c) => {
     const A = byId.get(c.anchorId)
     const ghostX = c.block.rel(c.anchorId)
-    const x0 = forest.xs[clusterStart + i]
+    const x0 = xOfBlock.get(c.block)
     if (ghostX == null) return
     pos.set(c.echoId, x0 + ghostX)
     nodes.push({ id: c.echoId, _type: 'person', _data: A._data, width: PERSON_W, height: PERSON_H, _generation: A._generation, y: A.y, _echo: true, _echoOf: c.anchorId })
@@ -649,21 +701,9 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
   const partnerOf = (id) => { const ch = chainOf.get(id) || []; return ch.find(x => x !== id && byId.get(x)?._type === 'person') }
   const families = [
     { id: 'main', label: referenceNode?._data?.lastName || '', count: mainPeople.length, portraits: portraitsOf(mainIds), bbox: bboxOf(mainIds), links: [] },
-    ...clusters.map(c => ({ id: c.cardId, label: c.label, count: c.people.length, portraits: portraitsOf([...c.block.members]), bbox: bboxOf([...c.block.members]), links: [{ to: 'main', label: [byId.get(c.anchorId)?._data?.firstName, byId.get(partnerOf(c.anchorId))?._data?.firstName].filter(Boolean).join(' et ') }] })),
+    ...clusters.map(c => ({ id: c.cardId, side: c.side, anchorId: c.anchorId, label: c.label, count: c.people.length, portraits: portraitsOf([...c.block.members]), bbox: bboxOf([...c.block.members]), links: [{ to: 'main', label: [byId.get(c.anchorId)?._data?.firstName, byId.get(partnerOf(c.anchorId))?._data?.firstName].filter(Boolean).join(' et ') }] })),
   ].filter(f => f.bbox)
-  // Place réelle (centre de la famille sur la toile) et place sur la carte : les familles par alliance se rangent
-  // autour de la famille principale, en coordonnées de l'arbre, à une distance qui tient dans un écran au dézoom
-  const centerOf = (f) => ({ x: (f.bbox.x0 + f.bbox.x1) / 2, y: (f.bbox.y0 + f.bbox.y1) / 2 })
-  const mainFam = families[0]
-  const others = families.slice(1)
-  const RING = 2600
-  families.forEach((f, i) => {
-    f.spread = centerOf(f)
-    if (i === 0) { f.gathered = f.spread; return }
-    const k = i - 1, n = others.length
-    const angle = -Math.PI / 3 + (k / n) * Math.PI * 2
-    f.gathered = { x: mainFam.spread.x + Math.cos(angle) * RING, y: mainFam.spread.y + Math.sin(angle) * RING * 0.62 }
-  })
+  families.forEach(f => { f.spread = { x: (f.bbox.x0 + f.bbox.x1) / 2, y: (f.bbox.y0 + f.bbox.y1) / 2 } })
   result.families = families
 
   return result
