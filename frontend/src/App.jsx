@@ -3142,7 +3142,7 @@ function App() {
       {tree.selectedPerson && (
         <PersonCard
           person={tree.selectedPerson}
-          onClose={() => { chooseSelectedPerson(null) }}
+          onClose={() => chooseSelectedPerson(null)}
           onMediaSelect={handleMediaSelectFresh}
           saveOnLeaveRef={personSaveOnLeaveRef}
           editMode={editMode.isActive}

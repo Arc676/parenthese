@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useSheetDrag } from '../../hooks/useSheetDrag'
 import './NavMenu.css'
 
 /**
@@ -9,8 +10,8 @@ import './NavMenu.css'
  */
 export function NavMenu({ phone = false, label, onClose, triggerRef, children }) {
   const ref = useRef(null)
-  const dragStart = useRef(null)
-  const [dragY, setDragY] = useState(0)
+  // Le geste part de la poignée seulement (le contenu de la feuille défile et reste intact)
+  const drag = useSheetDrag({ enabled: phone, zone: '.navm-handle', onClose, closes: ({ offset }) => offset > 70 })
 
   useEffect(() => {
     const node = ref.current
@@ -21,35 +22,20 @@ export function NavMenu({ phone = false, label, onClose, triggerRef, children })
     }
   }, [triggerRef])
 
-  const onHandleDown = (event) => {
-    dragStart.current = event.clientY
-    event.currentTarget.setPointerCapture?.(event.pointerId)
-  }
-  const onHandleMove = (event) => {
-    if (dragStart.current === null) return
-    setDragY(Math.max(0, event.clientY - dragStart.current))
-  }
-  const onHandleUp = (event) => {
-    if (dragStart.current === null) return
-    const distance = event.clientY - dragStart.current
-    dragStart.current = null
-    if (distance > 70) onClose()
-    else setDragY(0)
-  }
-
   if (phone) {
     return createPortal(
       <>
         <div className="navm-scrim" onClick={onClose} aria-hidden="true" />
-        <div ref={ref} className="navm-sheet" role="dialog" aria-label={label} style={dragY ? { transform: `translateY(${dragY}px)` } : undefined}>
-          <div
-            className="navm-handle"
-            onPointerDown={onHandleDown}
-            onPointerMove={onHandleMove}
-            onPointerUp={onHandleUp}
-            onPointerCancel={() => { dragStart.current = null; setDragY(0) }}
-            aria-hidden="true"
-          >
+        <div
+          ref={ref}
+          className="navm-sheet"
+          role="dialog"
+          aria-label={label}
+          style={drag.style}
+          data-dragging={drag.dragging || undefined}
+          {...drag.bind}
+        >
+          <div className="navm-handle" aria-hidden="true">
             <span />
           </div>
           {children}

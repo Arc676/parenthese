@@ -9,6 +9,7 @@ import TextOptions from '../annotations/TextOptions'
 import StickerPicker from '../annotations/StickerPicker'
 import { toJourneyRole, toOpaqueTreeId, trackAppEvent } from '../../utils/analytics'
 import { t } from '../../i18n/index.js'
+import { PHONE_QUERY } from '../../utils/sheetDrag'
 import './ContextualNavbar.css'
 
 const ANNOT_TOOLS = [
@@ -27,8 +28,7 @@ const ANNOT_MENU = [
   { id: 'photo', label: t('Poser une photo'), Icon: Image },
 ]
 
-// Téléphone (ou pointeur grossier) : le « + » et le compte s'ouvrent en feuille, sinon en popover
-const PHONE_QUERY = '(max-width: 767px), (pointer: coarse)'
+// Téléphone (ou pointeur grossier) : le « + » et le compte s'ouvrent en feuille, sinon en popover (PHONE_QUERY, partagé avec la fiche)
 const ICON = { size: 18, strokeWidth: 2, 'aria-hidden': true }
 
 function ContextualNavbar({

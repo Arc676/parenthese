@@ -10,6 +10,7 @@ import GeoMediaThumbnail from './GeoMediaThumbnail'
 import ImmichFacePanel from './ImmichFacePanel.jsx'
 import './PersonCard.css'
 import PzBusy from './PzBusy.jsx'
+import { useSheetDrag, useSheetMode } from '../hooks/useSheetDrag'
 import PortraitCropModal from './PortraitCropModal.jsx'
 import { imagePlacement } from '../utils/portraitCrop.js'
 import { t, dateLocale } from '../i18n/index.js'
@@ -143,6 +144,9 @@ const PersonCard = ({
   const [openedFields, setOpenedFields] = useState([])
   const [focusField, setFocusField] = useState(null)
   const bodyRef = useRef(null)
+  // Feuille du bas (téléphone) : on la ferme en la glissant par la poignée ou l'en-tête, comme la croix
+  const sheetMode = useSheetMode()
+  const drag = useSheetDrag({ enabled: sheetMode, zone: '.pc-grab, .pc-head, .pc-close', onClose })
 
   // Reset edits quand la personne change
   useEffect(() => {
@@ -634,7 +638,14 @@ const PersonCard = ({
   )
 
   return (
-    <div className={`person-card ${editMode ? 'person-card--edit-mode' : ''}`} role="dialog" aria-label={t('Fiche de {name}', { name: fullNameLabel(person) })}>
+    <div
+      className={`person-card ${editMode ? 'person-card--edit-mode' : ''}`}
+      role="dialog"
+      aria-label={t('Fiche de {name}', { name: fullNameLabel(person) })}
+      style={drag.style}
+      data-dragging={drag.dragging || undefined}
+      {...drag.bind}
+    >
       <span className="pc-grab" aria-hidden="true" />
       <button type="button" className="pz-btn pz-btn--ghost pz-btn--icon pc-close" onClick={onClose} aria-label={t('Fermer la fiche')}>
         <X size={18} strokeWidth={2} />
