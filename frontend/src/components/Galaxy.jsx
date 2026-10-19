@@ -55,6 +55,8 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   const focusPersonIdRef = useRef(focusPersonId)
   // Mis à jour hors du rendu, avant l'effet de cadrage déclaré plus bas (même phase, ordre de déclaration)
   useEffect(() => { focusPersonIdRef.current = activeRef }, [activeRef])
+  // Sur téléphone, la barre défile : l'onglet ouvert par un badge se met en vue, sans animation
+  useEffect(() => { document.querySelector('.family-tab.is-active')?.scrollIntoView({ behavior: 'auto', inline: 'nearest', block: 'nearest' }) }, [activeRef, tabs])
   // Clic sur un badge : l'onglet de cette famille s'il existe déjà (la même famille vue depuis un autre
   // conjoint), sinon un nouvel onglet avec ce conjoint comme référence
   const openFamily = useCallback((anchorId) => {
