@@ -4,10 +4,10 @@
   "type": "module",
   "scripts": {
     "bench": "node --import ./register.mjs run.mjs",
-    "fixture": "node fetch-fixture.mjs"
+    "fixture": "node fetch-fixture.mjs",
+    "diff": "node diff.mjs"
   },
   "dependencies": {
-    "@resvg/resvg-js": "^2.6.2",
-    "elkjs": "^0.11.0"
+    "@resvg/resvg-js": "^2.6.2"
   }
 }
