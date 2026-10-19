@@ -234,16 +234,24 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
       if ((anchor.end === 'right' && idx === 0) || (anchor.end === 'left' && idx === kidsOfChain.length - 1)) kidsOfChain.reverse()
       anchor = null
     }
+    // Remariage : les enfants de chaque union restent groupés dans l'ordre des unions de la chaîne, et une
+    // belle-famille va du côté de son union (gauche pour la première, droite pour la dernière), jamais au-delà
+    // des demi-frères et demi-sœurs
+    const unionsOfChain = chain.filter(id => byId.get(id)._type === 'union')
+    const sideOfUnion = (unionId) => {
+      if (unionsOfChain.length < 2) return 0
+      return unionsOfChain.indexOf(unionId) < (unionsOfChain.length - 1) / 2 ? -1 : 1
+    }
     kidsOfChain.forEach(({ unionId, kid }, i) => {
       const kc = chainOf.get(kid)
       if (placed.has(kc)) {
         external.push({ kid, unionId })
         externalEdges.add(`${unionId}>${kid}`)
-        childBlocks.push(ghostBlock(kid))
+        childBlocks.push({ ...ghostBlock(kid), unionId })
         return
       }
-      const side = outer || (i < (kidsOfChain.length - 1) / 2 ? -1 : 1)
-      childBlocks.push(buildBlock(kc, unionId, side))
+      const side = sideOfUnion(unionId) || outer || (i < (kidsOfChain.length - 1) / 2 ? -1 : 1)
+      childBlocks.push({ ...buildBlock(kc, unionId, side), unionId })
     })
     // Un enfant dont le conjoint amène sa famille va au bout de la fratrie, de son côté : sa belle-famille
     // se colle à lui sans survoler ses frères et sœurs. L'ordre de naissance s'efface pour lui (choix du 19/10).
@@ -252,7 +260,10 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
       const left = b.pending.some(p => p.side < 0), right = b.pending.some(p => p.side > 0)
       return left && !right ? -1 : right && !left ? 1 : 0
     }
-    const ordered = [...childBlocks.filter(b => sideOf(b) < 0), ...childBlocks.filter(b => sideOf(b) === 0), ...childBlocks.filter(b => sideOf(b) > 0)]
+    const ordered = unionsOfChain.flatMap(u => {
+      const group = childBlocks.filter(b => b.unionId === u)
+      return [...group.filter(b => sideOf(b) < 0), ...group.filter(b => sideOf(b) === 0), ...group.filter(b => sideOf(b) > 0)]
+    })
     childBlocks.length = 0
     childBlocks.push(...ordered)
     const packed = packBlocks(childBlocks, FAMILY_GAP)
@@ -290,7 +301,7 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
       if (placed.has(pc)) continue
       const top = topChainOf(pc)
       if (placed.has(top)) continue
-      const side = outer || (chain.indexOf(id) < chain.length / 2 ? -1 : 1)
+      const side = chain.length > 3 ? (chain.indexOf(id) < chain.length / 2 ? -1 : 1) : (outer || (chain.indexOf(id) < chain.length / 2 ? -1 : 1))
       const saved = anchor
       anchor = { kid: id, end: side < 0 ? 'right' : 'left' }
       const block = buildBlock(top, null, side)
@@ -308,6 +319,28 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
       const kidRowL = Math.min(...childBlocks.map((b, i) => packed.xs[i] + b.chain[0]))
       const kidRowR = Math.max(...childBlocks.map((b, i) => packed.xs[i] + b.chain[1]))
       rowX = (kidRowL + kidRowR) / 2 - rowW / 2
+      // Remariage : chaque union au plus près au-dessus de ses propres enfants. Parmi les positions qui
+      // alignent une union sur un bord ou le centre de son groupe, on garde celle où les lignes de fratrie
+      // débordent le moins au-dessus des demi-frères et demi-sœurs (égalité : la plus proche du centrage).
+      if (unionsOfChain.length > 1) {
+        const groups = unionsOfChain.map(u => {
+          const g = childBlocks.map((b, i) => (b.unionId === u ? [packed.xs[i] + b.chain[0], packed.xs[i] + b.chain[1]] : null)).filter(Boolean)
+          return g.length ? [Math.min(...g.map(r => r[0])), Math.max(...g.map(r => r[1]))] : null
+        })
+        const at = (u) => offsets.get(u) + byId.get(u).width / 2
+        const cost = (x) => unionsOfChain.reduce((s, u, i) => {
+          if (!groups[i]) return s
+          const c = x + at(u)
+          return s + Math.max(0, c - groups[i][1]) + Math.max(0, groups[i][0] - c)
+        }, 0)
+        const centered = rowX
+        const candidates = [centered]
+        unionsOfChain.forEach((u, i) => { if (groups[i]) for (const target of [groups[i][0], (groups[i][0] + groups[i][1]) / 2, groups[i][1]]) candidates.push(target - at(u)) })
+        rowX = candidates.reduce((best, x) => {
+          const cb = cost(best), cx = cost(x)
+          return cx < cb - 0.5 || (Math.abs(cx - cb) <= 0.5 && Math.abs(x - centered) < Math.abs(best - centered)) ? x : best
+        })
+      }
       const obstacles = rows.get(gen) || []
       if (overlaps(rowX, rowX + rowW, obstacles, FAMILY_GAP)) {
         const candidates = obstacles.flatMap(([l, r]) => [r + FAMILY_GAP, l - FAMILY_GAP - rowW])
