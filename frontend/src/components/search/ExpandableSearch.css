@@ -5,6 +5,9 @@
   right: 20px;
   z-index: 1000;
 }
+/* Ouverte, ses résultats passent devant la bannière d'édition et « Créer mon arbre » (1001), qui descendent
+   sous le champ sur téléphone et rendaient les résultats intouchables. Les panneaux (1050) restent devant. */
+.expandable-search:has(.search-expanded-content) { z-index: 1003; }
 
 .search-icon-button {
   width: 46px;
