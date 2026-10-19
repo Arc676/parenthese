@@ -85,12 +85,14 @@ export class ImmichClient {
     return `${this.apiUrl}${path}`
   }
 
-  private async fetch(path: string): Promise<Response> {
+  private async fetch(path: string, body?: unknown): Promise<Response> {
     const url = this.buildUrl(path)
     let response: Response
     try {
       response = await fetch(url, {
-        headers: { 'x-api-key': this.apiKey, Accept: 'application/json' },
+        method: body === undefined ? 'GET' : 'POST',
+        body: body === undefined ? undefined : JSON.stringify(body),
+        headers: { 'x-api-key': this.apiKey, Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
         signal: AbortSignal.timeout(IMMICH_TIMEOUT_MS),
         // Aucune redirection suivie : la clé ne doit jamais partir vers une autre adresse.
         redirect: 'error',
@@ -124,6 +126,28 @@ export class ImmichClient {
     } catch {
       return false
     }
+  }
+
+  async listAssets(page: number, type: 'IMAGE' | 'VIDEO', filters: { query?: string; personId?: string } = {}) {
+    const query = filters.query?.trim()
+    const response = await this.fetch(query ? '/api/search/smart' : '/api/search/metadata', {
+      page, size: 30, type, isTrashed: false,
+      ...(query ? { query } : {}),
+      ...(filters.personId ? { personIds: [filters.personId] } : {}),
+    })
+    const payload = await this.readJson(response) as { assets?: { items?: Array<{ id: string; type: string; originalFileName: string }>; nextPage?: string | null } }
+    if (!Array.isArray(payload.assets?.items)) throw new ImmichUnavailableError('Liste de médias Immich illisible')
+    return {
+      assets: payload.assets.items.filter((asset) => isImmichPersonId(asset.id) && asset.type === type).map((asset) => ({
+        id: asset.id, type: asset.type, name: asset.originalFileName,
+      })),
+      hasNextPage: Boolean(payload.assets.nextPage),
+    }
+  }
+
+  async getAssetBytes(assetId: string, thumbnail: boolean, maxBytes: number, preview = false): Promise<Buffer | null> {
+    const variant = preview ? 'thumbnail?size=preview' : thumbnail ? 'thumbnail?size=thumbnail' : 'original'
+    return this.readBytes(`/api/assets/${encodeURIComponent(assetId)}/${variant}`, maxBytes)
   }
 
   // Toutes les personnes (sans les masquées), en suivant la pagination d'Immich.
@@ -178,7 +202,11 @@ export class ImmichClient {
   // Vignette d'une personne, en octets bruts (JPEG côté Immich). Absente -> ImmichNotFoundError.
   // Lue en flux : au-delà de maxBytes, la lecture s'arrête et renvoie null sans charger le reste.
   async getPersonThumbnail(personId: string, maxBytes: number): Promise<Buffer | null> {
-    const response = await this.fetch(`/api/people/${encodeURIComponent(personId)}/thumbnail`)
+    return this.readBytes(`/api/people/${encodeURIComponent(personId)}/thumbnail`, maxBytes)
+  }
+
+  private async readBytes(path: string, maxBytes: number): Promise<Buffer | null> {
+    const response = await this.fetch(path)
     const declared = Number(response.headers.get('content-length'))
     if (Number.isFinite(declared) && declared > maxBytes) {
       await response.body?.cancel().catch(() => {})
