@@ -166,6 +166,19 @@ describe('PUT /trees/:id/persons/:personId/avatar/crop', () => {
     expect(prismaMock.person.updateMany.mock.calls[0][0].data.avatarCrop).toBe(Prisma.DbNull)
   })
 
+  it('garde la forme choisie, même avec un cadrage centré, et refuse une forme inconnue', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    const put = (crop: unknown) => app.inject({ method: 'PUT', url, headers: { authorization: `Bearer ${token}` }, payload: { crop } })
+
+    const saved = await put({ x: 0.5, y: 0.5, zoom: 1, shape: 'round' })
+    expect(saved.statusCode).toBe(200)
+    expect(saved.json()).toEqual({ ok: true, avatarCrop: { x: 0.5, y: 0.5, zoom: 1, shape: 'round' } })
+    expect(prismaMock.person.updateMany.mock.calls[0][0].data.avatarCrop).toEqual({ x: 0.5, y: 0.5, zoom: 1, shape: 'round' })
+
+    expect((await put({ x: 0.5, y: 0.5, zoom: 1, shape: 'hexagone' })).statusCode).toBe(400)
+  })
+
   it('répond 404 sans portrait, et 409 pour un portrait venu d Immich', async () => {
     const app = createApp()
     const token = await createUserToken(app)

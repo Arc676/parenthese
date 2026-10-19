@@ -1,6 +1,6 @@
 import { t } from '../../i18n/index.js'
 import { getPersonById, getPersonMedias } from '../../data/mockData'
-import { cropViewport } from '../../utils/portraitCrop.js'
+import { cropShape, cropViewport, isLandscapeRect, resolveFrameKind } from '../../utils/portraitCrop.js'
 // Tracés Lucide dessinés sur le canvas : données publiques de @lucide/icons (Map renommé, il masquerait
 // le Map global utilisé plus bas)
 import { Map as mapIcon, MapPin as mapPinIcon, Route as routeIcon } from '@lucide/icons'
@@ -891,26 +891,12 @@ function drawMediaContent(ctx, media, ms, imageCache) {
 // ============================================================
 // Dessiner le cadre photo (polaroid, rect, round)
 // ============================================================
+// Forme choisie au recadrage d'abord ; sinon une photo très large ou très haute impose la sienne, et une photo
+// carrée ou presque garde la forme tirée au hasard pour la personne (pickFrameType), pour que l'arbre ne soit
+// pas uniforme. Même règle que la fenêtre de recadrage (portraitCrop.js).
 function resolveFrameType(person, img) {
-  const fallback = person.frameType || 'round'
-
-  if (!img || !img.naturalWidth || !img.naturalHeight) {
-    return fallback
-  }
-
-  const ratio = img.naturalWidth / img.naturalHeight
-
-  if (ratio >= 1.28) {
-    return 'rect'
-  }
-
-  if (ratio <= 0.78) {
-    return 'polaroid'
-  }
-
-  // Photo carrée ou presque : chaque personne garde sa forme tirée au hasard
-  // (person.frameType, voir pickFrameType), pour que l'arbre ne soit pas uniforme
-  return fallback
+  const ratio = img?.naturalWidth && img?.naturalHeight ? img.naturalWidth / img.naturalHeight : 1
+  return resolveFrameKind(person.frameType || 'round', ratio, cropShape(person.avatarCrop))
 }
 
 function drawFrame(ctx, frameType, person, img, hint = 0) {
@@ -952,8 +938,8 @@ function drawFrame(ctx, frameType, person, img, hint = 0) {
     const ratio = img?.naturalWidth && img?.naturalHeight
       ? img.naturalWidth / img.naturalHeight
       : 1
-    // Photo carrée : cadre vertical, qui garde le visage entier
-    const isLandscape = ratio > 1.05
+    // Couché ou debout selon la forme choisie, sinon selon la photo (carrée : debout, le visage reste entier)
+    const isLandscape = isLandscapeRect(ratio, cropShape(person.avatarCrop))
     const rw = isLandscape ? PERSON_R + 12 : PERSON_R + 2
     const rh = isLandscape ? PERSON_R - 8 : PERSON_R + 6
     const pad = 3

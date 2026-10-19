@@ -418,6 +418,12 @@ export default {
   'Il faut au moins un nom si le prénom est inconnu.': 'A last name is required when the first name is unknown.',
   // Recadrage du portrait (PortraitCropModal, menu du badge, App)
   'Recadrer la photo': 'Crop photo',
+  'Forme du cadre': 'Frame shape',
+  'Rond': 'Round',
+  'Carré': 'Square',
+  'Polaroïd': 'Polaroid',
+  'Vertical': 'Vertical',
+  'Horizontal': 'Horizontal',
   'Recadrer': 'Crop',
   'Options du portrait': 'Portrait options',
   'Zone de recadrage': 'Crop area',

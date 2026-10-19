@@ -55,3 +55,16 @@
 @media (prefers-reduced-motion: reduce) {
   .pcrop-img { transition: none; }
 }
+
+/* Forme du cadre : chaque choix montre sa forme, son nom est dans aria-label et title */
+.pcrop-shapes { width: min(100%, 300px); margin: 0 auto; }
+.pcrop-shapes .pz-tab { display: grid; place-items: center; min-height: 40px; padding: 0; color: var(--pz-muted); }
+.pcrop-shapes .pz-tab.is-active { color: var(--pz-a700, #93402A); }
+.pcrop-shapes .pz-tab:disabled { cursor: default; opacity: .5; }
+.pcrop-ico { display: block; border: 1.75px solid currentColor; }
+.pcrop-ico--round { width: 20px; height: 20px; border-radius: 50%; }
+.pcrop-ico--square { width: 20px; height: 20px; border-radius: 3px; }
+/* Polaroïd : la marge du bas plus large que les côtés */
+.pcrop-ico--polaroid { width: 20px; height: 22px; border-radius: 2px; border-bottom-width: 5px; }
+.pcrop-ico--portrait { width: 16px; height: 22px; border-radius: 3px; }
+.pcrop-ico--landscape { width: 26px; height: 16px; border-radius: 3px; }
