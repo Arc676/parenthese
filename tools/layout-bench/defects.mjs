@@ -11,8 +11,6 @@ const cx = (n) => n.x + n.width / 2
 export function busOffset(id) { let h = 0; for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0; return (Math.abs(h) % 3) * 4 }
 
 export function computeDefects(result, coupleBarMeta, graph, referenceId = null) {
-  // Le plan arrière (grosses belles-familles, maquette F) se mesure à part : ici, le plan avant seulement
-  result = { ...result, children: result.children.filter((n) => n._plane !== 'back'), edges: result.edges.filter((e) => !e._back && !e._bridge) }
   const nodes = result.children
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const kidsOf = new Map()

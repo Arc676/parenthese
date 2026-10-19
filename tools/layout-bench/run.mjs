@@ -37,7 +37,7 @@ for (const name of names) {
   const nodes = result.children
   const largeur = Math.round(Math.max(...nodes.map((n) => n.x + n.width)) - Math.min(...nodes.map((n) => n.x)))
   const { pires_foyers, ...defauts } = def
-  const row = { arbre: name, personnes: nodes.filter((n) => n._type === 'person').length, arriere: nodes.filter((n) => n._type === 'person' && n._plane === 'back').length, ms, ...inv, ...defauts, ...stab, largeur }
+  const row = { arbre: name, personnes: nodes.filter((n) => n._type === 'person').length, ms, ...inv, ...defauts, ...stab, largeur }
   row.invariants = HARD.every((k) => inv[k] === 0) ? 'ok' : 'FAUX'
   rows.push({ ...row, pires_foyers })
   if (tree.archetype) {
@@ -48,7 +48,7 @@ for (const name of names) {
     renderSvg(result, coupleBarMeta, `${OUT}${name}.svg`, name)
   }
 }
-const shown = ['arbre', 'personnes', 'arriere', 'invariants', 'rangees_fausses', 'conflits', 'fratries_coupees', 'renvois', 'renvois_sang', 'fils_sur_etranger', 'croisements', 'superpositions', 'cables_ecran', 'foyers_larges', 'proches_ecran', 'proches', 'max_bouges', 'max_deplacement_px', 'largeur', 'ms']
+const shown = ['arbre', 'personnes', 'invariants', 'rangees_fausses', 'conflits', 'fratries_coupees', 'renvois', 'renvois_sang', 'fils_sur_etranger', 'croisements', 'superpositions', 'cables_ecran', 'foyers_larges', 'proches_ecran', 'proches', 'max_bouges', 'max_deplacement_px', 'largeur', 'ms']
 console.table(rows.map((r) => Object.fromEntries(shown.filter((k) => k in r).map((k) => [k, r[k]]))))
 for (const r of rows) if (r.pires_foyers?.length && r.pires_foyers[0].etendue > 1440) console.log(`${r.arbre} : foyers les plus étendus`, r.pires_foyers.map((h) => `${h.enfants} enfants sur ${h.etendue} px`).join(' · '))
 writeFileSync(`${OUT}rapport-${tag}.json`, JSON.stringify(rows, null, 2))

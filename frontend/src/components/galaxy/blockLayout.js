@@ -1,4 +1,5 @@
 import { computeLayout, componentOrderPerGen, chainGap } from './elkLayout'
+import { PERSON_W, PERSON_H, FAMILY_CARD_W, FAMILY_CARD_H } from './constants'
 
 // ============================================================
 // Layout par blocs familiaux (Reingold-Tilford adapté aux couples)
@@ -41,10 +42,9 @@ const RENVOI_FAR_PX = 1440
 const PARENT_SHIFT_PX = 400
 // Côté d'une belle-famille : le côté extérieur de la branche, sauf si l'autre côté la rapproche d'au moins ça
 const SIDE_SWITCH_PX = 1440
-// Deux plans (maquette F du 19/10). Une belle-famille plus large que ça ne se colle pas devant : elle passe sur
-// le plan arrière, dessinée par le même placement, plus petite, ancrée à son conjoint
-const BACK_PX = 2880
-const BACK_SCALE = 0.55
+// Carte de famille et pont (maquette A, retenue le 19/10). Une belle-famille plus large que ça ne se colle pas à
+// son enfant : elle devient un cluster dessiné à part, et une carte prend sa place au-dessus du conjoint
+const CLUSTER_PX = 2880
 
 // Le fil d'une filiation union → enfant : une personne d'une autre famille, sur la ligne de l'enfant,
 // entre l'aplomb de l'union et l'enfant, est croisée. Frères et sœurs et leurs conjoint(e)s ne comptent pas
@@ -187,7 +187,8 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
   const placed = new Set()
   const externalEdges = new Set() // `${union}>${enfant}` : enfant dessiné sous une autre lignée
   const detached = [] // familles qu'on n'a pas pu coller à leur enfant (trop loin) : posées à part, renvoi
-  const backFamilies = [] // familles de conjoints du plan arrière : { block, anchorId }
+  const clusters = [] // grosses belles-familles dessinées à part : { block, anchorId, cardId, echoId, mainCardId }
+  const rowStep = (() => { const ys = [...new Set(nodes.map(n => n.y))].sort((a, b) => a - b); return ys.length > 1 ? ys[1] - ys[0] : PERSON_H + 60 })()
   const attachedEdges = new Set() // `${union}>${enfant}` : fil d'une famille collée à son enfant, toujours dessiné
 
   // Imbrique des blocs de gauche à droite, rangée par rangée
@@ -312,7 +313,22 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
       anchor = { kid: id, end: side < 0 ? 'right' : 'left' }
       const block = buildBlock(top, null, side)
       anchor = saved
-      if (block.width > BACK_PX) { backFamilies.push({ block, anchorId: id }); continue }
+      if (block.width > CLUSTER_PX) {
+        // La famille devient un cluster ; ici, une carte de famille tient la place de ses parents
+        const A = byId.get(id)
+        const cardId = `fam-${id}`, echoId = `echo-${id}`, mainCardId = `fam-main-${id}`
+        const partners = [byId.get(pu)?._data?.p1Key, byId.get(pu)?._data?.p2Key].map(k => byId.get(k)?._data).filter(Boolean)
+        const label = partners.find(d => d.lastName)?.lastName || A._data?.birthName || A._data?.lastName || ''
+        const people = [...block.members].map(m => byId.get(m)).filter(n => n?._type === 'person')
+        const portraits = [...people.filter(n => n._data?.photo), ...people.filter(n => !n._data?.photo)].slice(0, 4).map(n => n._data)
+        nodes.push({ id: cardId, _type: 'family', width: FAMILY_CARD_W, height: FAMILY_CARD_H, _generation: gen - 1, y: A.y - rowStep + (PERSON_H - FAMILY_CARD_H) / 2, _data: { label, count: people.length, portraits, targetId: echoId, stem: 'down', stemTo: id } })
+        byId.set(cardId, nodes[nodes.length - 1])
+        const card = { rows: new Map([[gen - 1, [[0, FAMILY_CARD_W]]]]), members: new Set([cardId]), external: [], gen: gen - 1, rel: (x) => (x === cardId ? 0 : null), chain: [0, FAMILY_CARD_W], width: FAMILY_CARD_W, place(x0) { pos.set(cardId, x0) } }
+        clusters.push({ block, anchorId: id, pu, cardId, echoId, mainCardId })
+        built.push({ block: card, anchorId: id, side })
+        if (chain.length === 3) orient(chain, chain[0] === id ? chain[2] : chain[0], side)
+        continue
+      }
       built.push({ block, anchorId: id, side })
       if (chain.length === 3) orient(chain, chain[0] === id ? chain[2] : chain[0], side)
     }
@@ -504,42 +520,41 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
   for (const r of roots) if (!placed.has(r)) free.push(buildBlock(r))
   for (const c of chains) if (!placed.has(c)) free.push(buildBlock(c))
   free.push(...detached)
+  // Clusters : chaque grosse belle-famille à part, sur les mêmes rangées. Le conjoint y apparaît dans sa fratrie
+  // (écho de la même personne) avec, sous lui, la carte de la lignée qu'il a rejointe. Les deux cartes se répondent.
+  const clusterStart = free.length
+  free.push(...clusters.map(c => c.block))
   const forest = packBlocks(free, FAMILY_GAP * 2)
   free.forEach((b, i) => b.place(forest.xs[i]))
+  const referenceNode = result.referenceId != null ? byId.get(`p-${result.referenceId}`) : null
+  const inCluster = new Set(clusters.flatMap(c => [...c.block.members]))
+  const mainPeople = nodes.filter(n => n._type === 'person' && !inCluster.has(n.id) && !n._echo)
+  clusters.forEach((c, i) => {
+    const A = byId.get(c.anchorId)
+    const ghostX = c.block.rel(c.anchorId)
+    const x0 = forest.xs[clusterStart + i]
+    if (ghostX == null) return
+    pos.set(c.echoId, x0 + ghostX)
+    nodes.push({ id: c.echoId, _type: 'person', _data: A._data, width: PERSON_W, height: PERSON_H, _generation: A._generation, y: A.y, _echo: true, _echoOf: c.anchorId })
+    byId.set(c.echoId, nodes[nodes.length - 1])
+    const mainChain = chainOf.get(c.anchorId) || []
+    const around = [...mainChain.filter(id => byId.get(id)._type === 'person' && id !== c.anchorId), ...mainChain.flatMap(id => childrenOfUnion.get(id) || [])].map(id => byId.get(id)?._data).filter(Boolean)
+    const mainLabel = referenceNode?._data?.lastName || around[0]?.lastName || ''
+    nodes.push({ id: c.mainCardId, _type: 'family', width: FAMILY_CARD_W, height: FAMILY_CARD_H, _generation: A._generation + 1, y: A.y + rowStep + (PERSON_H - FAMILY_CARD_H) / 2, _data: { label: mainLabel, count: mainPeople.length, portraits: around.slice(0, 4), targetId: c.anchorId, stem: 'up', stemTo: c.echoId } })
+    byId.set(c.mainCardId, nodes[nodes.length - 1])
+    pos.set(c.mainCardId, pos.get(c.echoId) + (PERSON_W - FAMILY_CARD_W) / 2)
+    // Le fil des parents va à l'écho dans le cluster ; vers le conjoint du plan principal, c'est la carte qui parle
+    for (const e of [...result.edges]) {
+      if (e.targets[0] !== c.anchorId || !c.block.members.has(e.sources[0])) continue
+      e._hidden = true
+      result.edges.push({ ...e, id: `${e.id}#echo`, targets: [c.echoId], _hidden: false })
+    }
+  })
 
   // Réinjecter le X, normalisé à 0 ; Y inchangé (rangées)
   let minX = Infinity
   for (const n of nodes) if (pos.has(n.id)) minX = Math.min(minX, pos.get(n.id))
   for (const n of nodes) if (pos.has(n.id)) n.x = pos.get(n.id) - minX
-
-  // Plan arrière : chaque grosse belle-famille est posée à l'échelle BACK_SCALE autour de son conjoint pivot,
-  // la place fantôme du conjoint dans sa fratrie d'origine venant coïncider avec lui. Ses parents sont donc
-  // juste au-dessus de lui, en retrait, et toute sa famille se déploie derrière le plan avant.
-  for (const { block, anchorId } of backFamilies) {
-    const A = byId.get(anchorId)
-    if (!A || A.x == null) continue
-    block.place(0)
-    const ghostX = block.rel(anchorId)
-    if (ghostX == null) continue
-    const acx = A.x + A.width / 2, acy = A.y + A.height / 2
-    const gcx = ghostX + A.width / 2, gcy = acy
-    for (const m of block.members) {
-      const n = byId.get(m)
-      if (!n || !pos.has(m)) continue
-      const lcx = pos.get(m) + n.width / 2, lcy = n.y + n.height / 2
-      const cx = acx + (lcx - gcx) * BACK_SCALE, cy = acy + (lcy - gcy) * BACK_SCALE
-      n.x = cx - n.width / 2
-      n.y = cy - n.height / 2
-      n._plane = 'back'
-      n._scale = BACK_SCALE
-    }
-  }
-  const backIds = new Set(nodes.filter(n => n._plane === 'back').map(n => n.id))
-  for (const e of result.edges) {
-    const s = backIds.has(e.sources[0]), k = backIds.has(e.targets[0])
-    if (s && k) e._back = true
-    else if (s && !k) e._bridge = true // des parents du plan arrière à leur enfant du plan avant
-  }
 
   // Arête vers un enfant dessiné sous l'autre lignée : renvoi (voir drawFiliations) seulement si le fil
   // croise une autre famille. Plusieurs renvois sous la même union : pastilles empilées (_renvoiIndex)
@@ -559,7 +574,7 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
   const renvoisByUnion = new Map()
   for (const e of result.edges) {
     const u = e.sources[0], c = e.targets[0]
-    if (e._back || e._bridge) continue
+    if (e._hidden) continue
     if (!externalEdges.has(`${u}>${c}`) || attachedEdges.has(`${u}>${c}`)) continue
     // Famille reliée deux fois à l'arbre (dessinée sous l'autre lien) : pastille si le fil croiserait une
     // famille, ou s'il devrait traverser plus d'un écran
@@ -576,7 +591,7 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
   // _railLift plus grand = plus haut ; 0 = la ligne la plus proche des enfants.
   const rails = new Map()
   for (const e of result.edges) {
-    if (e._renvoi || e._back || e._bridge) continue
+    if (e._renvoi || e._hidden) continue
     const u = byId.get(e.sources[0]), k = byId.get(e.targets[0])
     if (!u || !k) continue
     const ux = u.x + u.width / 2
