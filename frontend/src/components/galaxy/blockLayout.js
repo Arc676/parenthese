@@ -34,6 +34,13 @@ const FAMILY_GAP = 60
 // Au-delà de cet écart entre la place idéale d'une famille de conjoint et la première place libre, on ne la colle pas
 // Jamais d'îlot (Patch, 19/10) : une famille collée trop loin garde son fil, aussi long soit-il
 const DETACH_PX = Infinity
+// Famille reliée deux fois : au-delà de cet écart, la seconde filiation est une pastille, pas un fil
+const RENVOI_FAR_PX = 1440
+// Famille de conjoint poussée plus loin que ça : ses parents reviennent juste au-dessus de leur enfant
+// Famille de conjoint poussée plus loin que ça par les descendants du couple : la chaîne se décale au bord de sa rangée d'enfants
+const PARENT_SHIFT_PX = 400
+// Côté d'une belle-famille : le côté extérieur de la branche, sauf si l'autre côté la rapproche d'au moins ça
+const SIDE_SWITCH_PX = 1440
 
 // Le fil d'une filiation union → enfant : une personne d'une autre famille, sur la ligne de l'enfant,
 // entre l'aplomb de l'union et l'enfant, est croisée. Frères et sœurs et leurs conjoint(e)s ne comptent pas
@@ -148,13 +155,15 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
     return offsets
   }
 
-  // La chaîne la plus haute d'une famille : on remonte de parents en parents
+  // La chaîne la plus haute d'une famille : on remonte de parents en parents, par le sang de la référence
+  // quand un membre en est (on retombe alors sur la lignée principale, déjà en cours : rien à attacher,
+  // la filiation sera un renvoi), sinon par le premier membre qui a des parents
   function topChainOf(chain) {
     let cur = chain
     const seen = new Set()
     while (!seen.has(cur)) {
       seen.add(cur)
-      const m = cur.find(id => parentUnionOf.has(id))
+      const m = cur.find(id => parentUnionOf.has(id) && blood.has(id)) || cur.find(id => parentUnionOf.has(id))
       if (!m) break
       cur = chainOf.get(parentUnionOf.get(m))
     }
@@ -267,48 +276,24 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
       const side = sideOfUnion(unionId) || outer || (i < (kidsOfChain.length - 1) / 2 ? -1 : 1)
       childBlocks.push({ ...buildBlock(kc, unionId, side), unionId })
     })
-    // Un enfant dont le conjoint amène sa famille va au bout de la fratrie, de son côté : sa belle-famille
-    // se colle à lui sans survoler ses frères et sœurs. L'ordre de naissance s'efface pour lui (choix du 19/10).
-    const sideOf = (b) => {
-      if (b.ghost || !b.pending?.length) return 0
-      const left = b.pending.some(p => p.side < 0), right = b.pending.some(p => p.side > 0)
-      return left && !right ? -1 : right && !left ? 1 : 0
-    }
+    // Un enfant dont le conjoint amène sa famille va au bout de la fratrie, de son côté : sa belle-famille,
+    // qui fait partie de son bloc, se retrouve au bord, sans survoler ses frères et sœurs. L'ordre de
+    // naissance s'efface pour lui (choix de Patch, 19/10).
     const kids = unionsOfChain.flatMap(u => {
       const group = childBlocks.filter(b => b.unionId === u)
-      return [...group.filter(b => sideOf(b) < 0), ...group.filter(b => sideOf(b) === 0), ...group.filter(b => sideOf(b) > 0)]
+      return [...group.filter(b => b.attachSide < 0), ...group.filter(b => !b.attachSide), ...group.filter(b => b.attachSide > 0)]
     })
-    // Les belles-familles des enfants entrent dans l'empilement comme des frères de plus, au bout de la
-    // fratrie du côté de leur enfant : elles ne se posent jamais sous la ligne de cette fratrie, et le
-    // contour les espace rangée par rangée. Plusieurs du même côté s'emboîtent comme des parenthèses :
-    // celle dont l'enfant est le plus proche du bout, et le plus bas, se colle la plus près.
-    const pending = []
-    kids.forEach((b, i) => { for (const p of (b.pending || [])) pending.push({ ...p, kidIndex: i, anchorGen: byId.get(p.anchorId)._generation }) })
     childBlocks.length = 0
     childBlocks.push(...kids)
     const packed = packBlocks(childBlocks, FAMILY_GAP)
     const rows = new Map()
     childBlocks.forEach((b, i) => { if (!b.ghost) mergeRows(rows, b.rows, packed.xs[i]) })
-    const attachments = []
-    // Du côté droit, la plus près du bout d'abord (enfant le plus à droite, puis le plus bas) ; symétrique à gauche
-    const rightP = pending.filter(p => p.side > 0).sort((a, b) => b.kidIndex - a.kidIndex || b.anchorGen - a.anchorGen)
-    const leftP = pending.filter(p => p.side < 0).sort((a, b) => a.kidIndex - b.kidIndex || b.anchorGen - a.anchorGen)
-    for (const p of [...rightP, ...leftP]) {
-      const kid = kids[p.kidIndex]
-      const anchorAbs = packed.xs[p.kidIndex] + kid.rel(p.anchorId)
-      const at = p.block.rel(p.anchorId)
-      const ideal = at == null ? anchorAbs : anchorAbs - at
-      const x = pushHybrid(p.block.rows, ideal, rows, p.side, p.anchorGen, FAMILY_GAP)
-      attachedEdges.add(`${parentUnionOf.get(p.anchorId)}>${p.anchorId}`)
-      attachments.push({ block: p.block, x })
-      mergeRows(rows, p.block.rows, x)
-    }
 
     // Familles des conjoints de la chaîne pas encore dessinées : construites entières depuis leur ancêtre
-    // le plus haut, puis remises au bloc du dessus qui les empile au bout de la fratrie, du côté du conjoint.
-    // Le couple se tourne vers cette famille (conjoint du côté où elle se pose). Une famille déjà dessinée
-    // (reliée deux fois) ne l'est pas une seconde fois : la filiation reste externe, renvoi si son fil croise.
-    const ownPending = []
+    // le plus haut. Le couple se tourne vers cette famille (conjoint du côté où elle se pose). Une famille
+    // déjà dessinée (reliée deux fois) ne l'est pas une seconde fois : la filiation reste externe, renvoi si
+    // son fil croise une autre famille.
+    const built = []
     for (const id of [...chain]) {
       if (byId.get(id)._type !== 'person') continue
       const pu = parentUnionOf.get(id)
@@ -322,19 +307,29 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
       anchor = { kid: id, end: side < 0 ? 'right' : 'left' }
       const block = buildBlock(top, null, side)
       anchor = saved
-      ownPending.push({ block, anchorId: id, side })
+      built.push({ block, anchorId: id, side })
       if (chain.length === 3) orient(chain, chain[0] === id ? chain[2] : chain[0], side)
     }
 
     // Chaîne centrée sur la rangée de ses enfants directs (fantômes compris), décalée au plus près si une
     // famille de conjoint occupe déjà cette rangée
     const rowW = chainWidth(chain)
-    const offsets = chainOffsets(chain)
-    let rowX = 0
+    let offsets = chainOffsets(chain)
+    const kidRowL = childBlocks.length ? Math.min(...childBlocks.map((b, i) => packed.xs[i] + b.chain[0])) : 0
+    const kidRowR = childBlocks.length ? Math.max(...childBlocks.map((b, i) => packed.xs[i] + b.chain[1])) : rowW
+    const avoidObstacles = (x) => {
+      const obstacles = rows.get(gen) || []
+      if (!overlaps(x, x + rowW, obstacles, FAMILY_GAP)) return x
+      const candidates = obstacles.flatMap(([l, r]) => [r + FAMILY_GAP, l - FAMILY_GAP - rowW])
+        .filter(c => !overlaps(c, c + rowW, obstacles, FAMILY_GAP))
+      // De préférence une place encore au-dessus de la rangée des enfants (sinon la ligne de fratrie
+      // partirait de l'extérieur et croiserait les familles voisines)
+      const over = candidates.filter(c => c + rowW > kidRowL && c < kidRowR)
+      const pool = over.length ? over : candidates
+      return pool.length ? pool.reduce((best, c) => (Math.abs(c - x) < Math.abs(best - x) ? c : best)) : x
+    }
+    let rowX = (kidRowL + kidRowR) / 2 - rowW / 2
     if (childBlocks.length) {
-      const kidRowL = Math.min(...childBlocks.map((b, i) => packed.xs[i] + b.chain[0]))
-      const kidRowR = Math.max(...childBlocks.map((b, i) => packed.xs[i] + b.chain[1]))
-      rowX = (kidRowL + kidRowR) / 2 - rowW / 2
       // Remariage : chaque union au plus près au-dessus de ses propres enfants. Parmi les positions qui
       // alignent une union sur un bord ou le centre de son groupe, on garde celle où les lignes de fratrie
       // débordent le moins au-dessus des demi-frères et demi-sœurs (égalité : la plus proche du centrage).
@@ -357,35 +352,85 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
           return cx < cb - 0.5 || (Math.abs(cx - cb) <= 0.5 && Math.abs(x - centered) < Math.abs(best - centered)) ? x : best
         })
       }
-      const obstacles = rows.get(gen) || []
-      if (overlaps(rowX, rowX + rowW, obstacles, FAMILY_GAP)) {
-        const candidates = obstacles.flatMap(([l, r]) => [r + FAMILY_GAP, l - FAMILY_GAP - rowW])
-          .filter(x => !overlaps(x, x + rowW, obstacles, FAMILY_GAP))
-        if (candidates.length) rowX = candidates.reduce((best, x) => (Math.abs(x - rowX) < Math.abs(best - rowX) ? x : best))
+      rowX = avoidObstacles(rowX)
+    }
+
+    // Belles-familles de la chaîne, collées au conjoint depuis leur place idéale (ses parents juste au-dessus
+    // de lui), poussées vers l'extérieur du bloc : sur la rangée du couple et en dessous, au-delà de tout le
+    // bloc (jamais sous la ligne de la fratrie des enfants) ; au-dessus, au premier trou libre.
+    // Elles font partie du bloc : le bloc du dessus les emporte avec l'enfant quand il l'empile au bout de
+    // sa fratrie.
+    const rowsBase = new Map([...rows].map(([g, l]) => [g, l.map(i => [...i])]))
+    const idealOf = (p, rx) => {
+      const at = p.block.rel(p.anchorId)
+      const anchorX = rx + offsets.get(p.anchorId)
+      return at == null ? anchorX - p.block.width / 2 : anchorX - at
+    }
+    // 1) Le côté de chaque famille : celui prévu (extérieur de la branche), sauf si l'autre côté la rapproche
+    //    nettement. Le couple se retourne alors et l'enfant ira au bout de sa fratrie de ce côté-là.
+    {
+      const trial = new Map([...rowsBase].map(([g, l]) => [g, l.map(i => [...i])]))
+      mergeRows(trial, new Map([[gen, [[rowX, rowX + rowW]]]]), 0)
+      if (ownerUnion) mergeRows(trial, new Map([[gen - 1, [[rowX - FAMILY_GAP, rowX + rowW + FAMILY_GAP]]]]), 0)
+      for (const p of built) {
+        if (chain.length !== 3) break
+        const ideal = idealOf(p, rowX)
+        const x = pushHybrid(p.block.rows, ideal, trial, p.side, gen, FAMILY_GAP)
+        const other = -p.side
+        const mirrored = (chain[0] === p.anchorId ? chain[2] : chain[0])
+        const idealOther = ideal + (offsets.get(mirrored) - offsets.get(p.anchorId))
+        const xOther = pushHybrid(p.block.rows, idealOther, trial, other, gen, FAMILY_GAP)
+        if (Math.abs(xOther - idealOther) + SIDE_SWITCH_PX < Math.abs(x - ideal)) {
+          p.side = other
+          orient(chain, mirrored, other)
+          offsets = chainOffsets(chain)
+        }
       }
     }
-    mergeRows(rows, new Map([[gen, [[rowX, rowX + rowW]]]]), 0)
+    // 2) Pose. Si une famille serait poussée loin par les descendants du couple, la chaîne se décale au bord
+    //    de sa rangée d'enfants, du côté de cette famille : les parents ne sont plus au centre de leurs enfants,
+    //    mais la belle-famille est tout près et son fil reste court.
+    // Au-dessus de la chaîne, la place de ses propres parents est réservée : les parents du conjoint se posent
+    // à côté, pas dessus (sinon le couple des parents, posé après, ne trouve plus sa place au-dessus des enfants)
+    const reserveParents = (r, rx) => { if (ownerUnion) mergeRows(r, new Map([[gen - 1, [[rx - FAMILY_GAP, rx + rowW + FAMILY_GAP]]]]), 0) }
+    const placeAll = (rx) => {
+      const r = new Map([...rowsBase].map(([g, l]) => [g, l.map(i => [...i])]))
+      mergeRows(r, new Map([[gen, [[rx, rx + rowW]]]]), 0)
+      reserveParents(r, rx)
+      const list = []
+      let maxPush = 0, sideOfMax = 0
+      for (const p of built) {
+        const ideal = idealOf(p, rx)
+        const x = pushHybrid(p.block.rows, ideal, r, p.side, gen, FAMILY_GAP)
+        if (Math.abs(x - ideal) > maxPush) { maxPush = Math.abs(x - ideal); sideOfMax = p.side }
+        list.push({ block: p.block, x, ideal, anchorId: p.anchorId, side: p.side })
+        mergeRows(r, p.block.rows, x)
+      }
+      // Le contour rendu ne garde pas la réservation (elle ne sert qu'à pousser les belles-familles)
+      const out = new Map([...rowsBase].map(([g, l]) => [g, l.map(i => [...i])]))
+      mergeRows(out, new Map([[gen, [[rx, rx + rowW]]]]), 0)
+      for (const a of list) mergeRows(out, a.block.rows, a.x)
+      return { rows: out, list, maxPush, sideOfMax }
+    }
+    let result = placeAll(rowX)
+    if (childBlocks.length && result.maxPush > PARENT_SHIFT_PX && kidRowR - kidRowL > rowW) {
+      const edge = avoidObstacles(result.sideOfMax < 0 ? kidRowL : kidRowR - rowW)
+      const alt = placeAll(edge)
+      if (alt.maxPush < result.maxPush) { rowX = edge; result = alt }
+    }
+    rows.clear()
+    for (const [g, l] of result.rows) rows.set(g, l)
+    const attachments = result.list.map(a => ({ block: a.block, x: a.x }))
+    for (const a of result.list) {
+      attachedEdges.add(`${parentUnionOf.get(a.anchorId)}>${a.anchorId}`)
+    }
+    const attachSide = built.length ? (built.every(p => p.side < 0) ? -1 : built.every(p => p.side > 0) ? 1 : 0) : 0
+
     const members = new Set(chain)
     for (const b of childBlocks) { for (const m of b.members) members.add(m); external.push(...b.external) }
     for (const a of attachments) { for (const m of a.block.members) members.add(m); external.push(...a.block.external) }
     const ghosts = new Map()
     childBlocks.forEach((b, i) => { if (b.ghost) ghosts.set(b.kid, packed.xs[i]) })
-
-    // Une chaîne sans bloc au-dessus (racine) pose elle-même ses familles de conjoints, au bout de sa propre étendue
-    if (ownerUnion == null) {
-      for (const p of ownPending) {
-        const at = p.block.rel(p.anchorId)
-        const anchorX = rowX + offsets.get(p.anchorId)
-        const ideal = at == null ? anchorX - p.block.width / 2 : anchorX - at
-        const x = pushHybrid(p.block.rows, ideal, rows, p.side, gen, FAMILY_GAP)
-        attachedEdges.add(`${parentUnionOf.get(p.anchorId)}>${p.anchorId}`)
-        attachments.push({ block: p.block, x })
-        mergeRows(rows, p.block.rows, x)
-        for (const m of p.block.members) members.add(m)
-        external.push(...p.block.external)
-      }
-      ownPending.length = 0
-    }
 
     // Origine du bloc au bord gauche de son contour
     const [minL] = extentOf(rows)
@@ -393,7 +438,7 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
     rowX -= minL
     const kidXs = packed.xs.map(x => x - minL)
     for (const [k, x] of ghosts) ghosts.set(k, x - minL)
-    for (const a of attachments) a.x -= minL
+    for (const a of attachments) { a.x -= minL; if (a.parents) a.parents.x -= minL }
 
     const rel = (id) => {
       if (offsets.has(id)) return rowX + offsets.get(id)
@@ -403,17 +448,24 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
         const r = childBlocks[i].rel(id)
         if (r != null) return kidXs[i] + r
       }
-      for (const a of attachments) { const r = a.block.rel(id); if (r != null) return a.x + r }
+      for (const a of attachments) {
+        if (a.parents?.offsets.has(id)) return a.parents.x + a.parents.offsets.get(id)
+        const r = a.block.rel(id)
+        if (r != null) return a.x + r
+      }
       return null
     }
     return {
-      rows, members, external, gen, rel, pending: ownPending,
+      rows, members, external, gen, rel, attachSide,
       chain: [rowX, rowX + rowW],
       width: extentOf(rows)[1],
       place(x0) {
         for (const id of chain) pos.set(id, x0 + rowX + offsets.get(id))
         childBlocks.forEach((b, i) => b.place(x0 + kidXs[i]))
-        attachments.forEach(a => a.block.place(x0 + a.x))
+        attachments.forEach(a => {
+          a.block.place(x0 + a.x)
+          if (a.parents) for (const id of a.parents.chain) pos.set(id, x0 + a.parents.x + a.parents.offsets.get(id))
+        })
       },
     }
   }
@@ -426,8 +478,21 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
     const y = raw != null ? parseInt(String(raw).slice(0, 4), 10) : NaN
     return Number.isFinite(y) ? y : 9999
   }))
+  // La plus grande lignée d'abord : construite en premier, c'est elle qui reçoit les autres en belles-familles.
+  // Dans l'autre sens, une petite branche construite d'abord aspirerait toute la lignée principale comme
+  // « famille du conjoint » et la pousserait loin (vu le 19/10 sur un arbre réel : 249 personnes poussées).
+  const descCount = new Map()
+  const countDesc = (chain, seen = new Set()) => {
+    if (descCount.has(chain)) return descCount.get(chain)
+    if (seen.has(chain)) return 0
+    seen.add(chain)
+    let n = chain.length
+    for (const id of chain) for (const k of (childrenOfUnion.get(id) || [])) n += countDesc(chainOf.get(k), seen)
+    descCount.set(chain, n)
+    return n
+  }
   const roots = chains.filter(c => !hasParents(c)).sort((a, b) => (
-    (isBloodChain(b) - isBloodChain(a)) || genOf(a) - genOf(b) || birthYearOf(a) - birthYearOf(b) || String(a[0]).localeCompare(String(b[0]))
+    (isBloodChain(b) - isBloodChain(a)) || countDesc(b) - countDesc(a) || genOf(a) - genOf(b) || birthYearOf(a) - birthYearOf(b) || String(a[0]).localeCompare(String(b[0]))
   ))
   const free = []
   for (const r of roots) if (!placed.has(r)) free.push(buildBlock(r))
@@ -459,7 +524,11 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
   const renvoisByUnion = new Map()
   for (const e of result.edges) {
     const u = e.sources[0], c = e.targets[0]
-    if (!externalEdges.has(`${u}>${c}`) || attachedEdges.has(`${u}>${c}`) || !crossesOtherFamily(u, c)) continue
+    if (!externalEdges.has(`${u}>${c}`) || attachedEdges.has(`${u}>${c}`)) continue
+    // Famille reliée deux fois à l'arbre (dessinée sous l'autre lien) : pastille si le fil croiserait une
+    // famille, ou s'il devrait traverser plus d'un écran
+    const far = Math.abs((byId.get(u).x + byId.get(u).width / 2) - (byId.get(c).x + byId.get(c).width / 2)) > RENVOI_FAR_PX
+    if (!far && !crossesOtherFamily(u, c)) continue
     e._renvoi = true
     e._renvoiIndex = renvoisByUnion.get(u) || 0
     renvoisByUnion.set(u, e._renvoiIndex + 1)
