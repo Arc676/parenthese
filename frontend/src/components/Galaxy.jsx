@@ -50,6 +50,8 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   const photoHintRef = useRef(photoHint)
   useEffect(() => { photoHintRef.current = photoHint }, [photoHint])
   const layoutDataRef = useRef(null)
+  // Calque du plan arrière (grosses belles-familles), composé plus clair et légèrement flou sous le plan avant
+  const backLayerRef = useRef(null)
   const [layoutReady, setLayoutReady] = useState(false)
   const transformRef = useRef({ x: 0, y: 0, scale: 1 })
 
@@ -811,6 +813,36 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       const cssW = canvas.width / dprRef.current
       const cssH = canvas.height / dprRef.current
       const view = { x0: -x / scale, y0: -y / scale, x1: (cssW - x) / scale, y1: (cssH - y) / scale, scale }
+      const nodeRenderState = {
+        nodeRandomData: nodeRandomDataRef.current,
+        imageCache: imageCache.current,
+        hoverScales: hoverScales.current,
+        selectedGlowScales: selectedGlowScales.current,
+        searchGlowScales: searchGlowScales.current,
+        mediaHoverState: mediaHoverState.current,
+        entrance, entranceActive, elapsed,
+        view,
+        photoHint: photoHintRef.current,
+        liftScales: liftScalesRef.current,
+      }
+      // Plan arrière : les grosses belles-familles, dessinées d'abord sur un calque, plus claires et un peu floues
+      if (layoutData.children.some((n) => n._plane === 'back')) {
+        const off = backLayerRef.current || (backLayerRef.current = document.createElement('canvas'))
+        if (off.width !== canvas.width || off.height !== canvas.height) { off.width = canvas.width; off.height = canvas.height }
+        const octx = off.getContext('2d')
+        octx.setTransform(1, 0, 0, 1, 0, 0)
+        octx.clearRect(0, 0, off.width, off.height)
+        octx.setTransform(ctx.getTransform())
+        drawCoupleLinks(octx, coupleBarMeta, posMap, nodeMap, nodeRandomDataRef.current, entrance, entranceActive, elapsed, view, 'back')
+        drawFiliations(octx, layoutData.edges, posMap, nodeMap, nodeRandomDataRef.current, entrance, entranceActive, elapsed, view, 'back')
+        drawNodes(octx, layoutData, posMap, entrance, entranceActive, elapsed, { ...nodeRenderState, plane: 'back' })
+        ctx.save()
+        ctx.setTransform(1, 0, 0, 1, 0, 0)
+        ctx.globalAlpha = 0.42
+        ctx.filter = 'blur(0.6px)'
+        ctx.drawImage(off, 0, 0)
+        ctx.restore()
+      }
       drawCoupleLinks(ctx, coupleBarMeta, posMap, nodeMap, nodeRandomDataRef.current, entrance, entranceActive, elapsed, view)
       drawFiliations(ctx, layoutData.edges, posMap, nodeMap, nodeRandomDataRef.current, entrance, entranceActive, elapsed, view)
       drawPathHighlight(ctx, {
@@ -825,18 +857,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
         nodeRandomData: nodeRandomDataRef.current,
         layoutData,
       })
-      drawNodes(ctx, layoutData, posMap, entrance, entranceActive, elapsed, {
-        nodeRandomData: nodeRandomDataRef.current,
-        imageCache: imageCache.current,
-        hoverScales: hoverScales.current,
-        selectedGlowScales: selectedGlowScales.current,
-        searchGlowScales: searchGlowScales.current,
-        mediaHoverState: mediaHoverState.current,
-        entrance, entranceActive, elapsed,
-        view,
-        photoHint: photoHintRef.current,
-        liftScales: liftScalesRef.current,
-      })
+      drawNodes(ctx, layoutData, posMap, entrance, entranceActive, elapsed, nodeRenderState)
       drawRenvoiPills(ctx)
       // Annotations dessinées APRES les noeuds pour que stickers/texte soient au-dessus
       // Annotations : ancrer aux personnes proches pour qu'elles suivent le layout

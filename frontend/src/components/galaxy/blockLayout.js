@@ -41,6 +41,10 @@ const RENVOI_FAR_PX = 1440
 const PARENT_SHIFT_PX = 400
 // Côté d'une belle-famille : le côté extérieur de la branche, sauf si l'autre côté la rapproche d'au moins ça
 const SIDE_SWITCH_PX = 1440
+// Deux plans (maquette F du 19/10). Une belle-famille plus large que ça ne se colle pas devant : elle passe sur
+// le plan arrière, dessinée par le même placement, plus petite, ancrée à son conjoint
+const BACK_PX = 2880
+const BACK_SCALE = 0.55
 
 // Le fil d'une filiation union → enfant : une personne d'une autre famille, sur la ligne de l'enfant,
 // entre l'aplomb de l'union et l'enfant, est croisée. Frères et sœurs et leurs conjoint(e)s ne comptent pas
@@ -183,6 +187,7 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
   const placed = new Set()
   const externalEdges = new Set() // `${union}>${enfant}` : enfant dessiné sous une autre lignée
   const detached = [] // familles qu'on n'a pas pu coller à leur enfant (trop loin) : posées à part, renvoi
+  const backFamilies = [] // familles de conjoints du plan arrière : { block, anchorId }
   const attachedEdges = new Set() // `${union}>${enfant}` : fil d'une famille collée à son enfant, toujours dessiné
 
   // Imbrique des blocs de gauche à droite, rangée par rangée
@@ -307,6 +312,7 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
       anchor = { kid: id, end: side < 0 ? 'right' : 'left' }
       const block = buildBlock(top, null, side)
       anchor = saved
+      if (block.width > BACK_PX) { backFamilies.push({ block, anchorId: id }); continue }
       built.push({ block, anchorId: id, side })
       if (chain.length === 3) orient(chain, chain[0] === id ? chain[2] : chain[0], side)
     }
@@ -506,6 +512,35 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
   for (const n of nodes) if (pos.has(n.id)) minX = Math.min(minX, pos.get(n.id))
   for (const n of nodes) if (pos.has(n.id)) n.x = pos.get(n.id) - minX
 
+  // Plan arrière : chaque grosse belle-famille est posée à l'échelle BACK_SCALE autour de son conjoint pivot,
+  // la place fantôme du conjoint dans sa fratrie d'origine venant coïncider avec lui. Ses parents sont donc
+  // juste au-dessus de lui, en retrait, et toute sa famille se déploie derrière le plan avant.
+  for (const { block, anchorId } of backFamilies) {
+    const A = byId.get(anchorId)
+    if (!A || A.x == null) continue
+    block.place(0)
+    const ghostX = block.rel(anchorId)
+    if (ghostX == null) continue
+    const acx = A.x + A.width / 2, acy = A.y + A.height / 2
+    const gcx = ghostX + A.width / 2, gcy = acy
+    for (const m of block.members) {
+      const n = byId.get(m)
+      if (!n || !pos.has(m)) continue
+      const lcx = pos.get(m) + n.width / 2, lcy = n.y + n.height / 2
+      const cx = acx + (lcx - gcx) * BACK_SCALE, cy = acy + (lcy - gcy) * BACK_SCALE
+      n.x = cx - n.width / 2
+      n.y = cy - n.height / 2
+      n._plane = 'back'
+      n._scale = BACK_SCALE
+    }
+  }
+  const backIds = new Set(nodes.filter(n => n._plane === 'back').map(n => n.id))
+  for (const e of result.edges) {
+    const s = backIds.has(e.sources[0]), k = backIds.has(e.targets[0])
+    if (s && k) e._back = true
+    else if (s && !k) e._bridge = true // des parents du plan arrière à leur enfant du plan avant
+  }
+
   // Arête vers un enfant dessiné sous l'autre lignée : renvoi (voir drawFiliations) seulement si le fil
   // croise une autre famille. Plusieurs renvois sous la même union : pastilles empilées (_renvoiIndex)
   // Le fil descend de l'union puis file sur la ligne de la fratrie jusqu'à l'enfant (traceSibship) :
@@ -524,6 +559,7 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
   const renvoisByUnion = new Map()
   for (const e of result.edges) {
     const u = e.sources[0], c = e.targets[0]
+    if (e._back || e._bridge) continue
     if (!externalEdges.has(`${u}>${c}`) || attachedEdges.has(`${u}>${c}`)) continue
     // Famille reliée deux fois à l'arbre (dessinée sous l'autre lien) : pastille si le fil croiserait une
     // famille, ou s'il devrait traverser plus d'un écran
@@ -540,7 +576,7 @@ export function computeBlockLayout(graphData = null, referenceId = null) {
   // _railLift plus grand = plus haut ; 0 = la ligne la plus proche des enfants.
   const rails = new Map()
   for (const e of result.edges) {
-    if (e._renvoi) continue
+    if (e._renvoi || e._back || e._bridge) continue
     const u = byId.get(e.sources[0]), k = byId.get(e.targets[0])
     if (!u || !k) continue
     const ux = u.x + u.width / 2

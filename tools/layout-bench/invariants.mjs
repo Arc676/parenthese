@@ -60,6 +60,8 @@ export function bloodRelatives(graph, referenceId) {
 const birthYear = (p) => { const raw = p?.birthYear ?? p?.birthDate; const y = raw != null ? parseInt(String(raw).slice(0, 4), 10) : NaN; return Number.isFinite(y) ? y : null }
 
 export function checkInvariants(result, coupleBarMeta, graph, referenceId = null) {
+  // Le plan arrière (grosses belles-familles, maquette F) se mesure à part : ici, le plan avant seulement
+  result = { ...result, children: result.children.filter((n) => n._plane !== 'back'), edges: result.edges.filter((e) => !e._back && !e._bridge) }
   const nodes = result.children
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const persons = nodes.filter((n) => n._type === 'person')

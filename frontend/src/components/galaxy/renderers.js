@@ -24,10 +24,13 @@ const NICKNAME_MAX_W = 150
 // ============================================================
 // Rayon d'un nœud : inconnu, conjoint isolé (petit) ou personne
 export function nodeRadius(node) {
-  if (node?._type === 'unknown') return UNKNOWN_R
-  if (node?._compact) return COMPACT_R
-  return PERSON_R
+  const scale = node?._scale || 1
+  if (node?._type === 'unknown') return UNKNOWN_R * scale
+  if (node?._compact) return COMPACT_R * scale
+  return PERSON_R * scale
 }
+// Plan d'un nœud : 'front' (la lignée) ou 'back' (une grosse belle-famille, en retrait)
+export const planeOf = (node) => node?._plane || 'front'
 
 function rectInView(view, minX, minY, maxX, maxY) {
   if (!view) return true
@@ -110,17 +113,17 @@ const SIB_STRAIGHT_DX = SIB_R * 2
 // Les lignes de fratrie s'emboîtent : une famille collée au conjoint d'un enfant dessine sa ligne sous celle
 // de la famille qui l'entoure. Le placement pose le niveau (_railLift, 0 = la plus proche des enfants).
 const RAIL_STEP = 6
-function busY(lift, sy) {
-  return sy + BUS_DY - RAIL_STEP * (lift || 0)
+function busY(lift, sy, scale = 1) {
+  return sy + (BUS_DY - RAIL_STEP * (lift || 0)) * scale
 }
 
 // Une union, toute sa fratrie : un seul tracé. Tronc depuis l'union jusqu'à la barre, coins arrondis
 // de même rayon à chaque jonction, puis descente vers chaque enfant. Chaque enfant a sa propre trajectoire
 // (sur la même barre), donc le surlignage du chemin suit exactement la même géométrie.
-export function traceSibship(ctx, sourceId, sourcePos, items, lift = 0) {
+export function traceSibship(ctx, sourceId, sourcePos, items, lift = 0, scale = 1) {
   const sx = sourcePos.cx, sy = sourcePos.cy
-  const by = busY(lift, sy)
-  const rr = Math.min(SIB_R, by - sy - 2)
+  const by = busY(lift, sy, scale)
+  const rr = Math.min(SIB_R * scale, by - sy - 2)
   ctx.beginPath()
   for (const { cx: ex, cy: ey } of items) {
     const dx = ex - sx
@@ -147,8 +150,9 @@ export function traceSibship(ctx, sourceId, sourcePos, items, lift = 0) {
 // ============================================================
 // Courbes de couple (Bézier)
 // ============================================================
-export function drawCoupleLinks(ctx, coupleBarMeta, posMap, nodeMap, nodeRandomData, entrance, entranceActive, elapsed, view = null) {
+export function drawCoupleLinks(ctx, coupleBarMeta, posMap, nodeMap, nodeRandomData, entrance, entranceActive, elapsed, view = null, plane = 'front') {
   coupleBarMeta.forEach(({ elkId, p1Key, p2Key, virtual }) => {
+    if (planeOf(nodeMap.get(p1Key)) !== plane) return
     const p1Pos = posMap.get(p1Key)
     const p2Pos = posMap.get(p2Key)
     const unionPos = posMap.get(elkId)
@@ -259,15 +263,15 @@ export function drawRenvoiPills(ctx) {
 // ============================================================
 // Filiations (Bézier union → enfant)
 // ============================================================
-export function drawFiliations(ctx, edges, posMap, nodeMap, nodeRandomData, entrance, entranceActive, elapsed, view = null) {
-  renvoiHitAreas.length = 0
-  renvoiPills.length = 0
+export function drawFiliations(ctx, edges, posMap, nodeMap, nodeRandomData, entrance, entranceActive, elapsed, view = null, plane = 'front') {
+  if (plane === 'front') { renvoiHitAreas.length = 0; renvoiPills.length = 0 }
   if (!edges) return
   const sibships = new Map()
 
   edges.forEach(edge => {
     const sourceId = edge.sources[0]
     const targetId = edge.targets[0]
+    if (planeOf(nodeMap.get(sourceId)) !== plane) return
     const sourcePos = posMap.get(sourceId)
     const targetPos = posMap.get(targetId)
     if (!sourcePos || !targetPos) return
@@ -312,7 +316,7 @@ export function drawFiliations(ctx, edges, posMap, nodeMap, nodeRandomData, entr
     ctx.lineCap = 'round'
     const p = progress / items.length
     ctx.globalAlpha = Math.min(1, p * 1.5) * p
-    traceSibship(ctx, sourceId, sourcePos, items, nodeMap.get(sourceId)?._railLift)
+    traceSibship(ctx, sourceId, sourcePos, items, nodeMap.get(sourceId)?._railLift, nodeMap.get(sourceId)?._scale || 1)
     ctx.globalAlpha = 1
     ctx.setLineDash([])
   }
@@ -1035,12 +1039,17 @@ function drawImageCover(ctx, img, x, y, w, h, crop = null) {
 // ============================================================
 export function drawNodes(ctx, layoutData, posMap, entrance, entranceActive, elapsed, renderState) {
   const view = renderState.view || null
-  photoPlaceholderHitAreas.length = 0
+  const plane = renderState.plane || 'front'
+  if (plane === 'front') photoPlaceholderHitAreas.length = 0
   layoutData.children.forEach(node => {
+    if (planeOf(node) !== plane) return
     const pos = posMap.get(node.id)
     if (!pos) return
     const { cx, cy } = pos
     if (!pointInView(view, cx, cy)) return
+    // Plan arrière : le nœud est dessiné à son échelle, autour de son centre
+    const scale = node._scale || 1
+    if (scale !== 1) { ctx.save(); ctx.translate(cx, cy); ctx.scale(scale, scale); ctx.translate(-cx, -cy) }
 
     let nodeProgress = 1
     if (entranceActive) {
@@ -1089,6 +1098,7 @@ export function drawNodes(ctx, layoutData, posMap, entrance, entranceActive, ela
       ctx.fillText(t('Inconnu'), 0, UNKNOWN_R + 4)
       ctx.restore()
     }
+    if (scale !== 1) ctx.restore()
   })
 }
 
