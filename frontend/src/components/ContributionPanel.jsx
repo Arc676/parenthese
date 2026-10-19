@@ -434,7 +434,7 @@ const ContributionPanel = ({
             {/* ── En-tête sessions ── */}
             <div className="contrib-list-header">
               <div className="contrib-list-heading">
-                <h2>{t('Propositions à relire')}</h2>
+                <h2 id="contrib-propositions">{t('Propositions à relire')}</h2>
                 <p>{t('Acceptez ou refusez chaque modification, puis appliquez vos choix.')}</p>
               </div>
               <div className="contrib-list-header-actions">

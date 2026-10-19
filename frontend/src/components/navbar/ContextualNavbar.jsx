@@ -1,11 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import {
-  Edit3, Share2, User, UserPlus,
-  X, MousePointer2, Pencil, Type, Star, Trash2, Image, ImagePlus, MoreHorizontal, HelpCircle, Globe, ArrowLeft,
+  Brush, ImagePlus, Plus, UserPlus, User, X, MousePointer2, Pencil, Type, Star, Trash2, Image, ArrowLeft,
 } from 'lucide-react'
-import NavButton from './NavButton'
+import { NavMenu, NavMenuGroup, NavMenuItem } from './NavMenu'
 import AvatarMenu from './AvatarMenu'
-import LanguageSwitch from './LanguageSwitch'
 import DrawingOptions from '../annotations/DrawingOptions'
 import TextOptions from '../annotations/TextOptions'
 import StickerPicker from '../annotations/StickerPicker'
@@ -21,13 +19,17 @@ const ANNOT_TOOLS = [
   { id: 'photo', label: t('Photo'), Icon: Image },
 ]
 
-// Mobile : les outils de dessin attendent dans « Plus », la barre ne montre que l'essentiel
+// Téléphone, en modification : les outils de dessin passent dans le menu « + »
 const ANNOT_MENU = [
   { id: 'drawing', label: t('Dessiner'), Icon: Pencil },
   { id: 'text', label: t('Écrire un texte'), Icon: Type },
   { id: 'sticker', label: t('Poser un sticker'), Icon: Star },
   { id: 'photo', label: t('Poser une photo'), Icon: Image },
 ]
+
+// Téléphone (ou pointeur grossier) : le « + » et le compte s'ouvrent en feuille, sinon en popover
+const PHONE_QUERY = '(max-width: 767px), (pointer: coarse)'
+const ICON = { size: 18, strokeWidth: 2, 'aria-hidden': true }
 
 function ContextualNavbar({
   userRole,
@@ -53,39 +55,35 @@ function ContextualNavbar({
   onLogout,
   annotationTools = null,
 }) {
-  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
+  // Un seul menu ouvert à la fois : 'add' (le +), 'account' (le rond), ou null
+  const [openMenu, setOpenMenu] = useState(null)
   const [annotPanel, setAnnotPanel] = useState(null)
   const [annotMode, setAnnotMode] = useState(false)
-  const [moreOpen, setMoreOpen] = useState(false)
-  const moreRef = useRef(null)
-  const [isMobile, setIsMobile] = useState(() =>
-    typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches
+  const [isPhone, setIsPhone] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia(PHONE_QUERY).matches
   )
 
-  const avatarMenuRef = useRef(null)
   const navRef = useRef(null)
+  const addBtnRef = useRef(null)
+  const avatarBtnRef = useRef(null)
   const photoInputRef = useRef(null)
 
   useEffect(() => {
-    const mql = window.matchMedia('(max-width: 768px)')
-    const handler = (event) => setIsMobile(event.matches)
+    const mql = window.matchMedia(PHONE_QUERY)
+    const handler = (event) => setIsPhone(event.matches)
     mql.addEventListener('change', handler)
     return () => mql.removeEventListener('change', handler)
   }, [])
 
+  // Clic dehors ferme le menu sur ordinateur (sur téléphone, c'est le voile)
   useEffect(() => {
     function handleClickOutside(event) {
-      if (avatarMenuRef.current && !avatarMenuRef.current.contains(event.target)) {
-        setAvatarMenuOpen(false)
-      }
-      if (moreRef.current && !moreRef.current.contains(event.target)) {
-        setMoreOpen(false)
-      }
+      if (isPhone) return
+      if (navRef.current && !navRef.current.contains(event.target)) setOpenMenu(null)
     }
-
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  }, [isPhone])
 
   useEffect(() => {
     if (!annotPanel) return
@@ -97,15 +95,14 @@ function ContextualNavbar({
     return () => document.removeEventListener('mousedown', handleClick)
   }, [annotPanel])
 
+  // Échap ferme le menu ouvert et le panneau d'options
   useEffect(() => {
     function handleEscape(event) {
       if (event.key === 'Escape') {
-        setAvatarMenuOpen(false)
-        setMoreOpen(false)
+        setOpenMenu(null)
         setAnnotPanel(null)
       }
     }
-
     document.addEventListener('keydown', handleEscape)
     return () => document.removeEventListener('keydown', handleEscape)
   }, [])
@@ -118,11 +115,32 @@ function ContextualNavbar({
   }, [editModeActive])
 
   const { navbarType, authenticated } = userRole
-  const showMobileAnnot = isMobile && editModeActive && annotationTools
+  const isOwner = navbarType === 'admin'
+  const isFamily = (navbarType === 'contributor_anon' || navbarType === 'contributor_auth') && Boolean(onAddSouvenirClick)
+  const isDemo = userRole.accessMode === 'demo' && !['admin', 'contributor_auth', 'contributor_anon', 'visitor'].includes(navbarType)
+  const showMobileAnnot = isPhone && editModeActive && annotationTools
   const accountRole = toJourneyRole(userRole.role) || 'visitor'
   const accountClickProps = {
     role: accountRole,
     tree_id: toOpaqueTreeId(activeTreeId),
+  }
+
+  const closeMenus = () => setOpenMenu(null)
+
+  // « Propositions à relire » ouvre la fenêtre de partage, positionnée sur la section des propositions
+  const openProposals = () => {
+    onShareClick?.()
+    const scrollWhenReady = (retries) => {
+      const section = document.getElementById('contrib-propositions')
+      if (section) section.scrollIntoView({ block: 'start' })
+      else if (retries > 0) setTimeout(() => scrollWhenReady(retries - 1), 100)
+    }
+    scrollWhenReady(20)
+  }
+  // Chaque action ferme le menu avant de se lancer
+  const run = (action) => () => {
+    closeMenus()
+    action?.()
   }
 
   // Création de compte dans l'app
@@ -156,184 +174,69 @@ function ContextualNavbar({
     </button>
   )
 
-  // Famille arrivée par le lien : les deux gestes utiles écrits en toutes lettres, le reste dans « Plus »
-  const isFamily = (navbarType === 'contributor_anon' || navbarType === 'contributor_auth') && Boolean(onAddSouvenirClick)
-  const renderFamilyButtons = () => (
-    <>
-      {/* Le même crayon que le propriétaire : proposer des changements sans passer par « Plus » */}
-      <NavButton
-        icon={<Edit3 size={20} strokeWidth={2} />}
-        label={t('Proposer des changements')}
-        onClick={onEditClick}
-        active={editModeActive}
-      />
-      {/* Sous 420 px, un libellé court tient sur une ligne ; le libellé complet reste en aria-label et en title */}
-      <button type="button" className="nav-family-btn nav-family-btn--primary" onClick={onAddSouvenirClick} aria-label={t('Ajouter un souvenir')} title={t('Ajouter un souvenir')}>
-        <ImagePlus size={20} strokeWidth={2} aria-hidden="true" />
-        <span className="nav-family-label-full">{t('Ajouter un souvenir')}</span>
-        <span className="nav-family-label-short" aria-hidden="true">{t('Souvenir')}</span>
-      </button>
-      <button type="button" className="nav-family-btn" onClick={onAddPersonClick} aria-label={t('Ajouter une personne')} title={t('Ajouter une personne')}>
-        <UserPlus size={20} strokeWidth={2} aria-hidden="true" />
-        <span className="nav-family-label-full">{t('Ajouter une personne')}</span>
-        <span className="nav-family-label-short" aria-hidden="true">{t('Personne')}</span>
-      </button>
-      <div ref={moreRef} className="nav-more-wrapper">
-        <button type="button" className={`nav-family-btn nav-family-btn--more${moreOpen ? ' is-open' : ''}`} onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen} aria-haspopup="menu">
-          <MoreHorizontal size={20} strokeWidth={2} aria-hidden="true" />
-          <span>{t('Plus')}</span>
-        </button>
-        {moreOpen && (
-          <div className="nav-more-menu" role="menu">
-            <button type="button" role="menuitem" onClick={() => { setMoreOpen(false); onEditClick?.() }}>
-              <Pencil size={18} strokeWidth={2} aria-hidden="true" />
-              {t("Dessiner ou écrire sur l'arbre")}
-            </button>
-            {helpUrl && (
-              <a role="menuitem" href={helpUrl} target="_blank" rel="noopener" onClick={() => setMoreOpen(false)}>
-                <HelpCircle size={18} strokeWidth={2} aria-hidden="true" />
-                {t("Le mode d'emploi")}
-              </a>
-            )}
-            {!authenticated && (
-              <button type="button" role="menuitem" onClick={() => { setMoreOpen(false); handleCreateAccountClick() }}>
-                <User size={18} strokeWidth={2} aria-hidden="true" />
-                {t('Créer un compte')}
-              </button>
-            )}
-            {!authenticated && (
-              <div className="pz-lang-row">
-                <span className="pz-lang-row-label">
-                  <Globe size={18} strokeWidth={2} aria-hidden="true" />
-                  <span>{t('Langue')}</span>
-                </span>
-                <LanguageSwitch />
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </>
+  // Le « + » : ce qu'on met sur l'arbre, et ce qu'on corrige
+  const editLabel = editModeActive
+    ? t('Terminer la modification')
+    : isFamily
+      ? t('Proposer des changements')
+      : isDemo
+        ? t('Modifier la démo')
+        : t("Modifier l'arbre")
+
+  let addGroups = []
+  if (showMobileAnnot) {
+    addGroups = [{
+      label: t('Ajouter'),
+      items: [
+        { key: 'person', icon: <UserPlus {...ICON} />, label: t('Une personne'), onSelect: onAddPersonClick },
+        ...ANNOT_MENU.map((tool) => ({
+          key: tool.id,
+          icon: <tool.Icon {...ICON} />,
+          label: tool.label,
+          onSelect: () => { setAnnotMode(true); handleAnnotToolClick(tool.id) },
+        })),
+      ],
+    }]
+  } else {
+    const addItems = []
+    if (onAddSouvenirClick) {
+      addItems.push({ key: 'souvenir', icon: <ImagePlus {...ICON} />, label: t('Un souvenir'), sub: t('photo, vidéo, voix, document'), onSelect: onAddSouvenirClick })
+    }
+    if (isFamily || isOwner || isDemo) {
+      addItems.push({ key: 'person', icon: <UserPlus {...ICON} />, label: t('Une personne'), onSelect: onAddPersonClick })
+      addItems.push({ key: 'word', icon: <Brush {...ICON} />, label: t("Un mot ou un dessin sur l'arbre"), onSelect: onEditClick })
+    }
+    const fixItems = []
+    if (isFamily) {
+      fixItems.push({ key: 'edit', icon: <Pencil {...ICON} />, label: editLabel, sub: editModeActive ? null : t('dates, noms, liens, le propriétaire relit'), onSelect: onEditClick })
+    } else if (isOwner || isDemo) {
+      fixItems.push({ key: 'edit', icon: <Pencil {...ICON} />, label: editLabel, onSelect: onEditClick })
+    }
+    if (addItems.length) addGroups.push({ label: t('Ajouter'), items: addItems })
+    if (fixItems.length) addGroups.push({ label: t('Corriger'), items: fixItems })
+  }
+  const hasAddMenu = addGroups.length > 0
+
+  const renderAddMenu = () => (
+    <NavMenu phone={isPhone} label={t('Ajouter ou corriger')} onClose={closeMenus} triggerRef={addBtnRef}>
+      {addGroups.map((group) => (
+        <NavMenuGroup key={group.label} label={group.label}>
+          {group.items.map((item) => (
+            <NavMenuItem
+              key={item.key}
+              icon={item.icon}
+              label={item.label}
+              sub={item.sub}
+              onSelect={run(item.onSelect)}
+            />
+          ))}
+        </NavMenuGroup>
+      ))}
+    </NavMenu>
   )
 
-  const renderButtons = () => {
-    switch (navbarType) {
-      case 'admin':
-        return (
-          <>
-            <NavButton
-              icon={<Edit3 size={20} strokeWidth={2} />}
-              label={t("Modifier l'arbre")}
-              onClick={onEditClick}
-              active={editModeActive}
-            />
-            {editModeActive && (
-              <NavButton
-                icon={<UserPlus size={20} strokeWidth={2} />}
-                label={t('Ajouter une personne')}
-                onClick={onAddPersonClick}
-              />
-            )}
-            <NavButton
-              icon={<Share2 size={20} strokeWidth={2} />}
-              label={t('Contributions')}
-              onClick={onShareClick}
-              badge={pendingContributions}
-              badgeColor={pendingContributions > 0 ? 'orange' : null}
-            />
-          </>
-        )
-
-      case 'contributor_auth':
-        return (
-          <>
-            <NavButton
-              icon={<Edit3 size={20} strokeWidth={2} />}
-              label={t('Proposer des changements')}
-              onClick={onEditClick}
-              active={editModeActive}
-            />
-            {editModeActive && (
-              <NavButton
-                icon={<UserPlus size={20} strokeWidth={2} />}
-                label={t('Ajouter une personne')}
-                onClick={onAddPersonClick}
-              />
-            )}
-          </>
-        )
-
-      case 'contributor_anon':
-        return (
-          <>
-            <NavButton
-              icon={<Edit3 size={20} strokeWidth={2} />}
-              label={t('Proposer des changements')}
-              onClick={onEditClick}
-              active={editModeActive}
-            />
-            {editModeActive && (
-              <NavButton
-                icon={<UserPlus size={20} strokeWidth={2} />}
-                label={t('Ajouter une personne')}
-                onClick={onAddPersonClick}
-              />
-            )}
-            <NavButton
-              icon={<User size={20} strokeWidth={2} />}
-              label={t('Créer un compte')}
-              onClick={handleCreateAccountClick}
-            />
-          </>
-        )
-
-      case 'visitor':
-        return (
-          <>
-            <NavButton
-              icon={<User size={20} strokeWidth={2} />}
-              label={t('Créer un compte')}
-              onClick={handleCreateAccountClick}
-            />
-            <NavButton
-              icon={<Edit3 size={20} strokeWidth={2} />}
-              label={t('Contribuer (mot de passe contribution requis)')}
-              onClick={onEditClick}
-              disabled
-            />
-          </>
-        )
-
-      default:
-        if (userRole.accessMode === 'demo') {
-          return (
-            <>
-              <NavButton
-                icon={<Edit3 size={20} strokeWidth={2} />}
-                label={t('Modifier la démo')}
-                onClick={onEditClick}
-                active={editModeActive}
-              />
-              <NavButton
-                icon={<User size={20} strokeWidth={2} />}
-                label={authenticated ? t('Mon compte') : t('Se connecter')}
-                onClick={() => onProfileClick?.('login')}
-              />
-            </>
-          )
-        }
-
-        return (
-          <NavButton
-            icon={<User size={20} strokeWidth={2} />}
-            label={t('Se connecter')}
-            onClick={() => onProfileClick?.('login')}
-          />
-        )
-    }
-  }
-
   const avatarInitial = (linkedPersonName || userDisplayName || userEmail || 'P').trim().charAt(0).toUpperCase()
+  const pendingBadge = isOwner && onShareClick && pendingContributions > 0
 
   return (
     <nav
@@ -391,43 +294,18 @@ function ContextualNavbar({
               <X size={18} strokeWidth={2.5} />
             </button>
 
-            {/* Libellé court : la barre doit tenir à droite du bouton de zoom */}
-            <button type="button" className="nav-family-btn nav-family-btn--primary" onClick={onAddPersonClick} aria-label={t('Ajouter une personne')}>
-              <UserPlus size={20} strokeWidth={2} aria-hidden="true" />
-              <span>{t('Ajouter')}</span>
+            <button
+              type="button"
+              ref={addBtnRef}
+              className={`nav-add${openMenu === 'add' ? ' is-open' : ''}`}
+              onClick={() => setOpenMenu((v) => (v === 'add' ? null : 'add'))}
+              aria-expanded={openMenu === 'add'}
+              aria-haspopup="menu"
+              aria-label={t('Ajouter ou corriger')}
+            >
+              <Plus size={20} strokeWidth={2.2} aria-hidden="true" />
             </button>
-
-            <div ref={moreRef} className="nav-more-wrapper">
-              <button
-                type="button"
-                className={`nav-family-btn nav-family-btn--more${moreOpen ? ' is-open' : ''}`}
-                onClick={() => setMoreOpen((v) => !v)}
-                aria-expanded={moreOpen}
-                aria-haspopup="menu"
-              >
-                <MoreHorizontal size={20} strokeWidth={2} aria-hidden="true" />
-                <span>{t('Plus')}</span>
-              </button>
-              {moreOpen && (
-                <div className="nav-more-menu" role="menu">
-                  {ANNOT_MENU.map((tool) => (
-                    <button
-                      key={tool.id}
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setMoreOpen(false)
-                        setAnnotMode(true)
-                        handleAnnotToolClick(tool.id)
-                      }}
-                    >
-                      <tool.Icon size={18} strokeWidth={2} aria-hidden="true" />
-                      {tool.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            {openMenu === 'add' && renderAddMenu()}
 
             {(annotationTools.selectedAnnotationId || annotationTools.isDragging) && renderAnnotTrash()}
           </>
@@ -469,58 +347,72 @@ function ContextualNavbar({
           </>
         ) : (
           <>
-            {isFamily && !editModeActive ? renderFamilyButtons() : renderButtons()}
-
-            {/* Hors connexion, pas de menu du compte : le choix de la langue vit dans la barre (ou dans « Plus » pour la famille) */}
-            {!authenticated && !(isFamily && !editModeActive) && <LanguageSwitch className="pz-lang--nav" />}
-
-            {authenticated && (
-              <div ref={avatarMenuRef} className="nav-dropdown-wrapper">
-                <div
-                  className={`nav-avatar ${userRole.isAdmin ? 'admin' : ''} ${avatarMenuOpen ? 'active' : ''}`}
-                  onClick={() => setAvatarMenuOpen(!avatarMenuOpen)}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={t('Menu compte')}
-                >
-                  {userAvatarPhoto ? (
-                    <img className="nav-avatar-photo" src={userAvatarPhoto} alt="" />
-                  ) : (
-                    <span className="nav-avatar-initial">{avatarInitial}</span>
-                  )}
-                </div>
-                {avatarMenuOpen && (
-                  <AvatarMenu
-                    userDisplayName={userDisplayName}
-                    userEmail={userEmail}
-                    linkedPersonName={linkedPersonName}
-                    trees={trees}
-                    activeTreeId={activeTreeId}
-                    activeTreeName={activeTreeName}
-                    onAccountClick={() => {
-                      onAccountClick?.()
-                      setAvatarMenuOpen(false)
-                    }}
-                    onSelectTree={(treeId) => {
-                      onTreeSelect?.(treeId)
-                      setAvatarMenuOpen(false)
-                    }}
-                    onCreateTree={() => {
-                      onCreateTree?.()
-                      setAvatarMenuOpen(false)
-                    }}
-                    onSettings={() => {
-                      onSettingsClick?.()
-                      setAvatarMenuOpen(false)
-                    }}
-                    onLogout={() => {
-                      onLogout?.()
-                      setAvatarMenuOpen(false)
-                    }}
-                  />
-                )}
-              </div>
+            {hasAddMenu && (
+              <button
+                type="button"
+                ref={addBtnRef}
+                className={`nav-add${isPhone ? '' : ' nav-add--label'}${openMenu === 'add' ? ' is-open' : ''}${editModeActive ? ' is-editing' : ''}`}
+                onClick={() => setOpenMenu((v) => (v === 'add' ? null : 'add'))}
+                aria-expanded={openMenu === 'add'}
+                aria-haspopup="menu"
+                aria-label={t('Ajouter ou corriger')}
+              >
+                <Plus size={20} strokeWidth={2.2} aria-hidden="true" />
+                {!isPhone && <span className="nav-add-label">{t('Ajouter')}</span>}
+              </button>
             )}
+            {hasAddMenu && openMenu === 'add' && renderAddMenu()}
+
+            {/* Rond du compte : icône de profil hors connexion, initiale ou photo connecté */}
+            <div className="nav-dropdown-wrapper">
+              <button
+                type="button"
+                ref={avatarBtnRef}
+                className={`nav-avatar${authenticated ? '' : ' nav-avatar--guest'}${userRole.isAdmin ? ' admin' : ''}${openMenu === 'account' ? ' active' : ''}`}
+                onClick={() => setOpenMenu((v) => (v === 'account' ? null : 'account'))}
+                aria-expanded={openMenu === 'account'}
+                aria-haspopup="menu"
+                aria-label={t('Menu compte')}
+                title={t('Menu compte')}
+              >
+                {!authenticated ? (
+                  <User size={20} strokeWidth={2} aria-hidden="true" />
+                ) : userAvatarPhoto ? (
+                  <img className="nav-avatar-photo" src={userAvatarPhoto} alt="" />
+                ) : (
+                  <span className="nav-avatar-initial" aria-hidden="true">{avatarInitial}</span>
+                )}
+                {pendingBadge && (
+                  <span className="nav-avatar-badge" aria-hidden="true">{pendingContributions > 9 ? '9+' : pendingContributions}</span>
+                )}
+              </button>
+              {openMenu === 'account' && (
+                <AvatarMenu
+                  phone={isPhone}
+                  triggerRef={avatarBtnRef}
+                  guest={!authenticated}
+                  onClose={closeMenus}
+                  userDisplayName={userDisplayName}
+                  userEmail={userEmail}
+                  linkedPersonName={linkedPersonName}
+                  trees={trees}
+                  activeTreeId={activeTreeId}
+                  activeTreeName={activeTreeName}
+                  isOwner={isOwner}
+                  pendingContributions={pendingContributions}
+                  onContributionsClick={openProposals}
+                  onShareClick={onShareClick}
+                  helpUrl={helpUrl}
+                  onAccountClick={onAccountClick}
+                  onSelectTree={onTreeSelect}
+                  onCreateTree={onCreateTree}
+                  onSettings={onSettingsClick}
+                  onLogin={() => onProfileClick?.('login')}
+                  onRegister={handleCreateAccountClick}
+                  onLogout={onLogout}
+                />
+              )}
+            </div>
           </>
         )}
       </div>
@@ -529,4 +421,3 @@ function ContextualNavbar({
 }
 
 export default ContextualNavbar
-
