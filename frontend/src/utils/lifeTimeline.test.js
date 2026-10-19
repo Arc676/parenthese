@@ -66,6 +66,30 @@ describe('frise de vie', () => {
     expect(entries.map((e) => [e.title, e.year, e.meta])).toEqual([['Naissance', 1900, ''], ['Décès', null, 'date inconnue']])
   })
 
+  it('union sans date : avant le premier enfant du couple, sinon avant le décès du conjoint, sinon en bas', () => {
+    const lucie = { id: 1, firstName: 'Lucie', birthYear: 1940 }
+    const entries = buildLifeTimeline(lucie, {
+      children: [{ id: 7, firstName: 'Hugo', birthYear: 1966 }, { id: 8, firstName: 'Léa', birthYear: 1981 }],
+      unions: [
+        { id: 'u1', partner: { id: 2, firstName: 'Marc', lastName: 'Roy', deathYear: 2013 }, unionType: 'mariage', childIds: [7] },
+        { id: 'u2', partner: { id: 3, firstName: 'Paul', lastName: 'Vidal', deathYear: 2016 }, unionType: 'mariage', childIds: [] },
+        { id: 'u3', partner: { id: 4, firstName: 'Yves', lastName: 'Mallet' }, unionType: 'mariage' },
+      ],
+    }, null)
+    expect(entries.map((e) => e.title)).toEqual([
+      'Naissance', 'Épouse Marc Roy', 'Naissance de Hugo', 'Naissance de Léa', 'Décès de Marc', 'Épouse Paul Vidal', 'Décès de Paul', 'Épouse Yves Mallet',
+    ])
+    // Aucune année inventée : colonne vide, « date inconnue » dit pourquoi
+    for (const key of ['union-u1', 'union-u2', 'union-u3']) {
+      expect(entries.find((e) => e.key === key)).toMatchObject({ year: undefined, meta: 'date inconnue' })
+    }
+    expect(entries.find((e) => e.key === 'union-u1')).not.toHaveProperty('sortYear')
+  })
+
+  it('un moment sans date dit « date inconnue »', () => {
+    expect(entries.find((e) => e.title === 'Résidence').meta).toBe('Rue des Écoles · date inconnue')
+  })
+
   it('dit les dates comme on les dit', () => {
     expect(describeDate('1879-01-01', null, 'about')).toBe('vers 1879')
     expect(describeDate('1879-01-01', null, 'before')).toBe('avant 1879')

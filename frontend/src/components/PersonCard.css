@@ -252,8 +252,15 @@
     left: 0; right: 0; bottom: 0; width: auto;
     max-height: 78dvh; padding: 10px 18px calc(18px + env(safe-area-inset-bottom));
     border-radius: 26px 26px 0 0; border-bottom: 0;
-    animation: pc-sheet 400ms var(--pz-ease-drawer) both;
+    /* Pas de fill-mode « both » : une fois l'entrée finie, le glisser (style inline) reprend la main sur transform */
+    animation: pc-sheet 400ms var(--pz-ease-drawer) backwards;
+    transition: transform 240ms var(--pz-ease-drawer);
   }
+  /* Pendant le glisser, la feuille suit le doigt sans transition */
+  .person-card[data-dragging] { transition: none; }
+  /* La poignée et l'en-tête portent le geste : le navigateur ne doit pas le prendre pour un défilement (les champs gardent le leur) */
+  .person-card .pc-grab, .person-card .pc-close, .person-card .pc-head { touch-action: none; }
+  .person-card .pc-head :is(input, textarea, select, label, [contenteditable]) { touch-action: auto; }
   .pc-grab { display: block; width: 38px; height: 4px; margin: 0 auto 2px; border-radius: 4px; background: var(--pz-line); flex: none; }
   .pc-close { top: 10px; right: 10px; }
   .pc-photo { width: 68px; height: 68px; }
@@ -263,6 +270,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .person-card { animation: pz-fade 200ms ease both; }
+  .person-card { transition-duration: 1ms; }
 }
 
 /* Prénom inconnu (issue Anaïs, 18/10) : libellé en italique, case à cocher sous les champs de nom */
@@ -270,6 +278,7 @@
 .pc-unknown-first { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin: -4px 0 0; font: 400 12.5px var(--pz-sans); color: var(--pz-ink-2); cursor: pointer; white-space: nowrap; }
 .pc-unknown-first input { width: 15px; height: 15px; accent-color: var(--pz-a500); }
 .pc-name-error { margin: 6px 0 0; font: 500 12.5px var(--pz-sans); color: var(--pz-danger); }
+.pc-save-error { margin: 0; font: 500 12.5px/1.4 var(--pz-sans); color: var(--pz-danger); }
 
 /* Modification de l'onglet Infos : pastilles des champs vides (DA terracotta, sans nouvelle couleur) */
 .pc-fill-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }

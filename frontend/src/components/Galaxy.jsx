@@ -40,7 +40,7 @@ const DROP_SPRING = { stiffness: 480, dampingRatio: 0.72 }
 const centerX = (node) => node.x + node.width / 2
 const prefersReducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, photoHint = false, reorderEnabled = false, onReorderSiblings = null }) => {
+const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, photoHint = false, onPhotoPlaceholderClick = null, reorderEnabled = false, onReorderSiblings = null }) => {
   const canvasRef = useRef(null)
   // Lu au calcul du cadrage seulement : changer de personne de départ ne recadre pas une vue en cours
   const focusPersonIdRef = useRef(focusPersonId)
@@ -139,7 +139,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     canvasRef, transformRef, targetTransformRef,
     layoutDataRef, nodeRandomDataRef, entranceRef,
     hoveredNodeIdRef: hoveredNodeId, hoveredMediaKeyRef: hoveredMediaKey, mouseWorldPosRef: mouseWorldPos,
-    getAnimatedPos, onPersonSelect, onMediaSelect,
+    getAnimatedPos, onPersonSelect, onMediaSelect, onPhotoPlaceholderClick,
     annotationHandlers,
     minScale: MIN_SCALE,
     maxScale: MAX_SCALE,

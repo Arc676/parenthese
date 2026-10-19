@@ -10,6 +10,7 @@ import GeoMediaThumbnail from './GeoMediaThumbnail'
 import ImmichFacePanel from './ImmichFacePanel.jsx'
 import './PersonCard.css'
 import PzBusy from './PzBusy.jsx'
+import { useSheetDrag, useSheetMode } from '../hooks/useSheetDrag'
 import PortraitCropModal from './PortraitCropModal.jsx'
 import { imagePlacement } from '../utils/portraitCrop.js'
 import { t, dateLocale } from '../i18n/index.js'
@@ -17,6 +18,7 @@ import { formatPlace } from '../utils/place.js'
 import { firstNameLabel, fullNameLabel, isFirstNameUnknown } from '../utils/personName.js'
 import { isYearOnly } from '../utils/dateInput.js'
 import DateField from './DateField.jsx'
+import { runOnce } from '../utils/saveOnLeave.js'
 
 // Aucune modification en cours (référence stable)
 const NO_EDITS = Object.freeze({})
@@ -51,6 +53,10 @@ const PersonCard = ({
   onAvatarUpload,
   onAvatarDelete,
   onAvatarCrop,
+  pendingPortraitCrop = null,
+  onPendingPortraitCropDone = null,
+  photoSourceRequest = null,
+  onPhotoSourceRequestDone = null,
   treeId = null,
   immichToken = null,
   onImmichChange,
@@ -70,6 +76,7 @@ const PersonCard = ({
   onMoveSibling,
   onUploadMomentFile,
   onMomentSaved,
+  saveOnLeaveRef = null,
 }) => {
   // Souvenirs d'abord quand il y en a, ou quand on peut en ajouter : c'est là qu'est le bouton
   const [tab, setTab] = useState(() => (getPersonMedias(person.id).length > 0 || canManageMedia ? 'medias' : 'infos'))
@@ -114,6 +121,9 @@ const PersonCard = ({
   const [lastNameMissing, setLastNameMissing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  // Enregistrement en cours : un second appel (bouton, puis changement de fiche) reçoit la même promesse
+  const saveInFlight = useRef(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showImmichPanel, setShowImmichPanel] = useState(false)
   // null : connexion Immich de l'arbre inconnue, puis booléen. Le menu de source ne se propose
@@ -138,6 +148,9 @@ const PersonCard = ({
   const [openedFields, setOpenedFields] = useState([])
   const [focusField, setFocusField] = useState(null)
   const bodyRef = useRef(null)
+  // Feuille du bas (téléphone) : on la ferme en la glissant par la poignée ou l'en-tête, comme la croix
+  const sheetMode = useSheetMode()
+  const drag = useSheetDrag({ enabled: sheetMode, zone: '.pc-grab, .pc-head, .pc-close', onClose })
 
   // Reset edits quand la personne change
   useEffect(() => {
@@ -149,6 +162,7 @@ const PersonCard = ({
     setActiveRelationSearch(null)
     setRelationSearchQuery('')
     setSaveSuccess(false)
+    setSaveError('')
     setShowSourceMenu(false)
     setMomentSheet(null)
     setLifeNotice('')
@@ -170,16 +184,19 @@ const PersonCard = ({
   // Connexion Immich de l'arbre : métadonnées sans clé. Une erreur (rôle périmé, réseau) se
   // traduit par « non configuré » : la fiche reste utilisable, simplement sans choix de source.
   // Seul un administrateur de l'arbre voit l'option Immich, comme côté serveur.
+  // Dépend de la présence de onImmichChange, pas de sa valeur : App le recrée à chaque rendu, ce qui
+  // relançait la lecture de la config et refermait le menu des sources juste après son ouverture
+  const canChangeImmich = Boolean(onImmichChange)
   useEffect(() => {
     let cancelled = false
     setImmichConfigured(null)
     setShowSourceMenu(false)
-    if (!editMode || !isAdmin || !treeId || !onImmichChange || !immichToken) return undefined
+    if (!editMode || !isAdmin || !treeId || !canChangeImmich || !immichToken) return undefined
     fetchImmichConfig(treeId, immichToken)
       .then(({ config }) => { if (!cancelled) setImmichConfigured(Boolean(config?.configured)) })
       .catch(() => { if (!cancelled) setImmichConfigured(false) })
     return () => { cancelled = true }
-  }, [editMode, isAdmin, treeId, immichToken, onImmichChange])
+  }, [editMode, isAdmin, treeId, immichToken, canChangeImmich])
 
   useEffect(() => {
     if (!showSourceMenu) return undefined
@@ -239,6 +256,21 @@ const PersonCard = ({
   }
   const chooseFileSource = () => { setShowSourceMenu(false); avatarInputRef.current?.click() }
   const chooseImmichSource = () => { setShowSourceMenu(false); setShowImmichPanel(true) }
+
+  // Clic sur « + photo » dans l'arbre : la photo vient d'être envoyée, le recadrage s'ouvre tout de suite
+  useEffect(() => {
+    if (!pendingPortraitCrop || String(pendingPortraitCrop.personId) !== String(person.id)) return
+    setCropState({ src: pendingPortraitCrop.src, mode: 'new', ownsUrl: true })
+    onPendingPortraitCropDone?.()
+  }, [pendingPortraitCrop, person.id, onPendingPortraitCropDone])
+
+  // Clic sur « + photo » dans l'arbre, en modification avec Immich : même menu que le badge, sans clic de plus
+  useEffect(() => {
+    if (!photoSourceRequest || String(photoSourceRequest.personId) !== String(person.id)) return
+    if (immichConfigured === null) return
+    onPhotoSourceRequestDone?.()
+    if (immichUsable) openAvatarPicker()
+  }, [photoSourceRequest, person.id, immichConfigured, immichUsable, onPhotoSourceRequestDone]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Focus search input when relation search opens
   useEffect(() => {
@@ -313,29 +345,53 @@ const PersonCard = ({
   ]
   const emptyChips = editMode ? chipCandidates.filter((c) => c.relevant && !c.filled && !openedHas(c.field)) : []
 
-  const handleSave = async () => {
-    if (!hasChanges || !onSave) return
+  // Enregistre les modifications de cette fiche (bouton « Enregistrer » et départ de la fiche).
+  // Résultat : 'saved', 'unchanged' (rien à enregistrer) ou 'blocked' (validation, ou échec réseau :
+  // le message reste sur la fiche, la saisie n'est pas jetée).
+  const persistEdits = () => runOnce(saveInFlight, async () => {
+    if (!hasChanges || !onSave) return 'unchanged'
     if (!unknownFirstName && 'firstName' in edits && !String(edits.firstName).trim()) {
       setFirstNameMissing(true)
-      return
+      return 'blocked'
     }
     // Prénom inconnu : il faut alors un nom de famille
     if (unknownFirstName && !String(getEditValue('lastName', person.lastName) ?? '').trim()) {
       setLastNameMissing(true)
-      return
+      return 'blocked'
     }
+    const savedFor = person.id
     setSaving(true)
+    setSaveError('')
     try {
-      const savedFor = person.id
       await onSave(savedFor, edits)
       setEditState(prev => (prev.personId === savedFor ? { ...prev, changed: false } : prev))
       setOpenedFields([])
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 2000)
+      return 'saved'
+    } catch (error) {
+      // Serveur injoignable (status 0, message traduit par le client) ; sinon un texte clair, jamais un message technique
+      setSaveError(error?.status === 0 ? error.message : t("L'enregistrement a échoué. Vos modifications sont gardées, réessayez."))
+      return 'blocked'
     } finally {
       setSaving(false)
     }
-  }
+  })
+
+  // App enregistre la fiche avant de la quitter (changement de personne, fermeture, sortie du mode
+  // modification) : la référence suit toujours la dernière version de persistEdits
+  useEffect(() => {
+    if (!saveOnLeaveRef) return undefined
+    saveOnLeaveRef.current = persistEdits
+    return () => { if (saveOnLeaveRef.current === persistEdits) saveOnLeaveRef.current = null }
+  })
+
+  // Sortie du mode modification : les modifications restantes (abandonnées) ne reviennent pas à la prochaine entrée
+  useEffect(() => {
+    if (!editMode) setEditState({ personId: person.id, values: {}, changed: false })
+  }, [editMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSave = () => { persistEdits() }
 
   const handleDelete = () => {
     if (!onDelete) return
@@ -436,6 +492,8 @@ const PersonCard = ({
     unions: personUnions.map((union) => ({
       ...union,
       partner: persons.find((p) => p.id === (union.partner1Id === person.id ? union.partner2Id : union.partner1Id)) || null,
+      // Enfants du couple : placent dans la frise une union dont la date manque
+      childIds: filiations.filter((f) => f.unionId && String(f.unionId) === String(union.id)).map((f) => f.childId),
     })),
   }
 
@@ -602,7 +660,14 @@ const PersonCard = ({
   )
 
   return (
-    <div className={`person-card ${editMode ? 'person-card--edit-mode' : ''}`} role="dialog" aria-label={t('Fiche de {name}', { name: fullNameLabel(person) })}>
+    <div
+      className={`person-card ${editMode ? 'person-card--edit-mode' : ''}`}
+      role="dialog"
+      aria-label={t('Fiche de {name}', { name: fullNameLabel(person) })}
+      style={drag.style}
+      data-dragging={drag.dragging || undefined}
+      {...drag.bind}
+    >
       <span className="pc-grab" aria-hidden="true" />
       <button type="button" className="pz-btn pz-btn--ghost pz-btn--icon pc-close" onClick={onClose} aria-label={t('Fermer la fiche')}>
         <X size={18} strokeWidth={2} />
@@ -998,6 +1063,7 @@ const PersonCard = ({
       </div>
 
       {/* ── Actions d'édition ── */}
+      {editMode && saveError && <p className="pc-save-error" role="alert">{saveError}</p>}
       {editMode && (
         <footer className="pc-foot">
           {showDeleteConfirm ? (
