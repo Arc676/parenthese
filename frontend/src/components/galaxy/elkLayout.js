@@ -849,7 +849,7 @@ export function computeLayout(graphData = null, referenceId = null) {
 export function generateNodeRandomData(children, edges = []) {
   const data = new Map()
   // Enfant d'un renvoi : la pastille « Voir les parents » occupe le haut du portrait, l'orbite reste sur les côtés
-  const renvoiChildren = new Set(edges.filter(e => e._renvoi).map(e => e.targets[0]))
+  const renvoiChildren = new Set([...edges.filter(e => e._renvoi).map(e => e.targets[0]), ...children.filter(n => n._familyTab).map(n => n.id)])
   const deg = (d) => d * Math.PI / 180
   // Partenaire d'un conjoint isolé : ses souvenirs en orbite passent du côté opposé au petit portrait
   const compactSide = new Map()

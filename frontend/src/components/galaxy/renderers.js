@@ -206,12 +206,13 @@ export const familyHitAreas = []
 // Zones « + photo » : portraits vides, chez le propriétaire (cercle du nœud, rempli au dessin)
 export const photoPlaceholderHitAreas = []
 const renvoiPills = []
+const familyPills = [] // badges « Famille X » : { text, cx, cy, anchorId, tabKey, alpha }
 const RENVOI_FONT = '500 11px "DM Sans", system-ui, sans-serif'
 // Pastilles collées aux personnes : juste sous le couple, juste au-dessus du portrait de l'enfant
 const RENVOI_PARENT_DY = 38
 const RENVOI_CHILD_GAP = 13
 
-function drawRenvoiPill(ctx, { text, cx, cy, target, alpha }) {
+function drawPillShape(ctx, text, cx, cy, alpha) {
   ctx.save()
   ctx.font = RENVOI_FONT
   const w = measureTextCached(ctx, text, 'renvoi').width + 20
@@ -230,7 +231,17 @@ function drawRenvoiPill(ctx, { text, cx, cy, target, alpha }) {
   ctx.textBaseline = 'middle'
   ctx.fillText(text, cx, cy + 0.5)
   ctx.restore()
+  return { w, h }
+}
+
+function drawRenvoiPill(ctx, { text, cx, cy, target, alpha }) {
+  const { w, h } = drawPillShape(ctx, text, cx, cy, alpha)
   if (alpha > 0.5) renvoiHitAreas.push({ x0: cx - w / 2, y0: cy - h / 2, x1: cx + w / 2, y1: cy + h / 2, ...target })
+}
+
+function drawFamilyPill(ctx, { text, cx, cy, anchorId, tabKey, alpha }) {
+  const { w, h } = drawPillShape(ctx, text, cx, cy, alpha)
+  if (alpha > 0.5) familyHitAreas.push({ x0: cx - w / 2, y0: cy - h / 2, x1: cx + w / 2, y1: cy + h / 2, anchorId, tabKey })
 }
 
 function drawRenvoi(ctx, edge, sourcePos, targetPos, targetNode, childR, view) {
@@ -254,6 +265,7 @@ function drawRenvoi(ctx, edge, sourcePos, targetPos, targetNode, childR, view) {
 
 // Après drawNodes : les pastilles passent au-dessus des portraits et des souvenirs
 export function drawRenvoiPills(ctx) {
+  for (const p of familyPills) drawFamilyPill(ctx, p)
   renvoiPills.forEach(p => drawRenvoiPill(ctx, p))
   renvoiPills.length = 0
 }
@@ -264,6 +276,7 @@ export function drawRenvoiPills(ctx) {
 export function drawFiliations(ctx, edges, posMap, nodeMap, nodeRandomData, entrance, entranceActive, elapsed, view = null) {
   renvoiHitAreas.length = 0
   renvoiPills.length = 0
+  familyPills.length = 0
   familyHitAreas.length = 0
   if (!edges) return
   const sibships = new Map()
@@ -660,26 +673,17 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
     ctx.fillText(years, 0, hasNickname ? 31 : 15)
   }
 
-  // Sa famille est un onglet : un badge le dit, un clic l'ouvre
+  ctx.restore()
+
+  // Sa famille est un onglet : une pastille le dit, un clic l'ouvre. Au-dessus du portrait, à la place de ses
+  // parents (l'orbite des souvenirs évite le haut). Même place pour le retour vers la famille d'où l'on vient :
+  // la charnière peut avoir des enfants dessous, jamais rien au-dessus que le fil de ses parents.
   if (withDetail && node._familyTab) {
     const tab = node._familyTab
     const text = `${tab.label ? t('Famille {name}', { name: tab.label }) : t('Famille')} · ${tab.count} ›`
-    ctx.font = '500 10.5px "DM Sans", system-ui, sans-serif'
-    const w = ctx.measureText(text).width + 18, h = 18
-    const by = (hasNickname ? 31 : 15) + 21
-    ctx.fillStyle = '#FCF3EF'
-    ctx.strokeStyle = '#EDB6A4'
-    ctx.lineWidth = 0.9
-    ctx.beginPath()
-    ctx.roundRect(-w / 2, by - h / 2, w, h, h / 2)
-    ctx.fill()
-    ctx.stroke()
-    ctx.fillStyle = '#93402A'
-    ctx.fillText(text, 0, by + 0.5)
-    if (nodeProgress * labelAlpha > 0.5) familyHitAreas.push({ x0: cx - w / 2, y0: cy + labelOffsetY + by - h / 2, x1: cx + w / 2, y1: cy + labelOffsetY + by + h / 2, anchorId: tab.anchorId, tabKey: tab.tabKey })
+    const py = cy - PERSON_R * personScale - RENVOI_CHILD_GAP
+    familyPills.push({ text, cx, cy: py, anchorId: tab.anchorId, tabKey: tab.tabKey, alpha: nodeProgress * labelAlpha })
   }
-
-  ctx.restore()
 }
 
 // ============================================================

@@ -65,7 +65,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   const updateTabsEdges = useCallback(() => {
     const el = tabsBarRef.current
     if (!el) return
-    const left = el.scrollLeft > 2, right = el.scrollLeft + el.clientWidth < el.scrollWidth - 2
+    const left = el.scrollLeft > 12, right = el.scrollLeft + el.clientWidth < el.scrollWidth - 12
     setTabsEdges(`${left ? ' has-left' : ''}${right ? ' has-right' : ''}`)
   }, [])
   useEffect(() => {
@@ -480,7 +480,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       const parent = tabsCacheRef.current.tabs.find((tb) => tb.key === tab.parentKey)
       for (const h of (tab.hinges || [tab.referenceId])) {
         const node = result.children.find((n) => n.id === `p-${h}`)
-        if (parent && node) node._familyTab = { anchorId: node.id, label: parent.label, count: parent.count, tabKey: parent.key }
+        if (parent && node) node._familyTab = { anchorId: node.id, label: parent.label, count: parent.count, tabKey: parent.key, place: 'above' }
       }
     }
 
