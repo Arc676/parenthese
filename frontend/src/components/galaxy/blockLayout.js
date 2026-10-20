@@ -863,5 +863,20 @@ export function familyTabsOf(graphData = null, referenceId = null) {
       tabs.push({ key, referenceId: key, parentKey: tab.key, personIds: new Set([...f.members, ...f.hinges]), hinges: f.hinges, label: f.label, count: f.count })
     }
   }
+  // Deux onglets au même nom (homonymes, ou une branche sortie de sa propre lignée) : sauf le plus grand, chacun
+  // prend les prénoms de sa charnière, ceux que porte la pastille qui y mène (Patch, 20/10 : « plusieurs fois
+  // les mêmes familles »)
+  const firstName = new Map((graphData?.persons || globalPersons).map(p => [String(p.id), p.firstName]))
+  const byLabel = new Map()
+  for (const tb of tabs) { if (!byLabel.has(tb.label)) byLabel.set(tb.label, []); byLabel.get(tb.label).push(tb) }
+  for (const group of byLabel.values()) {
+    if (group.length < 2) continue
+    const biggest = group.reduce((a, b) => (b.count > a.count ? b : a))
+    for (const tb of group) {
+      if (tb === biggest) continue
+      const names = [...new Set((tb.hinges || [tb.referenceId]).map(id => firstName.get(String(id))).filter(Boolean))].slice(0, 2)
+      if (names.length) tb.label = `${tb.label} · ${names.join(' et ')}`
+    }
+  }
   return tabs
 }

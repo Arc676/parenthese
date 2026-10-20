@@ -474,6 +474,11 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     focusPersonIdRef.current = tab ? tab.referenceId : startRefRef.current
     const graph = tab?.personIds ? subgraphOf(tab.personIds) : null
     const result = USE_BLOCK_LAYOUT ? computeBlockLayout(graph, focusPersonIdRef.current, { familyTabs }) : computeLayout(null, focusPersonIdRef.current)
+    // Les pastilles portent le nom de l'onglet où elles mènent (prénoms ajoutés aux homonymes)
+    for (const n of result.children) {
+      const target = n._familyTab && tabsCacheRef.current.tabs.find((tb) => tb.key === n._familyTab.tabKey)
+      if (target) n._familyTab = { ...n._familyTab, label: target.label, count: target.count }
+    }
     // Dans l'onglet d'une belle-famille, chaque charnière (conjoint marié dans la famille d'où l'on vient)
     // porte le badge de retour
     if (tab?.parentKey) {
