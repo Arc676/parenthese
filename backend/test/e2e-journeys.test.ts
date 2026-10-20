@@ -278,6 +278,7 @@ describe('Journey 1 — Owner creates account, tree, and adds family', () => {
       },
     })
     expect(addSelfRes.statusCode).toBe(201)
+    expect(prismaMock.person.create.mock.calls.at(-1)[0].data).toMatchObject({ sex: 'male' })
 
     // Step 4: Add parent
     prismaMock.person.create.mockResolvedValue({ id: 'person-2', firstName: 'Jean', lastName: 'Martin' })
@@ -802,6 +803,58 @@ describe('Surnom (nickname) proposé par un contributeur', () => {
     expect(reviewRes.statusCode).toBe(200)
     expect(reviewRes.json().approvedCount).toBe(1)
     expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ nickname: 'Loulou' })
+
+    await app.close()
+  })
+})
+
+describe('Sexe proposé par un contributeur (issue #114)', () => {
+  it('appliqué par le propriétaire avec la valeur normalisée', async () => {
+    const app = createApp()
+    await app.ready()
+
+    const adminToken = (app as any).jwt.sign(
+      { kind: 'user', sub: 'user-1', jti: randomUUID(), userId: 'user-1', email: 'owner@example.com' },
+      { expiresIn: '1h' },
+    )
+    prismaMock.contributionSession.findFirst.mockResolvedValue({
+      id: 'session-s',
+      treeId: 'tree-1',
+      status: 'pending',
+      title: 'Sexe de Camille',
+      changes: [
+        {
+          id: 'change-s1',
+          entityType: 'person',
+          action: 'update',
+          entityId: 'person-1',
+          beforeJson: { sex: null },
+          afterJson: { sex: 'F' },
+          conflictState: 'none',
+        },
+        {
+          id: 'change-s2',
+          entityType: 'person',
+          action: 'create',
+          entityId: null,
+          beforeJson: null,
+          afterJson: { firstName: 'Léon', lastName: 'Martin', sex: 'male' },
+          conflictState: 'none',
+        },
+      ],
+    })
+    prismaMock.person.findFirst.mockResolvedValue({ id: 'person-1', treeId: 'tree-1', firstName: 'Camille', lastName: 'Martin', sex: null, deletedAt: null })
+
+    const reviewRes = await app.inject({
+      method: 'POST',
+      url: '/trees/tree-1/contributions/sessions/session-s/review',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { decision: 'approved' },
+    })
+    expect(reviewRes.statusCode).toBe(200)
+    expect(reviewRes.json().approvedCount).toBe(2)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ sex: 'female' })
+    expect(prismaMock.person.create.mock.calls.at(-1)[0].data).toMatchObject({ sex: 'male' })
 
     await app.close()
   })

@@ -66,7 +66,7 @@ export default {
   "Ouverture de l'arbre": 'Opening the tree',
   'Arbre prêt': 'Tree ready',
 
-  // utils/mediaUpload.js, utils/graphAdapter.js
+  // utils/mediaUpload.js
   'Saisissez le texte de la citation.': 'Enter the text of the quote.',
   'Sélectionnez un fichier.': 'Select a file.',
   'Fichier invalide.': 'Invalid file.',

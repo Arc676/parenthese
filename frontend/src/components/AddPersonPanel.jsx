@@ -5,6 +5,7 @@ import './AddPersonPanel.css'
 import PzBusy from './PzBusy.jsx'
 import { t } from '../i18n/index.js'
 import { firstNameLabel } from '../utils/personName.js'
+import { SEX_CHOICES } from '../utils/personSex.js'
 
 // Titre traduit d'un bloc : le passage entre <em> et </em> garde son italique
 function withEmphasis(text) {
@@ -38,6 +39,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
   const [lastName, setLastName] = useState('')
   const [birthName, setBirthName] = useState('')
   const [nickname, setNickname] = useState('')
+  const [sex, setSex] = useState(null)
   const [birthDate, setBirthDate] = useState('')
   const [deathDate, setDeathDate] = useState('')
   // Décédé(e) sans date connue (issue #77)
@@ -101,6 +103,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
       setLastName('')
       setBirthName('')
       setNickname('')
+      setSex(null)
       setBirthDate('')
       setDeathDate('')
       setIsDeceased(false)
@@ -156,6 +159,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
       lastName: lastName.trim(),
       birthName: birthName.trim() || null,
       nickname: nickname.trim() || null,
+      sex,
       birthDate: birthDate || null,
       deathDate: deathDate || null,
       isDeceased: !deathDate && isDeceased,
@@ -211,21 +215,22 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
                 disabled={unknownFirstName}
                 aria-invalid={touched.firstName && !unknownFirstName && !firstName.trim()}
               />
-              {/* Visible tant que le prénom est vide, et tant qu'elle est cochée (pour pouvoir la décocher) */}
-              {(!firstName.trim() || unknownFirstName) && (
-                <label className="apn-deceased">
-                  <input
-                    type="checkbox"
-                    checked={unknownFirstName}
-                    onChange={(e) => {
-                      setUnknownFirstName(e.target.checked)
-                      setTouched({})
-                    }}
-                  />
-                  {t('Je ne connais pas son prénom')}
-                </label>
-              )}
             </div>
+            {/* Visible tant que le prénom est vide, et tant qu'elle est cochée (pour pouvoir la décocher).
+                Hors de la colonne Prénom pour tenir sur une ligne : sous les deux champs sur ordinateur, sous Prénom sur téléphone */}
+            {(!firstName.trim() || unknownFirstName) && (
+              <label className="apn-deceased apn-row-check">
+                <input
+                  type="checkbox"
+                  checked={unknownFirstName}
+                  onChange={(e) => {
+                    setUnknownFirstName(e.target.checked)
+                    setTouched({})
+                  }}
+                />
+                {t('Je ne connais pas son prénom')}
+              </label>
+            )}
             <div className="pz-field">
               <label htmlFor="ap-lastName">{t('Nom')}</label>
               <input
@@ -271,6 +276,23 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
             />
           </div>
 
+          <div className="pz-field">
+            <span className="pz-label" id="ap-sex-label">{t('Sexe')} <span className="apn-optional">{t('facultatif')}</span></span>
+            <div className="pz-tabs apn-types apn-sex" role="group" aria-labelledby="ap-sex-label">
+              {SEX_CHOICES.map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={sex === value}
+                  className={`pz-tab ${sex === value ? 'is-active' : ''}`}
+                  onClick={() => setSex(sex === value ? null : value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="pz-row2 apn-row">
             <div className="pz-field">
               <label htmlFor="ap-birthDate">{t('Naissance')}</label>
@@ -279,13 +301,14 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
             <div className="pz-field">
               <label htmlFor="ap-deathDate">{t('Décès')}</label>
               <DateField key={`d-${dateFieldsKey}`} id="ap-deathDate" value={deathDate} onChange={setDeathDate} />
-              {!deathDate && (
-                <label className="apn-deceased">
-                  <input type="checkbox" checked={isDeceased} onChange={(e) => setIsDeceased(e.target.checked)} />
-                  {t('Décédé(e), date inconnue')}
-                </label>
-              )}
             </div>
+            {/* Hors de la colonne Décès pour tenir sur une ligne, comme la case du prénom */}
+            {!deathDate && (
+              <label className="apn-deceased apn-row-check">
+                <input type="checkbox" checked={isDeceased} onChange={(e) => setIsDeceased(e.target.checked)} />
+                {sex === 'male' ? t('Décédé, date inconnue') : sex === 'female' ? t('Décédée, date inconnue') : t('Décédé(e), date inconnue')}
+              </label>
+            )}
           </div>
 
           <section className="apn-section">
@@ -347,7 +370,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
             {(selectedRelationType === 'child' || selectedRelationType === 'parent') && (
               <label className="apn-deceased">
                 <input type="checkbox" checked={adopted} onChange={(e) => setAdopted(e.target.checked)} />
-                {t('Adopté(e)')}
+                {sex === 'male' ? t('Adopté') : sex === 'female' ? t('Adoptée') : t('Adopté(e)')}
               </label>
             )}
 

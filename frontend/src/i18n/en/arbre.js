@@ -12,30 +12,7 @@ export default {
   'Voir l’enfant': 'See child',
   'Inconnu': 'Unknown',
 
-  // Lien de parenté affiché au survol (components/galaxy/pathfinding.js)
-  'Conjoint(e)': 'Spouse',
-  'Beau-parent': 'Parent-in-law',
-  'Bel-enfant': 'Child-in-law',
-  'Beau-frère/sœur': 'Brother/sister-in-law',
-  'Parent': 'Parent',
-  'Grand-parent': 'Grandparent',
-  'Arrière-grand-parent': 'Great-grandparent',
-  'Aïeul(e) {n}e gén.': 'Ancestor, {n} generations up',
-  'Enfant': 'Child',
-  'Petit-enfant': 'Grandchild',
-  'Arrière-petit-enfant': 'Great-grandchild',
-  'Descendant(e) {n}e gén.': 'Descendant, {n} generations down',
-  'Frère/Sœur': 'Sibling',
-  'Oncle/Tante': 'Uncle/Aunt',
-  'Grand-oncle/tante': 'Great-uncle/aunt',
-  'Neveu/Nièce': 'Nephew/Niece',
-  'Petit-neveu/nièce': 'Grandnephew/niece',
-  'Cousin(e) germain(e)': 'First cousin',
-  'Petit-cousin(e)': 'First cousin once removed',
-  'Cousin(e) {n}e degré': 'Cousin, degree {n}',
-  'Cousin(e) éloigné(e)': 'Distant cousin',
-  '{n} liens': '{n} steps apart',
-  '{label} par alliance': '{label} by marriage',
+  // Le lien de parenté affiché au survol se nomme langue par langue dans utils/kinship/
 
   // Glisser pour ajouter une personne (components/ProximityFeedback.jsx)
   'Conjoint': 'Spouse',

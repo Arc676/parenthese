@@ -19,6 +19,7 @@ import { firstNameLabel, fullNameLabel, isFirstNameUnknown } from '../utils/pers
 import { isYearOnly } from '../utils/dateInput.js'
 import DateField from './DateField.jsx'
 import { runOnce } from '../utils/saveOnLeave.js'
+import { normalizeSex, SEX_CHOICES } from '../utils/personSex.js'
 
 // Aucune modification en cours (référence stable)
 const NO_EDITS = Object.freeze({})
@@ -319,6 +320,7 @@ const PersonCard = ({
   const birthFilled = isFilled(getEditValue('birthYear', person.birthDate || person.birthYear))
   const deathFilled = isFilled(getEditValue('deathYear', person.deathDate || person.deathYear))
   const deceasedNow = editMode ? !getEditValue('isAlive', person.isAlive) : !person.isAlive
+  const editSex = normalizeSex(getEditValue('sex', person.sex))
   const notesShown = editMode && (isFilled(getEditValue('note', person.note)) || openedHas('note'))
   // En lecture : toujours visible si demandé (naissance, décès d'une personne décédée), sinon si rempli
   const infoRow = (field, label, filled, content, always = false) => {
@@ -922,6 +924,24 @@ const PersonCard = ({
                 {infoRow('birthName', t('Nom de naissance'), isFilled(getEditValue('birthName', person.birthName)), renderEditableValue({ field: 'birthName', value: person.birthName || '', placeholder: t('Nom de naissance') }))}
                 {infoRow('nickname', t('Surnom'), isFilled(getEditValue('nickname', person.nickname)), renderEditableValue({ field: 'nickname', value: person.nickname || '', placeholder: t('Surnom') }))}
                 {editMode && (
+                  <div className="pc-row pc-row--seg" data-pc-field="sex">
+                    <span className="pc-label" id="pc-sex-label">{t('Sexe')}</span>
+                    <div className="pz-tabs pc-seg" role="group" aria-labelledby="pc-sex-label">
+                      {SEX_CHOICES.map(({ value, label }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          aria-pressed={editSex === value}
+                          className={`pz-tab ${editSex === value ? 'is-active' : ''}`}
+                          onClick={() => handleFieldChange('sex', editSex === value ? null : value)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {editMode && (
                   <div className="pc-row">
                     <span className="pc-label">{t('Statut')}</span>
                     <button
@@ -930,7 +950,7 @@ const PersonCard = ({
                       onClick={() => handleFieldChange('isAlive', !getEditValue('isAlive', person.isAlive))}
                     >
                       <span className="pc-alive-dot" />
-                      {getEditValue('isAlive', person.isAlive) ? t('En vie') : t('Décédé(e)')}
+                      {getEditValue('isAlive', person.isAlive) ? t('En vie') : editSex === 'male' ? t('Décédé') : editSex === 'female' ? t('Décédée') : t('Décédé(e)')}
                     </button>
                   </div>
                 )}

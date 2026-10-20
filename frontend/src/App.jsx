@@ -247,6 +247,7 @@ function buildContributionChangesFromDraft(draft = {}) {
         lastName: String(person.lastName).trim(),
         birthName: person.birthName ? String(person.birthName).trim() : null,
         nickname: person.nickname ? String(person.nickname).trim() : null,
+        sex: person.sex || null,
         birthDate: person.birthDate || null,
         deathDate: person.deathDate || null,
         isDeceased: !person.deathDate && Boolean(person.isDeceased),
@@ -302,6 +303,7 @@ function buildContributionChangesFromDraft(draft = {}) {
     if (Object.prototype.hasOwnProperty.call(source, 'lastName')) after.lastName = source.lastName || ''
     if (Object.prototype.hasOwnProperty.call(source, 'birthName')) after.birthName = (source.birthName || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(source, 'nickname')) after.nickname = (source.nickname || '').trim() || null
+    if (Object.prototype.hasOwnProperty.call(source, 'sex')) after.sex = source.sex || null
     if (Object.prototype.hasOwnProperty.call(source, 'birthYear')) after.birthDate = yearToIsoDate(source.birthYear)
     if (Object.prototype.hasOwnProperty.call(source, 'deathYear')) after.deathDate = yearToIsoDate(source.deathYear)
     if (Object.prototype.hasOwnProperty.call(source, 'birthPlace')) after.birthPlace = (source.birthPlace || '').trim() || null
@@ -1077,6 +1079,7 @@ function App() {
             lastName: formData.lastName || '',
             birthName: formData.birthName || null,
             nickname: formData.nickname || null,
+            sex: formData.sex || null,
             birthDate: formData.birthDate || null,
             deathDate: formData.deathDate || null,
             birthYear,
@@ -1157,6 +1160,7 @@ function App() {
             lastName: formData.lastName,
             birthName: formData.birthName || null,
             nickname: formData.nickname || null,
+            sex: formData.sex || null,
             birthDate: formData.birthDate || null,
             deathDate: formData.deathDate || null,
             isDeceased: Boolean(formData.isDeceased),
@@ -1184,6 +1188,7 @@ function App() {
           lastName: formData.lastName,
           birthName: formData.birthName,
           nickname: formData.nickname,
+          sex: formData.sex || null,
           birthDate: formData.birthDate,
           deathDate: formData.deathDate,
           isDeceased: Boolean(formData.isDeceased),
@@ -1315,6 +1320,7 @@ function App() {
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'lastName')) payload.lastName = rawChanges.lastName || ''
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'birthName')) payload.birthName = (rawChanges.birthName || '').trim() || null
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'nickname')) payload.nickname = (rawChanges.nickname || '').trim() || null
+          if (Object.prototype.hasOwnProperty.call(rawChanges, 'sex')) payload.sex = rawChanges.sex || null
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'birthYear')) payload.birthDate = yearToIsoDate(rawChanges.birthYear)
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'deathYear')) payload.deathDate = yearToIsoDate(rawChanges.deathYear)
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'birthPlace')) payload.birthPlace = (rawChanges.birthPlace || '').trim() || null
@@ -1591,6 +1597,7 @@ function App() {
         if (Object.prototype.hasOwnProperty.call(changes, 'lastName')) localPerson.lastName = changes.lastName || ''
         if (Object.prototype.hasOwnProperty.call(changes, 'birthName')) localPerson.birthName = changes.birthName || null
         if (Object.prototype.hasOwnProperty.call(changes, 'nickname')) localPerson.nickname = changes.nickname || null
+        if (Object.prototype.hasOwnProperty.call(changes, 'sex')) localPerson.sex = changes.sex || null
         if (Object.prototype.hasOwnProperty.call(changes, 'birthYear')) {
           const iso = yearToIsoDate(changes.birthYear)
           localPerson.birthDate = iso
@@ -1629,6 +1636,7 @@ function App() {
     if (Object.prototype.hasOwnProperty.call(changes, 'lastName')) payload.lastName = changes.lastName || ''
     if (Object.prototype.hasOwnProperty.call(changes, 'birthName')) payload.birthName = (changes.birthName || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(changes, 'nickname')) payload.nickname = (changes.nickname || '').trim() || null
+    if (Object.prototype.hasOwnProperty.call(changes, 'sex')) payload.sex = changes.sex || null
     if (Object.prototype.hasOwnProperty.call(changes, 'birthYear')) payload.birthDate = yearToIsoDate(changes.birthYear)
     if (Object.prototype.hasOwnProperty.call(changes, 'deathYear')) payload.deathDate = yearToIsoDate(changes.deathYear)
     if (Object.prototype.hasOwnProperty.call(changes, 'birthPlace')) payload.birthPlace = (changes.birthPlace || '').trim() || null

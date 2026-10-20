@@ -798,7 +798,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
         dirty = true
         lastPathInputRef.current = { selected: selectedElkId, hovered: currentHovered }
         if (selectedElkId && currentHovered && currentHovered !== selectedElkId && currentHovered.startsWith('p-')) {
-          const result = findPathBFS(selectedElkId, currentHovered, layoutData)
+          const result = findPathBFS(selectedElkId, currentHovered, layoutData, graphPersons)
           pathNodesRef.current = result ? result.nodePath : []
           pathEdgesRef.current = result ? result.edgePath : []
           pathLabelRef.current = result ? result.label : ''

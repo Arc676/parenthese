@@ -14,6 +14,7 @@ import { findParentChildValidationError, findUnionValidationError } from '../uti
 import { nextSiblingOrder } from '../lib/sibling-order.js'
 import { personPrecisionResets, unionPrecisionResets } from '../lib/date-precision.js'
 import { hasAnyName } from '../lib/person-names.js'
+import { sexOrNull, sexSchema } from '../lib/person-sex.js'
 
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/
 
@@ -81,7 +82,7 @@ const personCreateSchema = z.object({
   profession: z.string().max(200).optional().nullable(),
   region: z.string().max(120).optional().nullable(),
   nationality: z.string().max(120).optional().nullable(),
-  sex: z.string().max(20).optional().nullable(),
+  sex: sexSchema,
   notes: z.string().max(2000).optional().nullable(),
 }).refine((value) => hasAnyName(value.firstName, value.lastName), { message: 'name_required', path: ['lastName'] })
 
@@ -99,7 +100,7 @@ const personUpdateSchema = z
     profession: z.string().max(200).optional().nullable(),
     region: z.string().max(120).optional().nullable(),
     nationality: z.string().max(120).optional().nullable(),
-    sex: z.string().max(20).optional().nullable(),
+    sex: sexSchema,
     notes: z.string().max(2000).optional().nullable(),
   })
   .refine((value) => Object.keys(value).length > 0, {
@@ -869,6 +870,7 @@ async function snapshotEntity(
       ...current,
       birthDate: current.birthDate?.toISOString().slice(0, 10) ?? null,
       deathDate: current.deathDate?.toISOString().slice(0, 10) ?? null,
+      sex: sexOrNull(current.sex),
     }
   }
 

@@ -17,6 +17,7 @@ import type { MembershipRole } from '../types/auth.js'
 import { findParentChildValidationError, findUnionValidationError } from '../utils/relationship-guards.js'
 import { personPrecisionResets, unionPrecisionResets } from '../lib/date-precision.js'
 import { hasAnyName } from '../lib/person-names.js'
+import { sexSchema } from '../lib/person-sex.js'
 import { ContributionRouteError, resolveSubmissionContext } from './contributions.js'
 
 const MAX_TREES_PER_ACCOUNT = 10
@@ -97,7 +98,7 @@ const createPersonSchema = z.object({
   profession: z.string().max(200).optional().nullable(),
   region: z.string().max(120).optional().nullable(),
   nationality: z.string().max(120).optional().nullable(),
-  sex: z.string().max(20).optional().nullable(),
+  sex: sexSchema,
   notes: z.string().max(2000).optional().nullable(),
 }).refine((value) => hasAnyName(value.firstName, value.lastName), { message: 'name_required', path: ['lastName'] })
 
@@ -115,7 +116,7 @@ const patchPersonSchema = z
     profession: z.string().max(200).optional().nullable(),
     region: z.string().max(120).optional().nullable(),
     nationality: z.string().max(120).optional().nullable(),
-    sex: z.string().max(20).optional().nullable(),
+    sex: sexSchema,
     notes: z.string().max(2000).optional().nullable(),
   })
   .refine((value) => Object.keys(value).length > 0, {
