@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   listContributionSessions,
   submitContributionSession,
@@ -20,6 +20,26 @@ const EMPTY_CONTRIB_STATE = {
 
 export function useContributions({ canEditCurrentTree, canSubmitContribution, treeContext, refreshCurrentTreeGraph }) {
   const [contribState, setContribState] = useState({ ...EMPTY_CONTRIB_STATE })
+
+  // Pastille « Propositions à relire » : le compte se charge dès que le propriétaire ouvre son arbre, et se
+  // remet à jour quand il revient sur l'onglet, sans attendre qu'il ouvre le panneau des propositions
+  const { treeId, accessToken } = treeContext
+  useEffect(() => {
+    if (!canEditCurrentTree || !treeId || !accessToken) return undefined
+    let cancelled = false
+    const load = async () => {
+      try {
+        const sessions = await listContributionSessions(treeId, accessToken, 'pending')
+        if (!cancelled) setContribState((current) => ({ ...current, sessions }))
+      } catch {
+        // Le panneau affichera l'erreur s'il est ouvert ; la pastille reste telle quelle
+      }
+    }
+    load()
+    const onVisible = () => { if (document.visibilityState === 'visible') load() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { cancelled = true; document.removeEventListener('visibilitychange', onVisible) }
+  }, [canEditCurrentTree, treeId, accessToken])
 
   const resetContribState = () => {
     setContribState({ ...EMPTY_CONTRIB_STATE })
