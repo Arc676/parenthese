@@ -67,6 +67,8 @@ So that people who come across the address can't sign up and start their own tre
 
 #### Sign in with your identity provider (OIDC)
 
+*Experimental in 1.2.0: tested against a certified OpenID provider, feedback from real setups is welcome in the issues.*
+
 Parenthèse can hand sign-in to an OpenID Connect provider you already run (Authentik, Authelia, Keycloak, Pocket ID, Zitadel…), so your family reuses one account and its two-factor settings. Create an OIDC application (confidential client, authorization code flow) whose redirect URI is the public address of Parenthèse followed by `/auth/oidc/callback`, then set in `.env`:
 
 ```bash

@@ -77,15 +77,22 @@ beforeEach(() => {
   prismaMock.$executeRaw.mockResolvedValue(1)
 })
 
+// Chaque connexion simulée vient de sa propre adresse : les routes OIDC sont limitées à 20 appels par minute et
+// par adresse, et le fichier en fait plus
+let visitor = 0
+const nextAddress = () => `10.0.${Math.floor(++visitor / 250)}.${visitor % 250 + 1}`
+let currentAddress = nextAddress()
+
 // Début de connexion : renvoie le cookie signé que le navigateur rapportera au retour
 async function start(returnTo = '/') {
-  const res = await app.inject({ method: 'GET', url: `/auth/oidc/start?returnTo=${encodeURIComponent(returnTo)}` })
+  currentAddress = nextAddress()
+  const res = await app.inject({ method: 'GET', url: `/auth/oidc/start?returnTo=${encodeURIComponent(returnTo)}`, remoteAddress: currentAddress })
   const setCookie = String(res.headers['set-cookie'])
   return { res, cookie: setCookie.split(';')[0] }
 }
 
 async function callback(cookie?: string, query = '?code=abc&state=state-1') {
-  return app.inject({ method: 'GET', url: `/auth/oidc/callback${query}`, headers: cookie ? { cookie } : {} })
+  return app.inject({ method: 'GET', url: `/auth/oidc/callback${query}`, headers: cookie ? { cookie } : {}, remoteAddress: currentAddress })
 }
 
 function fragmentOf(location: string | undefined) {
@@ -161,8 +168,17 @@ describe('compte relié, créé ou refusé', () => {
     expect(prismaMock.user.create).not.toHaveBeenCalled()
   })
 
-  it('email vérifié qui a déjà un compte : relie le compte, ne le duplique pas', async () => {
-    prismaMock.user.findUnique.mockResolvedValue({ id: 'user-7' })
+  it("email vérifié d'un compte à mot de passe : refusé, ni relié ni dupliqué (le compte a pu être créé par un tiers)", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'user-7', passwordHash: 'hash' })
+    const { cookie } = await start()
+    const res = await callback(cookie)
+    expect(fragmentOf(res.headers.location).get('oidc_error')).toBe('oidc_email_taken')
+    expect(prismaMock.userIdentity.create).not.toHaveBeenCalled()
+    expect(prismaMock.user.create).not.toHaveBeenCalled()
+  })
+
+  it('email vérifié qui a déjà un compte sans mot de passe : relie le compte, ne le duplique pas', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'user-7', passwordHash: null })
     const { cookie } = await start()
     const res = await callback(cookie)
     expect(prismaMock.userIdentity.create).toHaveBeenCalledWith({ data: { userId: 'user-7', issuer: ISSUER, subject: 'sub-1' } })

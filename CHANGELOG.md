@@ -2,6 +2,39 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
+## 1.2.0 (2026-10-20)
+
+### Tree layout
+
+- Rows follow the kinship generation from the tree's starting person: spouses on the same row, parents one row up, children one row down. A shorter branch married into a deeper one no longer sits several rows too high (#67, reported by @SpaceOptimist, #111).
+- One tree, never islands. An in-law family attaches to its child at the end of the sibling row, never between two siblings, and each union of a remarriage sits above its own children (#105, #116).
+- In-law families wider than a screen open in their own tab, the same tree drawn from the spouse. A pill above the spouse leads there and back, and tabs with the same name show the couple's first names. Search opens the tab holding the person. Tree settings can turn tabs off (#116, #81 reported by @coutadeurf).
+- Lines between families are full lines when they cross no other family, with one trunk per sibling row (#83, #90).
+
+### People
+
+- Sex can be set to female, male or other, and is unspecified by default. Relationship names follow it in French and English, with neutral or double forms when unknown. GEDCOM `SEX X` is read and written (#114, suggested by @Arc676, #118).
+- Nicknames show under the name in the tree and the profile (#85). The last name is optional and an unknown first name can be ticked (#87, #89).
+- Profiles: pills for facts, place of death, adoption, autosave when leaving, a cleared field stays cleared, close by swiping down on phones (#91, #93, #98, #101, #106).
+- Portraits can be cropped with the full photo kept, in a round or square frame, and "+ photo" opens the picker right away (#95, #108, #109). Admins can edit a memory (#94).
+
+### Sharing and family
+
+- Guests can propose changes with the pencil, and the owner sees pending proposals on their avatar as soon as the tree opens (#96, #121).
+- A simpler start page with two choices, one door for shared trees, and a clearer login (#86, #88, #92).
+- The bottom bar is one pill with Add or correct and the account menu (#100, #104, #107). Search results can be tapped in edit mode on phones (#110).
+
+### Self-hosting
+
+- `ALLOW_REGISTRATION=false` closes sign-up. Existing accounts log in and the first account of an empty instance is still allowed (#113, suggested by @milan616, #117).
+- OIDC login (experimental) with `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` and `OIDC_REDIRECT_URI`. An existing account is linked by verified email only, and never an account that has a password (sign-up does not verify the address). `PASSWORD_LOGIN=false` turns passwords off (#115, suggested by @Arc676, #122).
+
+### Fixes and maintenance
+
+- GEDCOM import in transactions and much faster on large files, backups restore tested in CI, and other points from the 18/10 audit (#97). A union without a date sits at its logical place in the Life tab (#102).
+- Mobile: separated parents drawn as a dotted line, lighter edit bar, dates on the number pad (#82).
+- Eleven unused interface modules removed (#119).
+
 ## 1.1.0 (2026-10-17)
 
 ### Life tab
