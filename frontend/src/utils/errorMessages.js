@@ -16,7 +16,16 @@ export function getShareErrorMessage(error) {
   return t('Connexion backend impossible. Vérifiez API/DB puis réessayez.')
 }
 
-export function getAccountDeletionErrorMessage(error) {
+export function getAccountDeletionErrorMessage(error, confirmation = {}) {
+  // Compte sans mot de passe (connexion OIDC) : l'email retapé, et une connexion récente chez le fournisseur
+  if (error?.payload?.error === 'recent_sign_in_required') {
+    return t('Pour supprimer le compte, reconnectez-vous avec votre fournisseur de connexion, puis recommencez dans le quart d’heure.')
+  }
+
+  if (error?.status === 403 && confirmation.confirmEmail !== undefined) {
+    return t("Cette adresse n'est pas celle du compte.")
+  }
+
   if (error?.status === 403) {
     return t('Mot de passe incorrect.')
   }
@@ -57,6 +66,26 @@ export function getAccountErrorMessage(error) {
 
   if (errorCode === 'storage_quota_exceeded') {
     return t("L'arbre n'a plus de place pour de nouveaux souvenirs. Son propriétaire peut en supprimer.")
+  }
+
+  if (errorCode === 'password_login_disabled') {
+    return t('Sur cette instance, la connexion passe par le bouton du fournisseur.')
+  }
+
+  if (errorCode === 'oidc_email_unverified') {
+    return t("Votre fournisseur de connexion n'indique pas que votre adresse email est vérifiée. Vérifiez-la chez lui, puis réessayez.")
+  }
+
+  if (errorCode === 'oidc_email_missing') {
+    return t("Votre fournisseur de connexion n'a pas donné d'adresse email. La personne qui héberge l'instance doit autoriser le partage de l'email.")
+  }
+
+  if (errorCode === 'oidc_unavailable') {
+    return t('Le fournisseur de connexion ne répond pas. Réessayez dans un moment.')
+  }
+
+  if (errorCode === 'oidc_failed' || errorCode === 'invalid_handoff') {
+    return t("La connexion n'a pas abouti. Réessayez.")
   }
 
   if (errorCode === 'registration_closed') {

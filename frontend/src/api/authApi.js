@@ -1,4 +1,4 @@
-import { apiRequest } from './client'
+import { API_BASE_URL, apiRequest } from './client'
 
 export async function loginUser(email, password) {
   const data = await apiRequest('/auth/login', {
@@ -29,13 +29,14 @@ export async function logoutUser(token) {
   return data
 }
 
-export async function deleteAccount(token, password) {
+// confirmation : { password } pour un compte à mot de passe, { confirmEmail } pour un compte né d'une connexion OIDC
+export async function deleteAccount(token, confirmation) {
   const data = await apiRequest('/auth/me', {
     method: 'DELETE',
     headers: {
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify(confirmation),
   })
 
   return data
@@ -76,7 +77,20 @@ export async function updateLastOpenedTree(token, payload) {
   return data?.lastTree || null
 }
 
-// Options de l'instance : inscription ouverte ou fermée (ALLOW_REGISTRATION côté API)
+// Options de l'instance : inscription ouverte ou fermée, connexion par mot de passe, fournisseur OIDC
 export async function fetchAuthOptions() {
   return apiRequest('/auth/options', { method: 'GET' })
+}
+
+// Adresse qui part chez le fournisseur OIDC ; returnTo ramène sur l'arbre partagé ouvert (validé par l'API)
+export function oidcStartUrl(returnTo = '/') {
+  return `${API_BASE_URL}/auth/oidc/start?returnTo=${encodeURIComponent(returnTo)}`
+}
+
+// Jeton de passage reçu au retour du fournisseur, échangé une seule fois contre une session
+export async function exchangeOidcCode(code) {
+  return apiRequest('/auth/oidc/exchange', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  })
 }

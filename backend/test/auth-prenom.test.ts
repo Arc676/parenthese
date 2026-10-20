@@ -55,7 +55,7 @@ describe('prénom du compte', () => {
     expect(prismaMock.user.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ firstName: 'Anaïs' }),
     }))
-    expect(res.json().user).toEqual({ id: 'user-1', email: 'anais@example.com', firstName: 'Anaïs' })
+    expect(res.json().user).toEqual({ id: 'user-1', email: 'anais@example.com', firstName: 'Anaïs', hasPassword: true })
   })
 
   it("l'inscription sans prénom le garde vide, sans erreur", async () => {
@@ -90,7 +90,7 @@ describe('prénom du compte', () => {
     })
 
     expect(res.statusCode).toBe(200)
-    expect(res.json().user).toEqual({ id: 'user-1', email: 'anais@example.com', firstName: 'Anaïs' })
+    expect(res.json().user).toEqual({ id: 'user-1', email: 'anais@example.com', firstName: 'Anaïs', hasPassword: true })
   })
 
   it('/me renvoie le profil du compte connecté, et refuse sans session', async () => {
@@ -108,10 +108,10 @@ describe('prénom du compte', () => {
     })
     const token = login.json().token
 
-    prismaMock.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'anais@example.com', firstName: 'Anaïs' })
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'anais@example.com', firstName: 'Anaïs', passwordHash: 'hash' })
     const me = await app.inject({ method: 'GET', url: '/auth/me', headers: { authorization: `Bearer ${token}` } })
     expect(me.statusCode).toBe(200)
-    expect(me.json().user).toEqual({ id: 'user-1', email: 'anais@example.com', firstName: 'Anaïs' })
+    expect(me.json().user).toEqual({ id: 'user-1', email: 'anais@example.com', firstName: 'Anaïs', hasPassword: true })
 
     const anonymous = await app.inject({ method: 'GET', url: '/auth/me' })
     expect(anonymous.statusCode).toBe(401)

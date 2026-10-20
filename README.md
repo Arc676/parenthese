@@ -65,6 +65,22 @@ To open the instance to your family over the Internet, put an HTTPS reverse prox
 
 So that people who come across the address can't sign up and start their own trees, set `ALLOW_REGISTRATION=false` in `.env`, then run `docker compose up -d`. Existing accounts keep signing in and creating trees, relatives still open shared trees with the link and password, and the app no longer offers to create an account. An instance with no account at all still accepts the first one, so the variable can be set before the very first start: create your own account right away, before you give out the address.
 
+#### Sign in with your identity provider (OIDC)
+
+Parenthèse can hand sign-in to an OpenID Connect provider you already run (Authentik, Authelia, Keycloak, Pocket ID, Zitadel…), so your family reuses one account and its two-factor settings. Create an OIDC application (confidential client, authorization code flow) whose redirect URI is the public address of Parenthèse followed by `/auth/oidc/callback`, then set in `.env`:
+
+```bash
+OIDC_ISSUER=https://auth.your-domain.com/application/o/parenthese/   # exactly as the provider announces it
+OIDC_CLIENT_ID=parenthese
+OIDC_CLIENT_SECRET=...                                               # empty for a public client (PKCE only)
+OIDC_REDIRECT_URI=https://tree.your-domain.com/auth/oidc/callback
+OIDC_PROVIDER_NAME=Authentik                                         # shown on the button
+```
+
+The sign-in screen then shows "Sign in with Authentik". On a first sign-in, Parenthèse links the provider account to the Parenthèse account with the same email, or creates one when `ALLOW_REGISTRATION` allows it. With registration closed, the provider only signs in people who already have an account (the first account of an empty instance is still accepted). Emails are only trusted when the provider marks them verified (`email_verified`); `OIDC_REQUIRE_VERIFIED_EMAIL=false` lifts that check, for a provider that doesn't send the claim and where nobody picks their own address. Once linked, an account stays tied to the provider's user id, not to the email.
+
+`PASSWORD_LOGIN=false` removes Parenthèse passwords altogether: sign-in goes through the provider only (the API refuses to start without `OIDC_ISSUER`). Accounts created through the provider have no password; to delete one, its owner types their email instead. `OIDC_SCOPES` (default `openid email profile`) and `OIDC_APP_URL` (where the app opens after sign-in, by default the origin of `OIDC_REDIRECT_URI`) rarely need changing.
+
 A self-hosted instance sends no analytics. Usage tracking on parenthese.io only turns on when a PostHog key is provided at build time, which this setup does not do.
 
 The help and privacy links in the app point to parenthese.io. To use your own pages, set `VITE_HELP_URL` and `VITE_PRIVACY_URL` when you build the front end yourself (see `frontend/.env.example`).

@@ -52,7 +52,7 @@ import {
   uploadPersonMedia,
 } from './api/treeApi'
 import { fetchImmichConfig, getImmichErrorMessage, unassignImmichPerson } from './api/immichApi.js'
-import { fetchAuthOptions } from './api/authApi'
+import { fetchAuthOptions, oidcStartUrl } from './api/authApi'
 import { useAuth } from './hooks/useAuth'
 import { useTreeAccess, getTreeTokenStorageKey, getSlugFromPathname, readTreeAccessRole, TREE_ID_FROM_ENV } from './hooks/useTreeAccess'
 import { useMediaManager } from './hooks/useMediaManager'
@@ -472,6 +472,19 @@ function buildContribChangesList(draft = {}) {
   return items
 }
 
+
+// Retour du fournisseur OIDC : #oidc=<jeton de passage> ou #oidc_error=<code>. Lu une seule fois au chargement de
+// la page puis effacé de l'adresse (historique, partage d'écran).
+function readOidcReturn() {
+  if (typeof window === 'undefined') return null
+  const params = new URLSearchParams(window.location.hash.slice(1))
+  if (!params.has('oidc') && !params.has('oidc_error')) return null
+  window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+  return { code: params.get('oidc'), error: params.get('oidc_error') }
+}
+const OIDC_RETURN = readOidcReturn()
+let oidcSignIn = null
+
 function App() {
   const auth = useAuth()
   const tree = useTreeAccess()
@@ -530,8 +543,10 @@ function App() {
   })
   const [treeNotFound, setTreeNotFound] = useState(false)
   const [accountEntryMode, setAccountEntryMode] = useState('login')
-  // Inscription fermée sur l'instance (ALLOW_REGISTRATION=false, #113) : plus de « Créer un compte » nulle part
-  const [registrationOpen, setRegistrationOpen] = useState(true)
+  // Options de l'instance. Inscription fermée (ALLOW_REGISTRATION=false, #113) ou mot de passe désactivé
+  // (PASSWORD_LOGIN=false, #115) : plus de « Créer un compte » nulle part. oidc : le bouton du fournisseur.
+  const [authOptions, setAuthOptions] = useState({ registration: true, passwordLogin: true, oidc: null })
+  const registrationOpen = authOptions.registration !== false && authOptions.passwordLogin !== false
   const [treeWizardVisible, setTreeWizardVisible] = useState(false)
   const [treeWizardLoading, setTreeWizardLoading] = useState(false)
   const [treeWelcomeVisible, setTreeWelcomeVisible] = useState(false)
@@ -2185,10 +2200,26 @@ function App() {
       let registrationAllowed = true
       const authOptionsReady = fetchAuthOptions()
         .then((options) => {
-          registrationAllowed = options?.registration !== false
-          if (active) setRegistrationOpen(registrationAllowed)
+          registrationAllowed = options?.registration !== false && options?.passwordLogin !== false
+          if (active && options) setAuthOptions(options)
         })
         .catch(() => {})
+
+      // Retour du fournisseur OIDC (lu une fois au chargement, voir OIDC_RETURN). Le jeton de passage ne sert qu'une
+      // fois : un second passage du démarrage (React en développement) attend le même échange.
+      if (OIDC_RETURN) {
+        oidcSignIn ??= OIDC_RETURN.code ? auth.handleOidcExchange(OIDC_RETURN.code) : Promise.resolve(false)
+        const signedIn = await oidcSignIn
+        if (!active) return
+        if (!signedIn) {
+          if (OIDC_RETURN.error) auth.setAccountError(getAccountErrorMessage({ payload: { error: OIDC_RETURN.error } }))
+          await authOptionsReady
+          if (!active) return
+          setAccountEntryMode('login')
+          tree.setBootState('account')
+          return
+        }
+      }
 
       const slug = getSlugFromPathname()
       let resolvedTreeId = TREE_ID_FROM_ENV
@@ -2733,8 +2764,8 @@ function App() {
   }
 
   // Suppression du compte : même remise à zéro que la déconnexion une fois la session effacée.
-  const handleDeleteAccount = async (password) => {
-    const errorMessage = await auth.handleDeleteAccount(password)
+  const handleDeleteAccount = async (confirmation) => {
+    const errorMessage = await auth.handleDeleteAccount(confirmation)
     if (errorMessage) {
       return errorMessage
     }
@@ -3001,6 +3032,10 @@ function App() {
           activeTreeId={tree.treeContext.treeId}
           defaultMode={accountEntryMode}
           canRegister={registrationOpen}
+          passwordLogin={authOptions.passwordLogin !== false}
+          oidcName={authOptions.oidc?.name || ''}
+          onOidcLogin={authOptions.oidc ? () => window.location.assign(oidcStartUrl(getSlugFromPathname() ? window.location.pathname : '/')) : undefined}
+          hasPassword={auth.userAuth.user?.hasPassword !== false}
           pendingTreeName={pendingSharedTreeName}
           onLogin={handleLogin}
           onRegister={handleRegister}

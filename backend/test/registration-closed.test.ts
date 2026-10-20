@@ -96,14 +96,14 @@ describe('inscription fermée', () => {
     const res = await app.inject({ method: 'GET', url: '/auth/options' })
 
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ registration: false })
+    expect(res.json()).toEqual({ registration: false, passwordLogin: true, oidc: null })
   })
 
   it('instance neuve : le premier compte se crée, sous verrou', async () => {
     prismaMock.user.count.mockResolvedValue(0)
 
     const options = await app.inject({ method: 'GET', url: '/auth/options' })
-    expect(options.json()).toEqual({ registration: true })
+    expect(options.json()).toMatchObject({ registration: true })
 
     const res = await app.inject({ method: 'POST', url: '/auth/register', payload: newAccount })
 
@@ -130,7 +130,7 @@ describe('inscription ouverte (par défaut)', () => {
     env.ALLOW_REGISTRATION = true
 
     const options = await app.inject({ method: 'GET', url: '/auth/options' })
-    expect(options.json()).toEqual({ registration: true })
+    expect(options.json()).toMatchObject({ registration: true })
 
     const res = await app.inject({ method: 'POST', url: '/auth/register', payload: newAccount })
 

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
   deleteAccount,
+  exchangeOidcCode,
   fetchAccountProfile,
   fetchLastOpenedTree,
   loginUser,
@@ -72,12 +73,17 @@ export function useAuth() {
     return { trees, lastOpenedTree: lastTree }
   }
 
-  const handleLogin = async (email, password) => {
+  const handleLogin = (email, password) => signIn(() => loginUser(email, password))
+
+  // Retour d'une connexion OIDC : le jeton de passage devient une session, comme une connexion par mot de passe
+  const handleOidcExchange = (code) => signIn(() => exchangeOidcCode(code))
+
+  const signIn = async (request) => {
     setAccountLoading(true)
     setAccountError('')
 
     try {
-      const result = await loginUser(email, password)
+      const result = await request()
       const storedProfile = loadUserProfile()
       const mergedUser = {
         ...(storedProfile && storedProfile.email === result.user?.email ? storedProfile : {}),
@@ -162,16 +168,16 @@ export function useAuth() {
   }
 
   // Renvoie null en cas de succès (session locale effacée), sinon un message d'erreur affichable.
-  const handleDeleteAccount = async (password) => {
+  const handleDeleteAccount = async (confirmation) => {
     const token = userAuth.token
     if (!token) {
       return errorMessages.getAccountDeletionErrorMessage({ status: 401 })
     }
 
     try {
-      await deleteAccount(token, password)
+      await deleteAccount(token, confirmation)
     } catch (error) {
-      return errorMessages.getAccountDeletionErrorMessage(error)
+      return errorMessages.getAccountDeletionErrorMessage(error, confirmation)
     }
 
     clearStoredUserToken()
@@ -203,6 +209,7 @@ export function useAuth() {
     loadAccountTrees,
     handleLogin,
     handleRegister,
+    handleOidcExchange,
     handleLogout,
     handleDeleteAccount,
     restoreUserToken,

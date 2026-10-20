@@ -1,4 +1,6 @@
+import { createHmac } from 'node:crypto'
 import Fastify, { type FastifyError } from 'fastify'
+import cookie from '@fastify/cookie'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
 import rateLimit from '@fastify/rate-limit'
@@ -12,6 +14,7 @@ import { contributionRoutes } from './routes/contributions.js'
 import { graphRoutes } from './routes/graph.js'
 import { immichRoutes } from './routes/immich.js'
 import { mediaRoutes } from './routes/media.js'
+import { oidcRoutes } from './routes/oidc.js'
 import { publicRoutes } from './routes/public.js'
 import { annotationRoutes } from './routes/annotations.js'
 import { gedcomRoutes } from './routes/gedcom.js'
@@ -19,9 +22,10 @@ import { treeRoutes } from './routes/trees.js'
 import { visitRoutes } from './routes/visits.js'
 import type { AnyJwtPayload } from './types/auth.js'
 
-// Les adresses des médias portent un jeton (<img src> n'envoie pas d'en-tête) : jamais dans les journaux
+// Les adresses des médias portent un jeton (<img src> n'envoie pas d'en-tête), le retour OIDC un code
+// d'autorisation : jamais dans les journaux
 export function redactUrl(url: string | undefined): string | undefined {
-  return url?.replace(/([?&]token=)[^&#]*/g, '$1[masqué]')
+  return url?.replace(/([?&](?:token|code)=)[^&#]*/g, '$1[masqué]')
 }
 
 export function createApp() {
@@ -67,6 +71,11 @@ export function createApp() {
   app.register(jwt, {
     secret: env.JWT_SECRET,
   })
+
+  // Cookie signé du parcours OIDC seulement (state, nonce, PKCE entre /auth/oidc/start et le retour) : les sessions
+  // restent des jetons Bearer
+  // Clé propre au cookie, dérivée de JWT_SECRET : une signature de cookie ne vaut jamais signature de jeton
+  app.register(cookie, { secret: createHmac('sha256', env.JWT_SECRET).update('parenthese-oidc-cookie').digest('hex') })
 
   app.addHook('preHandler', async (request) => {
     request.actor = null
@@ -140,6 +149,7 @@ export function createApp() {
   app.get('/health', async () => ({ ok: true }))
 
   app.register(authRoutes, { prefix: '/auth' })
+  app.register(oidcRoutes, { prefix: '/auth/oidc' })
   app.register(publicRoutes)
   app.register(treeRoutes)
   app.register(mediaRoutes)
