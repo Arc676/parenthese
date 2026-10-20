@@ -538,6 +538,23 @@ components:
       required: [decision]
 
 paths:
+  /auth/options:
+    get:
+      tags: [Auth]
+      summary: What the sign-in screen can offer on this instance
+      responses:
+        '200':
+          description: Instance options
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  registration:
+                    type: boolean
+                    description: false when ALLOW_REGISTRATION=false and the instance already has an account
+                required: [registration]
+
   /auth/register:
     post:
       tags: [Auth]
@@ -557,6 +574,12 @@ paths:
                 $ref: '#/components/schemas/AuthResponse'
         '400':
           description: Invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Registration closed on this instance (registration_closed)
           content:
             application/json:
               schema:

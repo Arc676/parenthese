@@ -23,6 +23,7 @@ const AccountDashboard = ({
   trees,
   activeTreeId,
   defaultMode = 'login',
+  canRegister = true,
   pendingTreeName = '',
   onLogin,
   onRegister,
@@ -78,7 +79,8 @@ const AccountDashboard = ({
     setMode(defaultMode === 'register' ? 'register' : 'login')
   }, [defaultMode])
 
-  const isRegister = mode === 'register'
+  // Inscription fermée sur l'instance : seul le formulaire de connexion reste
+  const isRegister = mode === 'register' && canRegister
 
   const canSubmitAuth = useMemo(() => {
     if (loading) return false
@@ -207,17 +209,19 @@ const AccountDashboard = ({
             </button>
           </div>
 
-          <p className="pz-auth-switch pz-small">
-            {isRegister ? t('Déjà inscrit ?') : t('Pas encore de compte ?')}{' '}
-            <button
-              type="button"
-              className="pz-link account-signup-toggle"
-              onClick={() => setMode(isRegister ? 'login' : 'register')}
-              disabled={loading}
-            >
-              {isRegister ? t('Se connecter') : t('Créer un compte')}
-            </button>
-          </p>
+          {canRegister && (
+            <p className="pz-auth-switch pz-small">
+              {isRegister ? t('Déjà inscrit ?') : t('Pas encore de compte ?')}{' '}
+              <button
+                type="button"
+                className="pz-link account-signup-toggle"
+                onClick={() => setMode(isRegister ? 'login' : 'register')}
+                disabled={loading}
+              >
+                {isRegister ? t('Se connecter') : t('Créer un compte')}
+              </button>
+            </p>
+          )}
 
           <LanguageSwitch className="pz-lang--screen" />
         </div>

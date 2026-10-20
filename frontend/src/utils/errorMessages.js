@@ -59,6 +59,10 @@ export function getAccountErrorMessage(error) {
     return t("L'arbre n'a plus de place pour de nouveaux souvenirs. Son propriétaire peut en supprimer.")
   }
 
+  if (errorCode === 'registration_closed') {
+    return t("Cette instance n'accepte plus de nouveaux comptes. Demandez à la personne qui l'héberge.")
+  }
+
   if (errorCode === 'citation_text_required') {
     return t('Ajoutez le texte de la citation.')
   }

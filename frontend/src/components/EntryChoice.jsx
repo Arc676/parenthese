@@ -27,11 +27,14 @@ const EntryChoice = ({ onFamilyLink, onLogin, onRegister }) => (
         </button>
       </div>
 
-      <div className="pz-account-foot">
-        <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={onRegister}>
-          {t('Créer mon arbre')}
-        </button>
-      </div>
+      {/* Absent quand l'instance n'accepte plus de compte (ALLOW_REGISTRATION=false) */}
+      {onRegister && (
+        <div className="pz-account-foot">
+          <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={onRegister}>
+            {t('Créer mon arbre')}
+          </button>
+        </div>
+      )}
 
       <LanguageSwitch className="pz-lang--screen" />
     </div>

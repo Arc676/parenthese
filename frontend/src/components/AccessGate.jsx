@@ -27,6 +27,7 @@ const AccessGate = ({
   connectedName = '',
   onSubmit,
   onUseAccount,
+  canRegister = true,
   onNotMyAccount,
 }) => {
   const [treeId, setTreeId] = useState(initialTreeId || '')
@@ -159,9 +160,16 @@ const AccessGate = ({
             </button>
           )}
 
-          {treeNotFound && onUseAccount && (
+          {/* Inscription fermée : un compte existant crée encore ses arbres, un visiteur ne peut que se connecter */}
+          {treeNotFound && onUseAccount && (canRegister || connected) && (
             <button type="button" className="pz-btn pz-btn--primary pz-btn--block" onClick={() => onUseAccount('register')} disabled={loading}>
               {t('Créer mon propre arbre')}
+            </button>
+          )}
+
+          {treeNotFound && onUseAccount && !canRegister && !connected && (
+            <button type="button" className="pz-btn pz-btn--primary pz-btn--block" onClick={() => onUseAccount('login')} disabled={loading}>
+              {t('Se connecter')}
             </button>
           )}
         </form>
@@ -179,9 +187,11 @@ const AccessGate = ({
             <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => onUseAccount('login')} disabled={loading}>
               {t("J'ai déjà un compte")}
             </button>
-            <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => onUseAccount('register')} disabled={loading}>
-              {t("Je n'ai pas de compte")}
-            </button>
+            {canRegister && (
+              <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => onUseAccount('register')} disabled={loading}>
+                {t("Je n'ai pas de compte")}
+              </button>
+            )}
           </div>
         )}
 
