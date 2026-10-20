@@ -52,6 +52,8 @@ const FAMILY_TAB_PX = 2880
 const FAMILY_FIT_PX = 480
 // Une belle-famille qui grimpe au-dessus des parents du conjoint reste dessinée si elle est toute petite
 const FAMILY_INLINE_MAX = 6
+// En dessous, une famille sortie de l'arbre ne fait pas d'onglet : elle reste dessinée
+const FAMILY_TAB_MIN = 10
 
 // Le fil d'une filiation union → enfant : une personne d'une autre famille, sur la ligne de l'enfant,
 // entre l'aplomb de l'union et l'enfant, est croisée. Frères et sœurs et leurs conjoint(e)s ne comptent pas
@@ -412,7 +414,8 @@ function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
       const pcPersons = pc.filter(x => byId.get(x)._type === 'person')
       const keep = new Set(pcPersons)
       const extra = [...block.members].filter(m => byId.get(m)?._type === 'person' && !keep.has(m) && chainOf.get(m) !== pc)
-      if (!extra.length) return block
+      // Une famille de FAMILY_TAB_MIN personnes ou moins reste dessinée : pas d'onglet pour si peu (Patch, 20/10)
+      if (extra.length <= FAMILY_TAB_MIN) return block
       const nested = forgetTabs(snap.tabsBefore, snap.tabsAfter)
       unplace(block.members)
       forgetExternal(snap.externalBefore, snap.externalAfter)
