@@ -200,7 +200,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
 
       <form className="apn-form" onSubmit={handleSubmit}>
         <div className="apn-scroll">
-          <div className="pz-row2 apn-row">
+          <div className="pz-row2 apn-row apn-name-row">
             <div className="pz-field">
               <label htmlFor="ap-firstName">{t('Prénom')}</label>
               <input
@@ -215,21 +215,22 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
                 disabled={unknownFirstName}
                 aria-invalid={touched.firstName && !unknownFirstName && !firstName.trim()}
               />
-              {/* Visible tant que le prénom est vide, et tant qu'elle est cochée (pour pouvoir la décocher) */}
-              {(!firstName.trim() || unknownFirstName) && (
-                <label className="apn-deceased">
-                  <input
-                    type="checkbox"
-                    checked={unknownFirstName}
-                    onChange={(e) => {
-                      setUnknownFirstName(e.target.checked)
-                      setTouched({})
-                    }}
-                  />
-                  {t('Je ne connais pas son prénom')}
-                </label>
-              )}
             </div>
+            {/* Visible tant que le prénom est vide, et tant qu'elle est cochée (pour pouvoir la décocher).
+                Hors de la colonne Prénom pour tenir sur une ligne : sous les deux champs sur ordinateur, sous Prénom sur téléphone */}
+            {(!firstName.trim() || unknownFirstName) && (
+              <label className="apn-deceased apn-unknown">
+                <input
+                  type="checkbox"
+                  checked={unknownFirstName}
+                  onChange={(e) => {
+                    setUnknownFirstName(e.target.checked)
+                    setTouched({})
+                  }}
+                />
+                {t('Je ne connais pas son prénom')}
+              </label>
+            )}
             <div className="pz-field">
               <label htmlFor="ap-lastName">{t('Nom')}</label>
               <input
@@ -277,7 +278,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
 
           <div className="pz-field">
             <span className="pz-label" id="ap-sex-label">{t('Sexe')} <span className="apn-optional">{t('facultatif')}</span></span>
-            <div className="pz-tabs apn-types" role="radiogroup" aria-labelledby="ap-sex-label">
+            <div className="pz-tabs apn-types apn-sex" role="radiogroup" aria-labelledby="ap-sex-label">
               {SEX_CHOICES.map(({ value, label }) => (
                 <button
                   key={label}

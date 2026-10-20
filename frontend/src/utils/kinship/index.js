@@ -3,7 +3,7 @@
 // Le chemin arrive complet : la personne de départ, puis chaque pas avec la personne atteinte.
 //   { from: { id, sex, birthYear }, steps: [{ move, person: { id, sex, birthYear } }] }
 // move vaut 'up' (vers un parent), 'down' (vers un enfant), 'sibling' (vers un frère ou une sœur)
-// ou 'spouse' (vers un conjoint). sex vaut 'male', 'female' ou null (non précisé).
+// ou 'spouse' (vers un conjoint). sex vaut 'male', 'female', 'other' (autre) ou null (non précisé).
 //
 // Chaque langue lit ce dont elle a besoin. Le français et l'anglais comptent les générations et
 // regardent le sexe de la personne nommée (kinshipFacts). Une langue qui distingue le côté paternel

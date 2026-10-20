@@ -459,6 +459,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
       const sex = sexOrNull(person.sex)
       if (sex === 'male') lines.push('1 SEX M')
       else if (sex === 'female') lines.push('1 SEX F')
+      else if (sex === 'other') lines.push('1 SEX X')
 
       const personEvents = eventsByPerson.get(person.id) ?? []
       const birthDetails = personEvents.find((event) => event.type === 'birth')

@@ -6,5 +6,6 @@ export { normalizeSex } from './kinship/facts.js'
 export const SEX_CHOICES = [
   { value: 'female', label: t('Femme') },
   { value: 'male', label: t('Homme') },
+  { value: 'other', label: t('Autre') },
   { value: null, label: t('Non précisé') },
 ]

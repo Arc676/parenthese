@@ -893,6 +893,61 @@ describe('Import GEDCOM', () => {
   })
 })
 
+describe('Sexe dans le GEDCOM (issue #114)', () => {
+  const importer = async (app: FastifyInstance, content: string) => {
+    const auth = { authorization: `Bearer ${await createUserToken(app)}` }
+    prismaMock.person.findMany.mockResolvedValue([])
+    prismaMock.union.findMany.mockResolvedValue([])
+    prismaMock.parentChildLink.findMany.mockResolvedValue([])
+    prismaMock.person.create.mockImplementation(async ({ data }: { data: { firstName: string } }) => ({ id: `p-${data.firstName}` }))
+    prismaMock.person.create.mockClear()
+    const response = await app.inject({ method: 'POST', url: '/trees/tree-1/import/gedcom', headers: auth, payload: { content } })
+    expect(response.statusCode).toBe(200)
+    return Object.fromEntries(prismaMock.person.create.mock.calls.map((call: [{ data: { firstName: string; sex: string | null } }]) => [call[0].data.firstName, call[0].data.sex]))
+  }
+
+  it('import : M, F, X (GEDCOM 7), U et absent donnent male, female, other, null, null', async () => {
+    const app = createApp()
+    const content = [
+      '0 HEAD',
+      '0 @I1@ INDI', '1 NAME Jean /Martin/', '1 SEX M',
+      '0 @I2@ INDI', '1 NAME Marie /Martin/', '1 SEX F',
+      '0 @I3@ INDI', '1 NAME Camille /Martin/', '1 SEX X',
+      '0 @I4@ INDI', '1 NAME Dominique /Martin/', '1 SEX U',
+      '0 @I5@ INDI', '1 NAME Claude /Martin/',
+      '0 TRLR',
+    ].join('\n')
+    expect(await importer(app, content)).toEqual({ Jean: 'male', Marie: 'female', Camille: 'other', Dominique: null, Claude: null })
+    await app.close()
+  })
+
+  it('aller-retour : other sort en SEX X, non précisé sans ligne SEX, et tout se relit à l’identique', async () => {
+    const app = createApp()
+    await app.ready()
+    const token = (app as any).jwt.sign({ kind: 'tree_access', sub: 'tree:tree-1:visitor', treeId: 'tree-1', role: 'visitor', accessVersion: new Date('2026-02-11T10:00:00.000Z').getTime() })
+    const base = { lastName: 'Martin', birthDate: null, birthDatePrecision: null, birthPlace: null, birthDateEnd: null, deathDateEnd: null, deathDatePrecision: null, deathPlace: null, nickname: null, notes: null, profession: null, deathDate: null }
+    prismaMock.tree.findFirst.mockResolvedValue({ id: 'tree-1', name: 'Martin', rootPersonId: null })
+    prismaMock.person.findMany.mockResolvedValue([
+      { ...base, id: 'p-1', firstName: 'Jean', sex: 'male' },
+      { ...base, id: 'p-2', firstName: 'Marie', sex: 'female' },
+      { ...base, id: 'p-3', firstName: 'Camille', sex: 'other' },
+      { ...base, id: 'p-4', firstName: 'Claude', sex: null },
+    ])
+    prismaMock.union.findMany.mockResolvedValue([])
+    prismaMock.parentChildLink.findMany.mockResolvedValue([])
+    prismaMock.lifeEvent.findMany.mockResolvedValue([])
+
+    const response = await app.inject({ method: 'GET', url: '/trees/tree-1/export/gedcom', headers: { authorization: `Bearer ${token}` } })
+    expect(response.statusCode).toBe(200)
+    const text = response.body.replace(/\r\n/g, '\n')
+    expect(text).toContain('1 NAME Camille /Martin/\n1 SEX X\n')
+    expect(text).toMatch(/1 NAME Claude \/Martin\/\n(?!1 SEX)/)
+
+    expect(await importer(app, text)).toEqual({ Jean: 'male', Marie: 'female', Camille: 'other', Claude: null })
+    await app.close()
+  })
+})
+
 describe('Visit log', () => {
   it('refuses the visit log to a non-admin member', async () => {
     const app = createApp()
@@ -1150,7 +1205,7 @@ describe('Surnom (nickname) en écriture directe', () => {
 })
 
 describe('Sexe d’une personne en écriture directe (issue #114)', () => {
-  it('PATCH ramène le sexe à male / female, null = non précisé, refuse une valeur inconnue', async () => {
+  it('PATCH ramène le sexe à male / female / other, null = non précisé, refuse une valeur inconnue', async () => {
     const app = createApp()
     const token = await createUserToken(app)
     const patch = (payload: object) => app.inject({ method: 'PATCH', url: '/trees/tree-1/persons/person-1', headers: { authorization: `Bearer ${token}` }, payload })
@@ -1160,6 +1215,9 @@ describe('Sexe d’une personne en écriture directe (issue #114)', () => {
 
     expect((await patch({ sex: 'male' })).statusCode).toBe(200)
     expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ sex: 'male' })
+
+    expect((await patch({ sex: 'other' })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ sex: 'other' })
 
     expect((await patch({ sex: null })).statusCode).toBe(200)
     expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ sex: null })

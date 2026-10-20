@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { parseSex, sexOrNull, sexSchema } from '../src/lib/person-sex'
 
-// Sexe d'une personne (issue #114) : male, female ou null, anciennes valeurs M/F relues
+// Sexe d'une personne (issue #114) : male, female, other ou null, anciennes valeurs M/F relues
 describe('sexe d’une personne', () => {
   it('ramène les écritures connues à male / female / null', () => {
     expect(parseSex('male')).toBe('male')
@@ -14,6 +14,9 @@ describe('sexe d’une personne', () => {
     expect(parseSex(null)).toBeNull()
     expect(parseSex('')).toBeNull()
     expect(parseSex('U')).toBeNull()
+    expect(parseSex('other')).toBe('other')
+    expect(parseSex('X')).toBe('other')
+    expect(parseSex('Autre')).toBe('other')
     expect(parseSex('robot')).toBeUndefined()
   })
 

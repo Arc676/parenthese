@@ -39,6 +39,14 @@ describe('nommage français', () => {
     expect(both(['spouse', 'up', 'sibling'])).toEqual(['Oncle par alliance', 'Tante par alliance', 'Oncle/Tante par alliance'])
   })
 
+  it('« Autre » prend les formes neutres ou doubles, comme non précisé', () => {
+    const autre = (moves, lang) => nameKinship(path(moves, 'other'), lang)
+    expect(['up', 'down', 'sibling', 'spouse'].map((m) => autre([m], 'fr'))).toEqual(['Parent', 'Enfant', 'Frère/Sœur', 'Conjoint(e)'])
+    expect(autre(['up', 'sibling', 'down'], 'fr')).toBe('Cousin(e) germain(e)')
+    expect(autre(['up', 'spouse'], 'fr')).toBe('Beau-parent')
+    expect(['up', 'down', 'sibling', 'up,sibling', 'up,spouse'].map((m) => autre(m.split(','), 'en'))).toEqual(['Parent', 'Child', 'Sibling', 'Uncle/Aunt', 'Stepparent'])
+  })
+
   it('le sexe des personnes du milieu ne change pas le mot (seule la personne nommée compte)', () => {
     const p = path(['up', 'sibling'], 'female', { 0: { sex: 'male' } })
     expect(nameKinship(p, 'fr')).toBe('Tante')
@@ -95,6 +103,6 @@ describe('chemin de parenté depuis le chemin BFS', () => {
 
 describe('normalizeSex', () => {
   it('lit les anciennes valeurs M/F et le reste en non précisé', () => {
-    expect(['male', 'M', 'female', 'f', null, '', 'U'].map(normalizeSex)).toEqual(['male', 'male', 'female', 'female', null, null, null])
+    expect(['male', 'M', 'female', 'f', 'other', 'X', null, '', 'U'].map(normalizeSex)).toEqual(['male', 'male', 'female', 'female', 'other', 'other', null, null, null])
   })
 })

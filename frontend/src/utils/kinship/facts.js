@@ -1,9 +1,11 @@
-// Sexe d'une personne tel que l'appli le lit : 'male', 'female' ou null (non précisé).
-// L'import GEDCOM écrit 'male'/'female' ; d'anciennes données ont pu garder 'M'/'F'.
+// Sexe d'une personne tel que l'appli le lit : 'male', 'female', 'other' (autre) ou null (non précisé).
+// L'import GEDCOM écrit 'male'/'female'/'other' ; d'anciennes données ont pu garder 'M'/'F'.
+// Pour nommer un lien, 'other' prend les formes neutres ou doubles, comme null.
 export function normalizeSex(value) {
   const key = String(value ?? '').trim().toLowerCase()
   if (key === 'male' || key === 'm') return 'male'
   if (key === 'female' || key === 'f') return 'female'
+  if (key === 'other' || key === 'x') return 'other'
   return null
 }
 

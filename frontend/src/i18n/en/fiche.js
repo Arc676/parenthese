@@ -57,6 +57,7 @@ export default {
   'Sexe': 'Sex',
   'Femme': 'Female',
   'Homme': 'Male',
+  'Autre': 'Other',
   'Non précisé': 'Not specified',
   'Adopté': 'Adopted',
   'Adoptée': 'Adopted',
