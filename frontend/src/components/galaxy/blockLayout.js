@@ -349,7 +349,9 @@ function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
       // Belle-famille en construction : une chaîne dont aucun membre du sang n'est enfant de cette union, mais
       // dont un membre du sang a ses parents ailleurs, ira sous ces parents-là (le sang de la référence gagne)
       const duSang = anchor && !kc.some(id => blood.has(id) && parentUnionOf.get(id) === unionId) && kc.some(id => blood.has(id) && byId.get(id)._type === 'person' && parentUnionOf.has(id))
-      if (placed.has(kc) || tabOfChain.has(kc) || duSang) {
+      // Un enfant parti dans un onglet ne laisse pas de place vide : ses parents se centrent sur les enfants dessinés
+      if (tabOfChain.has(kc)) return
+      if (placed.has(kc) || duSang) {
         external.push({ kid, unionId })
         externalEdges.add(`${unionId}>${kid}`)
         childBlocks.push({ ...ghostBlock(kid), unionId })
@@ -547,8 +549,10 @@ function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
     }
     // Sur un remariage où l'enfant de la lignée est à un bout, seule sa moitié est réservée : au-dessus des
     // ex-conjoints, la carte ou la famille du conjoint peut se poser.
+    // Seule la moitié de l'enfant de la lignée est réservée pour ses parents : au-dessus du conjoint, ses propres
+    // parents peuvent se poser (Patch, 20/10 : « Louis et Joséphine devraient être au-dessus de Victor »)
     const parentsSpan = (rx) => {
-      if (chain.length > 3 && kidOfChain) {
+      if (kidOfChain && (chain.indexOf(kidOfChain) === 0 || chain.indexOf(kidOfChain) === chain.length - 1)) {
         const k = rx + offsets.get(kidOfChain)
         return chain.indexOf(kidOfChain) === 0 ? [rx - FAMILY_GAP, k + byId.get(kidOfChain).width + FAMILY_GAP] : [k - FAMILY_GAP, rx + rowW + FAMILY_GAP]
       }
