@@ -43,3 +43,71 @@
     font-size: 13px;
   }
 }
+
+/* ============================================================
+   Onglets de familles : un onglet par famille, en haut à gauche
+   ============================================================ */
+
+.family-tabs {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 500;
+  display: flex;
+  gap: 6px;
+  max-width: calc(100vw - 120px);
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 4px;
+}
+.family-tabs::-webkit-scrollbar { display: none; }
+/* Bords coupés : un fondu de chaque côté qui défile encore */
+.family-tabs.has-left { mask-image: linear-gradient(to right, transparent, #000 36px); -webkit-mask-image: linear-gradient(to right, transparent, #000 36px); }
+.family-tabs.has-right { mask-image: linear-gradient(to left, transparent, #000 36px); -webkit-mask-image: linear-gradient(to left, transparent, #000 36px); }
+.family-tabs.has-left.has-right { mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent); -webkit-mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
+
+.family-tab {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 7px 14px 8px;
+  border-radius: 999px;
+  border: 1px solid #EBE6DF;
+  background: #FFFFFF;
+  color: #2A2622;
+  font-family: "Newsreader", Georgia, serif;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.family-tab:hover { border-color: #D9CFC6; }
+.family-tab:focus-visible { outline: 2px solid #C9553D; outline-offset: 2px; }
+.family-tab.is-active { background: #2A2622; border-color: #2A2622; color: #FFFFFF; }
+.family-tab-count {
+  font-family: "DM Sans", system-ui, sans-serif;
+  font-size: 11px;
+  color: #93402A;
+}
+.family-tab.is-active .family-tab-count { color: #EDB6A4; }
+
+/* En mode modification, le message « Vous proposez des changements » occupe le haut au centre : la barre
+   se limite à la moitié gauche sur grand écran et descend sous le message sur téléphone */
+.family-tabs--lowered { max-width: calc(50vw - 200px); }
+
+/* Fiche ouverte sur grand écran (à gauche, 384 px depuis 24 px) : la barre passe à sa droite */
+@media (min-width: 769px) {
+  body:has(.person-card) .family-tabs { left: 424px; max-width: calc(100vw - 424px - 96px); }
+  /* Recherche ouverte (environ 540 px à droite) : la barre s'arrête avant elle et se fond au bord */
+  body:has(.expandable-search.expanded) .family-tabs { max-width: calc(100vw - 16px - 560px); }
+  body:has(.person-card):has(.expandable-search.expanded) .family-tabs { max-width: calc(100vw - 424px - 560px); }
+}
+
+@media (max-width: 768px) {
+  .family-tabs { top: 10px; left: 10px; max-width: calc(100vw - 84px); }
+  .family-tabs--lowered { top: 64px; max-width: calc(100vw - 20px); }
+  /* Recherche ouverte sur téléphone : elle prend toute la largeur du haut, la barre passe dessous */
+  body:has(.expandable-search.expanded) .family-tabs { top: 80px; max-width: calc(100vw - 20px); }
+  .family-tab { font-size: 14px; padding: 6px 12px 7px; }
+}

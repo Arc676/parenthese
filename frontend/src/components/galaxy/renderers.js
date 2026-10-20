@@ -107,19 +107,19 @@ const BUS_DY = 100
 const SIB_R = 24
 const SIB_STRAIGHT_DX = SIB_R * 2
 
-function busY(sourceId, sy) {
-  let h = 0
-  for (let i = 0; i < sourceId.length; i++) h = (h * 31 + sourceId.charCodeAt(i)) | 0
-  // Léger décalage par union : deux fratries voisines ne fusionnent pas leurs lignes
-  return sy + BUS_DY + (Math.abs(h) % 3) * 4
+// Les lignes de fratrie s'emboîtent : une famille collée au conjoint d'un enfant dessine sa ligne sous celle
+// de la famille qui l'entoure. Le placement pose le niveau (_railLift, 0 = la plus proche des enfants).
+const RAIL_STEP = 6
+function busY(lift, sy) {
+  return sy + BUS_DY - RAIL_STEP * (lift || 0)
 }
 
 // Une union, toute sa fratrie : un seul tracé. Tronc depuis l'union jusqu'à la barre, coins arrondis
 // de même rayon à chaque jonction, puis descente vers chaque enfant. Chaque enfant a sa propre trajectoire
 // (sur la même barre), donc le surlignage du chemin suit exactement la même géométrie.
-export function traceSibship(ctx, sourceId, sourcePos, items) {
+export function traceSibship(ctx, sourceId, sourcePos, items, lift = 0) {
   const sx = sourcePos.cx, sy = sourcePos.cy
-  const by = busY(sourceId, sy)
+  const by = busY(lift, sy)
   const rr = Math.min(SIB_R, by - sy - 2)
   ctx.beginPath()
   for (const { cx: ex, cy: ey } of items) {
@@ -201,15 +201,18 @@ export function drawCoupleLinks(ctx, coupleBarMeta, posMap, nodeMap, nodeRandomD
 // useGalaxyInteractions.
 // ============================================================
 export const renvoiHitAreas = []
+// Badges « Famille X » sous les conjoints dont la famille est un onglet : { x0, y0, x1, y1, anchorId }
+export const familyHitAreas = []
 // Zones « + photo » : portraits vides, chez le propriétaire (cercle du nœud, rempli au dessin)
 export const photoPlaceholderHitAreas = []
 const renvoiPills = []
+const familyPills = [] // badges « Famille X » : { text, cx, cy, anchorId, tabKey, alpha }
 const RENVOI_FONT = '500 11px "DM Sans", system-ui, sans-serif'
 // Pastilles collées aux personnes : juste sous le couple, juste au-dessus du portrait de l'enfant
 const RENVOI_PARENT_DY = 38
 const RENVOI_CHILD_GAP = 13
 
-function drawRenvoiPill(ctx, { text, cx, cy, target, alpha }) {
+function drawPillShape(ctx, text, cx, cy, alpha) {
   ctx.save()
   ctx.font = RENVOI_FONT
   const w = measureTextCached(ctx, text, 'renvoi').width + 20
@@ -228,7 +231,17 @@ function drawRenvoiPill(ctx, { text, cx, cy, target, alpha }) {
   ctx.textBaseline = 'middle'
   ctx.fillText(text, cx, cy + 0.5)
   ctx.restore()
+  return { w, h }
+}
+
+function drawRenvoiPill(ctx, { text, cx, cy, target, alpha }) {
+  const { w, h } = drawPillShape(ctx, text, cx, cy, alpha)
   if (alpha > 0.5) renvoiHitAreas.push({ x0: cx - w / 2, y0: cy - h / 2, x1: cx + w / 2, y1: cy + h / 2, ...target })
+}
+
+function drawFamilyPill(ctx, { text, cx, cy, anchorId, tabKey, alpha }) {
+  const { w, h } = drawPillShape(ctx, text, cx, cy, alpha)
+  if (alpha > 0.5) familyHitAreas.push({ x0: cx - w / 2, y0: cy - h / 2, x1: cx + w / 2, y1: cy + h / 2, anchorId, tabKey })
 }
 
 function drawRenvoi(ctx, edge, sourcePos, targetPos, targetNode, childR, view) {
@@ -252,6 +265,7 @@ function drawRenvoi(ctx, edge, sourcePos, targetPos, targetNode, childR, view) {
 
 // Après drawNodes : les pastilles passent au-dessus des portraits et des souvenirs
 export function drawRenvoiPills(ctx) {
+  for (const p of familyPills) drawFamilyPill(ctx, p)
   renvoiPills.forEach(p => drawRenvoiPill(ctx, p))
   renvoiPills.length = 0
 }
@@ -262,10 +276,13 @@ export function drawRenvoiPills(ctx) {
 export function drawFiliations(ctx, edges, posMap, nodeMap, nodeRandomData, entrance, entranceActive, elapsed, view = null) {
   renvoiHitAreas.length = 0
   renvoiPills.length = 0
+  familyPills.length = 0
+  familyHitAreas.length = 0
   if (!edges) return
   const sibships = new Map()
 
   edges.forEach(edge => {
+    if (edge._hidden) return
     const sourceId = edge.sources[0]
     const targetId = edge.targets[0]
     const sourcePos = posMap.get(sourceId)
@@ -312,7 +329,7 @@ export function drawFiliations(ctx, edges, posMap, nodeMap, nodeRandomData, entr
     ctx.lineCap = 'round'
     const p = progress / items.length
     ctx.globalAlpha = Math.min(1, p * 1.5) * p
-    traceSibship(ctx, sourceId, sourcePos, items)
+    traceSibship(ctx, sourceId, sourcePos, items, nodeMap.get(sourceId)?._railLift)
     ctx.globalAlpha = 1
     ctx.setLineDash([])
   }
@@ -389,7 +406,7 @@ export function drawPathHighlight(ctx, {
       ctx.globalAlpha = 1
 
       ctx.globalAlpha = hp
-      traceSibship(ctx, edge.sources[0], sourcePos, [{ cx: targetPos.cx, cy: targetPos.cy - childR }])
+      traceSibship(ctx, edge.sources[0], sourcePos, [{ cx: targetPos.cx, cy: targetPos.cy - childR }], nodeMap.get(edge.sources[0])?._railLift)
       ctx.globalAlpha = 1
     })
   }
@@ -657,6 +674,16 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
   }
 
   ctx.restore()
+
+  // Sa famille est un onglet : une pastille le dit, un clic l'ouvre. Au-dessus du portrait, à la place de ses
+  // parents (l'orbite des souvenirs évite le haut). Même place pour le retour vers la famille d'où l'on vient :
+  // la charnière peut avoir des enfants dessous, jamais rien au-dessus que le fil de ses parents.
+  if (withDetail && node._familyTab) {
+    const tab = node._familyTab
+    const text = `${tab.label ? t('Famille {name}', { name: tab.label }) : t('Famille')} · ${tab.count} ›`
+    const py = cy - PERSON_R * personScale - RENVOI_CHILD_GAP
+    familyPills.push({ text, cx, cy: py, anchorId: tab.anchorId, tabKey: tab.tabKey, alpha: nodeProgress * labelAlpha })
+  }
 }
 
 // ============================================================

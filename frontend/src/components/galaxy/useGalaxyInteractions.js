@@ -1,9 +1,10 @@
 import { useRef, useCallback } from 'react'
 import { getPersonMedias } from '../../data/mockData'
 import { MAX_ORBIT_MEDIAS, ORBIT_MEDIA_SIZE } from './constants'
-import { nodeRadius, renvoiHitAreas, photoPlaceholderHitAreas } from './renderers'
+import { nodeRadius, renvoiHitAreas, familyHitAreas, photoPlaceholderHitAreas } from './renderers'
 
 const hitRenvoi = (x, y) => renvoiHitAreas.find(a => x >= a.x0 && x <= a.x1 && y >= a.y0 && y <= a.y1)
+const hitFamily = (x, y) => familyHitAreas.find(a => x >= a.x0 && x <= a.x1 && y >= a.y0 && y <= a.y1)
 const hitPhotoPlaceholder = (x, y) => photoPlaceholderHitAreas.find(a => Math.hypot(x - a.cx, y - a.cy) < a.r)
 import { getEntranceProgress } from './utils'
 
@@ -22,7 +23,7 @@ export function useGalaxyInteractions({
   canvasRef, transformRef, targetTransformRef,
   layoutDataRef, nodeRandomDataRef, entranceRef,
   hoveredNodeIdRef, hoveredMediaKeyRef, mouseWorldPosRef,
-  getAnimatedPos, onPersonSelect, onMediaSelect, onPhotoPlaceholderClick = null,
+  getAnimatedPos, onPersonSelect, onMediaSelect, onPhotoPlaceholderClick = null, onOpenFamily = null,
   annotationHandlers,
   minScale = 0.2,
   maxScale = 4,
@@ -138,7 +139,7 @@ export function useGalaxyInteractions({
           break
         }
       }
-      if (!isOverClickable && hitRenvoi(mouseWorldPosRef.current.x, mouseWorldPosRef.current.y)) isOverClickable = true
+      if (!isOverClickable && (hitRenvoi(mouseWorldPosRef.current.x, mouseWorldPosRef.current.y) || hitFamily(mouseWorldPosRef.current.x, mouseWorldPosRef.current.y))) isOverClickable = true
       if (!isOverClickable && hitPhotoPlaceholder(mouseWorldPosRef.current.x, mouseWorldPosRef.current.y)) isOverClickable = true
       hoveredNodeIdRef.current = newHoveredNode
       hoveredMediaKeyRef.current = newHoveredMedia
@@ -284,6 +285,10 @@ export function useGalaxyInteractions({
       }
     }
 
+    // Badge de famille : ouvre l'onglet de cette famille
+    const fam = hitFamily(clickX, clickY)
+    if (fam) { onOpenFamily?.(fam.tabKey); return }
+
     // Renvoi : on glisse vers l'autre extrémité (parents ou enfant), sans dézoomer en dessous de la lecture des prénoms
     const renvoi = hitRenvoi(clickX, clickY)
     if (renvoi) {
@@ -295,7 +300,7 @@ export function useGalaxyInteractions({
         y: rect2.height / 2 - renvoi.targetY * scale,
       }
     }
-  }, [canvasRef, transformRef, targetTransformRef, layoutDataRef, nodeRandomDataRef, entranceRef, getAnimatedPos, onPersonSelect, onMediaSelect, onPhotoPlaceholderClick, annotationHandlers])
+  }, [canvasRef, transformRef, targetTransformRef, layoutDataRef, nodeRandomDataRef, entranceRef, getAnimatedPos, onPersonSelect, onMediaSelect, onPhotoPlaceholderClick, onOpenFamily, annotationHandlers])
 
   return {
     isDragging, isZooming, zoomTimeoutRef, hasDragged,

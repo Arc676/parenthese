@@ -800,7 +800,7 @@ export function computeLayout(graphData = null, referenceId = null) {
   // --- PASS B (bottom-up) : placement initial centré sur les enfants ---
   const sortedGensDesc = [...componentOrderPerGen.keys()].sort((a, b) => b - a)
   if (sortedGensDesc.length === 0) {
-    return { children: allNodes, edges: allEdges, generationConflicts }
+    return { children: allNodes, edges: allEdges, generationConflicts, referenceId: reference ?? null }
   }
   const genMax = sortedGensDesc[0]
   const genMin = sortedGensDesc[sortedGensDesc.length - 1]
@@ -840,7 +840,7 @@ export function computeLayout(graphData = null, referenceId = null) {
     node.y = node._generation * (PERSON_H + LAYER_SPACING)
   }
 
-  return { children: allNodes, edges: allEdges, generationConflicts }
+  return { children: allNodes, edges: allEdges, generationConflicts, referenceId: reference ?? null }
 }
 
 // ============================================================
@@ -849,7 +849,7 @@ export function computeLayout(graphData = null, referenceId = null) {
 export function generateNodeRandomData(children, edges = []) {
   const data = new Map()
   // Enfant d'un renvoi : la pastille « Voir les parents » occupe le haut du portrait, l'orbite reste sur les côtés
-  const renvoiChildren = new Set(edges.filter(e => e._renvoi).map(e => e.targets[0]))
+  const renvoiChildren = new Set([...edges.filter(e => e._renvoi).map(e => e.targets[0]), ...children.filter(n => n._familyTab).map(n => n.id)])
   const deg = (d) => d * Math.PI / 180
   // Partenaire d'un conjoint isolé : ses souvenirs en orbite passent du côté opposé au petit portrait
   const compactSide = new Map()
