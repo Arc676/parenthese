@@ -76,6 +76,10 @@ export function getAccountErrorMessage(error) {
     return t("Votre fournisseur de connexion n'indique pas que votre adresse email est vérifiée. Vérifiez-la chez lui, puis réessayez.")
   }
 
+  if (errorCode === 'oidc_email_taken') {
+    return t("Un compte avec mot de passe existe déjà pour cette adresse. Connectez-vous avec votre email et votre mot de passe.")
+  }
+
   if (errorCode === 'oidc_email_missing') {
     return t("Votre fournisseur de connexion n'a pas donné d'adresse email. La personne qui héberge l'instance doit autoriser le partage de l'email.")
   }

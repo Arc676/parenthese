@@ -61,6 +61,8 @@ Pour qu'une personne qui tombe sur l'adresse ne puisse pas s'inscrire et y crée
 
 #### Connexion par votre fournisseur d'identité (OIDC)
 
+*Expérimental dans la 1.2.0 : testé contre un fournisseur OpenID certifié, vos retours sur de vraies installations sont les bienvenus dans les issues.*
+
 Parenthèse peut confier la connexion à un fournisseur OpenID Connect que vous faites déjà tourner (Authentik, Authelia, Keycloak, Pocket ID, Zitadel…) : la famille garde un seul compte et sa double authentification. Créez chez lui une application OIDC (client confidentiel, flux « authorization code ») dont l'adresse de retour est l'adresse publique de Parenthèse suivie de `/auth/oidc/callback`, puis renseignez dans `.env` :
 
 ```bash

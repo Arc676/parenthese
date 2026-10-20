@@ -46,7 +46,7 @@ describe('écran de connexion avec un fournisseur OIDC', () => {
   })
 
   it('chaque refus au retour du fournisseur a sa phrase', () => {
-    for (const code of ['oidc_failed', 'oidc_unavailable', 'oidc_email_unverified', 'oidc_email_missing', 'password_login_disabled', 'invalid_handoff']) {
+    for (const code of ['oidc_failed', 'oidc_unavailable', 'oidc_email_unverified', 'oidc_email_taken', 'oidc_email_missing', 'password_login_disabled', 'invalid_handoff']) {
       const message = getAccountErrorMessage({ payload: { error: code } })
       expect(message).not.toBe("Erreur backend. Vérifiez que l'API et la base sont lancées.")
     }

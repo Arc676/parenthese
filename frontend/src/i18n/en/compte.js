@@ -49,6 +49,7 @@ export default {
   "Cette adresse n'est pas celle du compte.": "This isn't the account's email address.",
   "Votre adresse email, pour confirmer": "Your email address, to confirm",
   "Sur cette instance, la connexion passe par le bouton du fournisseur.": "On this instance, sign in with the provider button.",
+  "Un compte avec mot de passe existe déjà pour cette adresse. Connectez-vous avec votre email et votre mot de passe.": "An account with a password already exists for this address. Sign in with your email and password.",
   "Votre fournisseur de connexion n'indique pas que votre adresse email est vérifiée. Vérifiez-la chez lui, puis réessayez.": "Your sign-in provider doesn't say your email address is verified. Verify it there, then try again.",
   "Votre fournisseur de connexion n'a pas donné d'adresse email. La personne qui héberge l'instance doit autoriser le partage de l'email.": "Your sign-in provider didn't share an email address. The person who hosts this instance needs to allow it.",
   "Le fournisseur de connexion ne répond pas. Réessayez dans un moment.": "The sign-in provider isn't responding. Try again in a moment.",
