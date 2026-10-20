@@ -17,8 +17,10 @@ aussi disposer de `person.read` pour ce filtre et ses portraits.
 Les fichiers sont copiés dans Parenthèse : ils restent disponibles indépendamment
 d'Immich après l'enregistrement. Les limites existantes s'appliquent : 5 Mo par
 photo, 20 Mo par vidéo et quota de l'arbre. Les formats pris en charge sont ceux
-des envois locaux : JPEG, PNG, WebP, GIF ; MP4, MOV, WebM. Aucun transcodage des
-originaux HEIC/RAW ni des codecs vidéo n'est ajouté.
+des envois locaux : JPEG, PNG, WebP, GIF ; MP4, MOV, WebM. Pour les photos,
+Parenthèse copie la version preview préparée par Immich, ce qui permet aussi
+d'importer les HEIC/RAW dont Immich a généré l'aperçu. Le nom du fichier suit
+le format reçu. Les vidéos conservent leur original, sans transcodage ajouté.
 
 La clé Immich doit disposer de `asset.read`, `asset.view` et `asset.download`, en
 plus des permissions utilisées pour les portraits. Contrat :

@@ -1,5 +1,5 @@
 /* Galerie Immich dans la DA terracotta des souvenirs. */
-.iap-overlay { z-index: 2400; }
+.iap-overlay { z-index: var(--pz-z-modal-nested); }
 .pz-modal.iap { width: min(100%, 850px); padding: 0; gap: 0; overflow: auto; }
 .iap-head { padding: 28px 64px 22px 28px; border-bottom: 1px solid var(--pz-line-soft); }
 .iap-head .pz-eyebrow { display: flex; align-items: center; gap: 7px; color: var(--pz-a700); }
@@ -30,12 +30,12 @@
 .iap-image img[hidden] { display: none; }
 .iap-placeholder { display: grid; place-items: center; gap: 6px; color: var(--pz-faint); font: 400 11px var(--pz-sans); }
 .iap-placeholder .pz-busy { width: 40px; height: 24px; }
-.iap-zoom { position: absolute; top: 9px; right: 9px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,.92); color: var(--pz-ink-2); box-shadow: 0 2px 8px rgba(42,38,34,.1); }
-.iap-video { position: absolute; left: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border-radius: 999px; background: rgba(42,38,34,.75); color: white; font: 500 11px var(--pz-sans); }
+.iap-zoom { position: absolute; top: 9px; right: 9px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--pz-surface); color: var(--pz-ink-2); box-shadow: var(--pz-shadow); }
+.iap-video { position: absolute; left: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border-radius: 999px; background: var(--pz-media-badge-bg); color: var(--pz-surface); font: 500 11px var(--pz-sans); }
 .iap-asset-caption { display: flex; align-items: center; gap: 7px; padding: 8px 10px; }
 .iap-asset-caption > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 12px/1.4 var(--pz-sans); color: var(--pz-muted); }
 .iap-select { display: grid; place-items: center; width: 30px; height: 30px; flex: none; padding: 0; background: var(--pz-surface); color: var(--pz-faint); border: 1px solid var(--pz-line); border-radius: 50%; cursor: pointer; }
-.iap-select.is-selected { background: var(--pz-a500); border-color: var(--pz-a500); color: white; }
+.iap-select.is-selected { background: var(--pz-a500); border-color: var(--pz-a500); color: var(--pz-surface); }
 .iap-open:disabled, .iap-select:disabled, .iap-face-choice:disabled { cursor: default; }
 .iap-select:disabled:not(.is-selected) { opacity: .45; }
 .iap :is(.iap-open, .iap-select, .iap-face-choice, .pz-tab):focus-visible { outline: 2px solid var(--pz-a500); outline-offset: -3px; }

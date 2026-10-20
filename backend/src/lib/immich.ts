@@ -4,6 +4,7 @@ import type { PrismaClient } from '@prisma/client'
 
 import { env } from '../config/env.js'
 import { decryptImmichApiKey } from './immich-secret.js'
+import { sniffMimeType } from './media-files.js'
 
 // Client Immich : la reconnaissance des visages lit les personnes et leurs vignettes.
 // Contrat vérifié sur la spécification OpenAPI officielle d'Immich v3.1.0 :
@@ -147,7 +148,7 @@ export class ImmichClient {
 
   async getAssetBytes(assetId: string, thumbnail: boolean, maxBytes: number, preview = false): Promise<Buffer | null> {
     const variant = preview ? 'thumbnail?size=preview' : thumbnail ? 'thumbnail?size=thumbnail' : 'original'
-    return this.readBytes(`/api/assets/${encodeURIComponent(assetId)}/${variant}`, maxBytes)
+    return this.readBytes(`/api/assets/${encodeURIComponent(assetId)}/${variant}`, maxBytes, 5 * 1024 * 1024)
   }
 
   // Toutes les personnes (sans les masquées), en suivant la pagination d'Immich.
@@ -205,10 +206,11 @@ export class ImmichClient {
     return this.readBytes(`/api/people/${encodeURIComponent(personId)}/thumbnail`, maxBytes)
   }
 
-  private async readBytes(path: string, maxBytes: number): Promise<Buffer | null> {
+  private async readBytes(path: string, maxBytes: number, maxImageBytes = maxBytes): Promise<Buffer | null> {
     const response = await this.fetch(path)
+    let limit = response.headers.get('content-type')?.startsWith('image/') ? Math.min(maxBytes, maxImageBytes) : maxBytes
     const declared = Number(response.headers.get('content-length'))
-    if (Number.isFinite(declared) && declared > maxBytes) {
+    if (Number.isFinite(declared) && declared > limit) {
       await response.body?.cancel().catch(() => {})
       return null
     }
@@ -219,12 +221,19 @@ export class ImmichClient {
     const reader = response.body.getReader()
     const chunks: Buffer[] = []
     let total = 0
+    let signature = Buffer.alloc(0)
     try {
       for (;;) {
         const { done, value } = await reader.read()
         if (done) break
         total += value.byteLength
-        if (total > maxBytes) {
+        // Ne pas se fier au Content-Type : même avec une signature répartie sur
+        // plusieurs chunks, une image est bornée à 5 Mo dès ses premiers octets.
+        if (signature.length < 12) {
+          signature = Buffer.concat([signature, Buffer.from(value.subarray(0, 12 - signature.length))])
+          if (sniffMimeType(signature, 'video')?.startsWith('image/')) limit = Math.min(limit, maxImageBytes)
+        }
+        if (total > limit || (Number.isFinite(declared) && declared > limit)) {
           await reader.cancel().catch(() => {})
           return null
         }

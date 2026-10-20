@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, Image, Search, Sparkles, UserRound, Video, X, ZoomIn } from 'lucide-react'
-import { fetchImmichAsset, fetchImmichThumbnail, getImmichErrorMessage, listImmichAssets, listImmichPeople } from '../api/immichApi.js'
+import { downloadImmichMemory, fetchImmichAsset, fetchImmichThumbnail, getImmichErrorMessage, listImmichAssets, listImmichPeople } from '../api/immichApi.js'
 import { t } from '../i18n/index.js'
 import PzBusy from './PzBusy.jsx'
 import './ImmichAssetPicker.css'
@@ -104,12 +104,9 @@ export default function ImmichAssetPicker({ treeId, token, onSelect, onClose }) 
     const controller = new AbortController()
     download.current = controller
     try {
-      const blob = await fetchImmichAsset(treeId, asset.id, token, 'original', controller.signal)
+      const file = await downloadImmichMemory(treeId, asset, token, controller.signal)
       if (controller.signal.aborted) return
-      if (!(asset.type === 'IMAGE' ? blob.type.startsWith('image/') : blob.type.startsWith('video/'))) {
-        const error = new Error('invalid_immich_media'); error.payload = { error: 'invalid_immich_media' }; throw error
-      }
-      onSelect(new File([blob], asset.name || asset.id, { type: blob.type }))
+      onSelect(file)
       if (!controller.signal.aborted) setSelected((ids) => [...ids, asset.id])
     } catch (err) { if (!controller.signal.aborted) setError(getImmichErrorMessage(err, t)) }
     finally { if (!controller.signal.aborted) setBusy(false) }

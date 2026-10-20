@@ -49,6 +49,21 @@ export async function fetchImmichAsset(treeId, assetId, token, variant = 'thumbn
   return response.blob()
 }
 
+// Les photos utilisent la version préparée par Immich, y compris les HEIC/RAW.
+// Le nom suit le format réellement reçu ; les vidéos gardent leur original.
+export async function downloadImmichMemory(treeId, asset, token, signal) {
+  const photo = asset.type === 'IMAGE'
+  const blob = await fetchImmichAsset(treeId, asset.id, token, photo ? 'preview' : 'original', signal)
+  if (!(photo ? blob.type.startsWith('image/') : blob.type.startsWith('video/'))) {
+    const error = new Error('invalid_immich_media')
+    error.payload = { error: 'invalid_immich_media' }
+    throw error
+  }
+  const extension = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' }[blob.type]
+  const name = asset.name || asset.id
+  return new File([blob], photo && extension ? `${name.replace(/\.[^.]+$/, '')}${extension}` : name, { type: blob.type })
+}
+
 // Connexion Immich de l'arbre : métadonnées sûres (jamais la clé, jamais l'adresse) et instances
 // autorisées par l'opérateur, nommées par leur libellé, dont le panneau d'administration fait un menu.
 export async function fetchImmichConfig(treeId, token) {

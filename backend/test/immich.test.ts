@@ -153,6 +153,53 @@ describe('Souvenirs Immich', () => {
     await app.close()
   })
 
+  it.each(['preview', 'original'])('coupe une image à 5 Mo en flux sur %s, même déclarée vidéo', async (variant) => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    const cancel = vi.fn()
+    let sent = 0
+    const stream = new ReadableStream({
+      pull(controller) {
+        // La signature JPEG arrive en trois chunks, sans Content-Length.
+        if (sent < 3) controller.enqueue(new Uint8Array(jpegBytes.subarray(sent, ++sent)))
+        else { sent++; controller.enqueue(new Uint8Array(1024 * 1024)) }
+      }, cancel,
+    }, { highWaterMark: 0 })
+    fetchMock.mockResolvedValueOnce(new Response(stream, { headers: { 'content-type': 'video/mp4' } }))
+    const response = await app.inject({ method: 'GET', url: `/trees/tree-1/immich/assets/${immichPersonId}/${variant}`, headers: { authorization: `Bearer ${token}` } })
+    expect(response.statusCode).toBe(413)
+    expect(cancel).toHaveBeenCalledOnce()
+    expect(sent).toBe(8) // 3 octets + 5 Mo : aucun chunk supplémentaire lu.
+    await app.close()
+  })
+
+  it('refuse une image annoncée au-dessus de 5 Mo avant toute lecture', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    const pull = vi.fn()
+    const cancel = vi.fn()
+    fetchMock.mockResolvedValueOnce(new Response(new ReadableStream({ pull, cancel }, { highWaterMark: 0 }), {
+      headers: { 'content-type': 'image/jpeg', 'content-length': String(6 * 1024 * 1024) },
+    }))
+    const response = await app.inject({ method: 'GET', url: `/trees/tree-1/immich/assets/${immichPersonId}/original`, headers: { authorization: `Bearer ${token}` } })
+    expect(response.statusCode).toBe(413)
+    expect(pull).not.toHaveBeenCalled()
+    expect(cancel).toHaveBeenCalledOnce()
+    await app.close()
+  })
+
+  it('conserve la limite vidéo de 20 Mo au-delà de 5 Mo', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    const video = Buffer.alloc(6 * 1024 * 1024)
+    video.set(Buffer.from([0, 0, 0, 24, ...Buffer.from('ftypisom')]))
+    fetchMock.mockResolvedValueOnce(new Response(new Uint8Array(video)))
+    const response = await app.inject({ method: 'GET', url: `/trees/tree-1/immich/assets/${immichPersonId}/original`, headers: { authorization: `Bearer ${token}` } })
+    expect(response.statusCode).toBe(200)
+    expect(response.rawPayload.equals(video)).toBe(true)
+    await app.close()
+  })
+
   it('importe les octets d’une vidéo et coupe un flux qui dépasse la limite', async () => {
     const app = createApp()
     const token = await createUserToken(app)
