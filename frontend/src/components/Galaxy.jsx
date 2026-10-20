@@ -51,6 +51,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   const [tabs, setTabs] = useState([])
   const [activeKey, setActiveKey] = useState(focusPersonId != null ? String(focusPersonId) : null)
   const tabsCacheRef = useRef({ rev: -1, start: undefined, tabs: [] })
+  const pendingFocusRef = useRef(null) // personne cherchée dans un autre onglet, visée après le changement
   const activeTabRef = useRef(null)
   const familyTabsRef = useRef(familyTabs)
   useEffect(() => { familyTabsRef.current = familyTabs }, [familyTabs])
@@ -406,6 +407,14 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     focusPerson: (personId) => {
       const canvas = canvasRef.current
       const node = layoutDataRef.current?.children.find(n => n.id === `p-${personId}`)
+      // Rangée dans un autre onglet : on ouvre cet onglet, la personne est visée une fois l'arbre posé
+      if (!node && familyTabsRef.current) {
+        const id = String(personId)
+        const all = tabsCacheRef.current.tabs
+        const home = all.find((tb) => tb.personIds?.has(id) && !(tb.hinges || []).map(String).includes(id)) || all.find((tb) => tb.personIds?.has(id)) || all[0]
+        if (home && home.key !== activeTabRef.current?.key) { pendingFocusRef.current = id; setActiveKey(home.key) }
+        return
+      }
       if (!canvas || !node) return
       const rect = canvas.getBoundingClientRect()
       const pos = getAnimatedPos(node, performance.now())
@@ -618,6 +627,11 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     layoutDataRef.current = result
     needsRedrawRef.current = true
     setLayoutReady(true)
+    if (pendingFocusRef.current) {
+      const id = pendingFocusRef.current
+      pendingFocusRef.current = null
+      requestAnimationFrame(() => zoomApiRef?.current?.focusPerson?.(id))
+    }
   }, [graphRevision, activeKey, familyTabs])
 
   // Sync selectedPersonId
