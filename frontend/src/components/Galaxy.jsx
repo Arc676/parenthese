@@ -189,7 +189,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       unions: graphUnions,
       filiations: filiationsWithOrder(graphFiliations, graphUnions, group.source, order),
     }
-    const result = computeBlockLayout(graph)
+    const result = computeBlockLayout(graph, focusPersonIdRef.current)
     const baseSource = base.children.find((n) => n.id === group.source)
     const source = result.children.find((n) => n.id === group.source)
     const shift = baseSource && source ? baseSource.x - source.x : 0
@@ -428,7 +428,8 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
 
   // Layout
   useEffect(() => {
-    const result = USE_BLOCK_LAYOUT ? computeBlockLayout() : computeLayout()
+    // La personne de départ sert de référence aux rangées (génération de parenté depuis elle)
+    const result = USE_BLOCK_LAYOUT ? computeBlockLayout(null, focusPersonIdRef.current) : computeLayout(null, focusPersonIdRef.current)
 
     const canvas = canvasRef.current
     if (!canvas) return
