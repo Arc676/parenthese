@@ -451,7 +451,9 @@ function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
         owner.hingeEdges.push([pu, id])
         continue
       }
-      const side = forcedSide.get(id) ?? (chain.length > 3 ? (chain.indexOf(id) < chain.length / 2 ? -1 : 1) : (outer || (chain.indexOf(id) < chain.length / 2 ? -1 : 1)))
+      // Le côté extérieur de la branche prime : une branche au bout de sa fratrie pose ses belles-familles au-delà,
+      // jamais dans la fratrie des aînés (Patch, 20/10 : la branche de Paul à droite d'Eugénie)
+      const side = (chain.length === 3 && outer) ? outer : (forcedSide.get(id) ?? (chain.length > 3 ? (chain.indexOf(id) < chain.length / 2 ? -1 : 1) : (chain.indexOf(id) < chain.length / 2 ? -1 : 1)))
       const saved = anchor
       const tabsBefore = tabs.length
       const externalBefore = new Set(externalEdges)
@@ -484,10 +486,21 @@ function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
       // ces parents : des ancêtres plus larges grimperaient dans les rangées des aînés de la lignée et s'y
       // glisseraient entre deux frères (Patch, 20/10, Marc et Sophie entre Anaïs et Germaine). Les parents
       // restent, le reste devient un onglet. Des ancêtres en colonne au-dessus des parents restent dessinés.
-      // Une toute petite famille (jusqu'à FAMILY_INLINE_MAX personnes au-delà des parents) reste dessinée.
+      // Une toute petite famille (jusqu'à FAMILY_INLINE_MAX personnes au-delà des parents) reste dessinée,
+      // à condition que ce qui est au-dessus des parents tienne dans leur largeur (une colonne d'ancêtres),
+      // sinon elle déborderait dans les rangées des aînés (Paul et ses frères dans la fratrie de Catherine)
       const deep = [...block.rows.keys()].some(g => g < gen - 1)
       const beyondParents = deep ? [...block.members].filter(m => byId.get(m)?._type === 'person' && chainOf.get(m) !== pc).length : 0
-      if (parentsOnly || (deep && beyondParents > FAMILY_INLINE_MAX)) entry.block = reduceToParents(entry)
+      // Au-dessus des parents, seuls les ancêtres en ligne directe du conjoint sont admis : des oncles ou tantes
+      // élargiraient ces rangées et la famille se glisserait dans la fratrie des aînés de la lignée
+      const ancestors = new Set()
+      for (const stack = [id]; stack.length;) {
+        const u = parentUnionOf.get(stack.pop())
+        if (!u) continue
+        for (const k of [byId.get(u)?._data?.p1Key, byId.get(u)?._data?.p2Key]) if (k && !ancestors.has(k)) { ancestors.add(k); stack.push(k) }
+      }
+      const collaterals = deep && [...block.members].some(m => { const n = byId.get(m); return n?._type === 'person' && n._generation < gen - 1 && !ancestors.has(m) })
+      if (parentsOnly || (deep && (beyondParents > FAMILY_INLINE_MAX || collaterals))) entry.block = reduceToParents(entry)
       built.push(entry)
       orient(chain, kidOfChain ?? (chain.length === 3 ? (chain[0] === id ? chain[2] : chain[0]) : null), side)
     }
