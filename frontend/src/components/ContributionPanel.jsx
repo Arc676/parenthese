@@ -7,6 +7,7 @@ import './SettingsPanels.css'
 import PzBusy from './PzBusy.jsx'
 import { HELP_URL } from '../utils/siteLinks.js'
 import { t, dateLocale } from '../i18n/index.js'
+import { normalizeSex, SEX_CHOICES } from '../utils/personSex.js'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -74,6 +75,7 @@ const PERSON_FIELD_LABELS = {
   lastName: t('Nom'),
   birthName: t('Nom de naissance'),
   nickname: t('Surnom'),
+  sex: t('Sexe'),
   birthDate: t('Date de naissance'),
   deathDate: t('Date de décès'),
   deathPlace: t('Lieu de décès'),
@@ -84,7 +86,9 @@ const PERSON_FIELD_LABELS = {
   notes: t('Notes'),
 }
 
-function displayVal(v) {
+function displayVal(v, key) {
+  // Sexe : « Non précisé » plutôt que « vide »
+  if (key === 'sex') return SEX_CHOICES.find((choice) => choice.value === normalizeSex(v))?.label ?? null
   if (v === null || v === undefined || v === '') return null
   return String(v)
 }
@@ -134,10 +138,11 @@ function getPersonDisplayName(change, sessionChanges = []) {
     const data = change.afterJson || {}
     return data.title || t('Moment')
   }
-  const data = (change.afterJson && typeof change.afterJson === 'object')
-    ? change.afterJson
-    : (change.beforeJson && typeof change.beforeJson === 'object' ? change.beforeJson : null)
-  if (!data) return null
+  // Une modification ne porte que les champs changés : le nom vient alors de l'« avant » (lu en base)
+  const after = change.afterJson && typeof change.afterJson === 'object' ? change.afterJson : null
+  const before = change.beforeJson && typeof change.beforeJson === 'object' ? change.beforeJson : null
+  if (!after && !before) return null
+  const data = { ...before, ...after }
   const name = `${data.firstName || ''} ${data.lastName || ''}`.trim()
   return name || null
 }
@@ -614,12 +619,12 @@ const ContributionPanel = ({
                                       <span className="contrib-field-label">{label}</span>
                                       {oldVal !== undefined ? (
                                         <span className="contrib-field-diff">
-                                          <span className="contrib-field-old">{displayVal(oldVal) ?? t('vide')}</span>
+                                          <span className="contrib-field-old">{displayVal(oldVal, key) ?? t('vide')}</span>
                                           <span className="contrib-field-arrow">→</span>
-                                          <span className="contrib-field-new">{displayVal(newVal) ?? t('vide')}</span>
+                                          <span className="contrib-field-new">{displayVal(newVal, key) ?? t('vide')}</span>
                                         </span>
                                       ) : (
-                                        <span className="contrib-field-new">{displayVal(newVal) ?? t('vide')}</span>
+                                        <span className="contrib-field-new">{displayVal(newVal, key) ?? t('vide')}</span>
                                       )}
                                     </div>
                                   ))}

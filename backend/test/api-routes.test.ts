@@ -491,7 +491,7 @@ describe('Graph routes', () => {
     prismaMock.person.findMany.mockResolvedValue([
       { ...base, id: 'p-1', firstName: 'Louis', lastName: 'Ragot', sex: 'male', birthDate: new Date('1879-01-01T00:00:00Z'), birthDatePrecision: 'about', birthPlace: 'La Roche-sur-Yon', deathDate: new Date('1950-05-02T00:00:00Z'), deathPlace: 'Nantes', nickname: 'Loulou', profession: 'Instituteur' },
       { ...base, id: 'p-2', firstName: 'Marie', lastName: 'Bodin', sex: 'female', birthDate: null, birthDatePrecision: null, birthPlace: null, isDeceased: true },
-      { ...base, id: 'p-3', firstName: 'Jean', lastName: 'Ragot', sex: 'male', birthDate: null, birthDatePrecision: null, birthPlace: null },
+      { ...base, id: 'p-3', firstName: 'Jean', lastName: 'Ragot', sex: 'M', birthDate: null, birthDatePrecision: null, birthPlace: null },
     ])
     prismaMock.union.findMany.mockResolvedValue([
       { id: 'u-1', partner1PersonId: 'p-1', partner2PersonId: 'p-2', startDate: new Date('1905-01-01T00:00:00Z'), startDatePrecision: 'estimated', startPlace: 'Limoges', endDate: null },
@@ -518,6 +518,8 @@ describe('Graph routes', () => {
     expect(text).toContain('2 PEDI adopted')
     // Décédée sans date (issue #77) : la forme courte de la norme
     expect(text).toContain('1 NAME Marie /Bodin/\n1 SEX F\n1 DEAT Y\n')
+    // Ancienne écriture « M » en base : exportée comme un homme (issue #114)
+    expect(text).toContain('1 NAME Jean /Ragot/\n1 SEX M\n')
 
     const roots = parseGedcom(text)
     const records = indexGedcomRecords(roots)
@@ -1143,6 +1145,28 @@ describe('Surnom (nickname) en écriture directe', () => {
     const token = await createUserToken(app)
     const res = await app.inject({ method: 'PATCH', url: '/trees/tree-1/persons/person-1', headers: { authorization: `Bearer ${token}` }, payload: { nickname: 'x'.repeat(121) } })
     expect(res.statusCode).toBe(400)
+    await app.close()
+  })
+})
+
+describe('Sexe d’une personne en écriture directe (issue #114)', () => {
+  it('PATCH ramène le sexe à male / female, null = non précisé, refuse une valeur inconnue', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    const patch = (payload: object) => app.inject({ method: 'PATCH', url: '/trees/tree-1/persons/person-1', headers: { authorization: `Bearer ${token}` }, payload })
+
+    expect((await patch({ sex: 'F' })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ sex: 'female' })
+
+    expect((await patch({ sex: 'male' })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ sex: 'male' })
+
+    expect((await patch({ sex: null })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ sex: null })
+
+    const calls = prismaMock.person.updateMany.mock.calls.length
+    expect((await patch({ sex: 'robot' })).statusCode).toBe(400)
+    expect(prismaMock.person.updateMany.mock.calls.length).toBe(calls)
     await app.close()
   })
 })

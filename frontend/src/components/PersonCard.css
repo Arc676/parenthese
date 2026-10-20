@@ -292,6 +292,9 @@
 .pc-parentage { display: grid; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--pz-line-soft); }
 .pc-seg { width: 100%; }
 .pc-seg .pz-tab { flex: 1; }
+/* Sexe (issue #114) : étiquette au-dessus, trois choix sur toute la largeur, chacun sur une ligne */
+.pc-row--seg { flex-direction: column; align-items: stretch; gap: 6px; }
+.pc-row--seg .pz-tab { white-space: nowrap; padding: 0 8px; }
 
 /* Titres de section de l'onglet Infos et Liens : casse normale, Newsreader 15 px, comme la maquette (.sec) */
 .pc-infos .pz-eyebrow { text-transform: none; letter-spacing: 0; font: 400 15px/1.3 var(--pz-serif); color: var(--pz-ink); }

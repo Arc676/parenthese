@@ -8,6 +8,7 @@ import { indexGedcomRecords, mediaRefsForPerson, noteText, photoPathForPerson } 
 import type { GedcomRecords } from '../lib/gedcom-photos.js'
 import type { MembershipRole } from '../types/auth.js'
 import { nextSiblingOrder } from '../lib/sibling-order.js'
+import { sexOrNull } from '../lib/person-sex.js'
 
 const treeIdParamSchema = z.object({
   id: z.string().min(1),
@@ -455,8 +456,9 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
       lines.push(`1 NAME ${gedcomNameValue(person.firstName, person.lastName)}`)
       if (person.nickname) lines.push(`2 NICK ${oneLine(person.nickname)}`)
 
-      if (person.sex === 'male' || person.sex === 'M') lines.push('1 SEX M')
-      else if (person.sex === 'female' || person.sex === 'F') lines.push('1 SEX F')
+      const sex = sexOrNull(person.sex)
+      if (sex === 'male') lines.push('1 SEX M')
+      else if (sex === 'female') lines.push('1 SEX F')
 
       const personEvents = eventsByPerson.get(person.id) ?? []
       const birthDetails = personEvents.find((event) => event.type === 'birth')
@@ -518,9 +520,9 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
       const p1 = union.partner1PersonId ? personById.get(union.partner1PersonId) : null
       const p2 = union.partner2PersonId ? personById.get(union.partner2PersonId) : null
 
-      const p1IsFemale = p1?.sex === 'female' || p1?.sex === 'F'
-      const p1IsMale = p1?.sex === 'male' || p1?.sex === 'M'
-      const p2IsMale = p2?.sex === 'male' || p2?.sex === 'M'
+      const p1IsFemale = sexOrNull(p1?.sex) === 'female'
+      const p1IsMale = sexOrNull(p1?.sex) === 'male'
+      const p2IsMale = sexOrNull(p2?.sex) === 'male'
 
       // Swap to HUSB=male if we know p1 is female and p2 is male (or unknown)
       const shouldSwap = p1IsFemale && !p2IsMale === false ? false : p1IsFemale && (p2IsMale || !p1IsMale)
@@ -675,7 +677,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
           : { firstName: '', lastName: '' }
 
         const sexNode = findChild(indi, 'SEX')
-        const sex = sexNode?.value === 'M' ? 'male' : sexNode?.value === 'F' ? 'female' : null
+        const sex = sexOrNull(sexNode?.value)
 
         const birtNode = findChild(indi, 'BIRT')
         const birthDateIso = gedcomDateToIso(findChild(birtNode, 'DATE')?.value ?? '')

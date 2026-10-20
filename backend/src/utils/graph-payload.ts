@@ -3,6 +3,7 @@ import type { Annotation, MediaItem, ParentChildLink, Person, Union } from '@pri
 import { sanitizeAnnotationContentForRead } from '../lib/annotation-content.js'
 import { readAvatarCrop, type AvatarCrop } from '../lib/avatar-crop.js'
 import { isImmichAvatarPath } from '../lib/media-files.js'
+import { sexOrNull } from '../lib/person-sex.js'
 
 export type GraphPayload = {
   persons: Array<{
@@ -98,7 +99,7 @@ export function buildGraphPayload(
         region: person.region,
         nationality: person.nationality,
         avatarUrlPath: person.avatarPath ? `/trees/${treeId}/persons/${person.id}/avatar` : null,
-        sex: person.sex,
+        sex: sexOrNull(person.sex),
         notes: person.notes,
         avatarFromImmich: isImmichAvatarPath(person.avatarPath),
         avatarCrop: person.avatarPath ? readAvatarCrop(person.avatarCrop) : null,

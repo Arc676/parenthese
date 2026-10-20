@@ -4,6 +4,7 @@
  */
 
 import { t } from '../i18n/index.js'
+import { normalizeSex } from './kinship/index.js'
 
 /**
  * Convertit une date ISO (YYYY-MM-DD) en année
@@ -53,7 +54,7 @@ export function adaptGraphForGalaxy(apiGraph, _treeId) {
     birthYear: dateToYear(p.birthDate),
     deathYear: dateToYear(p.deathDate),
     isAlive: isAlive(p.deathDate),
-    sex: p.sex || null,
+    sex: normalizeSex(p.sex),
     note: p.notes || null,
     birthDate: p.birthDate,
     deathDate: p.deathDate,

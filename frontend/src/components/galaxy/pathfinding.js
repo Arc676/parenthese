@@ -1,5 +1,5 @@
 import { coupleBarMeta } from './elkLayout'
-import { t } from '../../i18n/index.js'
+import { nameKinship, normalizeSex } from '../../utils/kinship/index.js'
 
 // ============================================================
 // BFS — chemin le plus court entre deux personnes
@@ -8,7 +8,8 @@ import { t } from '../../i18n/index.js'
 // noeuds intermédiaires invisibles ; seuls les noeuds personne
 // comptent comme "étapes".
 // ============================================================
-export function findPathBFS(fromElkId, toElkId, layoutData) {
+// persons : les personnes à jour (sexe modifié sans recalcul du placement) ; à défaut, celles du placement
+export function findPathBFS(fromElkId, toElkId, layoutData, persons = null) {
   if (!layoutData || fromElkId === toElkId) return null
 
   // Construire l'adjacence
@@ -63,78 +64,38 @@ export function findPathBFS(fromElkId, toElkId, layoutData) {
   }
   nodePath.unshift(fromElkId)
 
-  const label = computeRelationshipLabel(edgePath)
-  return { nodePath, edgePath, label }
+  const personById = persons
+    ? new Map(persons.map((person) => [`p-${person.id}`, person]))
+    : new Map((layoutData.children || []).filter((node) => node._type === 'person').map((node) => [node.id, node._data]))
+  const kinship = kinshipPath(edgePath, nodePath, (id) => personById.get(id))
+  return { nodePath, edgePath, kinship, label: nameKinship(kinship) }
 }
 
 // ============================================================
-// Calcul du lien de parenté à partir du chemin BFS
-// On analyse la direction à chaque union traversée :
-//   filiation→couple = UP (enfant → parent)
-//   couple→filiation = DOWN (parent → enfant)
-//   filiation→filiation = SIBLING (frères/sœurs, +1 up +1 down)
-//   couple→couple = SPOUSE (conjoints)
-// Puis (ups, downs) donne le degré de parenté.
+// Chemin de parenté complet, à partir du chemin BFS
+// On lit la direction à chaque union traversée :
+//   filiation→couple = 'up' (enfant → parent)
+//   couple→filiation = 'down' (parent → enfant)
+//   filiation→filiation = 'sibling' (frère ou sœur)
+//   couple→couple = 'spouse' (conjoint)
+// Chaque pas garde la personne atteinte (sexe, année de naissance) :
+// le nommage, langue par langue, est dans utils/kinship.
 // ============================================================
-export function computeRelationshipLabel(edgePath) {
-  if (edgePath.length < 2) return ''
+const MOVES = { 'filiation>couple': 'up', 'couple>filiation': 'down', 'filiation>filiation': 'sibling', 'couple>couple': 'spouse' }
 
-  let ups = 0, downs = 0, hasSpouse = false
+const personFacts = (data, id) => ({ id: data?.id ?? id, sex: normalizeSex(data?.sex), birthYear: data?.birthYear ?? null })
 
-  for (let i = 0; i < edgePath.length; i += 2) {
-    if (i + 1 >= edgePath.length) break
-    const entering = edgePath[i].type
-    const leaving = edgePath[i + 1].type
-    if (entering === 'couple' && leaving === 'couple') hasSpouse = true
-    else if (entering === 'couple' && leaving === 'filiation') downs++
-    else if (entering === 'filiation' && leaving === 'couple') ups++
-    else if (entering === 'filiation' && leaving === 'filiation') { ups++; downs++ }
+export function kinshipPath(edgePath, nodePath = [], personOf = () => null) {
+  if (edgePath.length < 2) return null
+  const steps = []
+  for (let i = 0; i + 1 < edgePath.length; i += 2) {
+    const move = MOVES[`${edgePath[i].type}>${edgePath[i + 1].type}`]
+    const id = nodePath[i + 2]
+    steps.push({ move, person: personFacts(personOf(id), id) })
   }
+  return { from: personFacts(personOf(nodePath[0]), nodePath[0]), steps }
+}
 
-  // Conjoint direct
-  if (hasSpouse && ups === 0 && downs === 0) return t('Conjoint(e)')
-
-  // In-laws courants
-  if (hasSpouse) {
-    if (ups === 1 && downs === 0) return t('Beau-parent')
-    if (ups === 0 && downs === 1) return t('Bel-enfant')
-    if (ups === 1 && downs === 1) return t('Beau-frère/sœur')
-  }
-
-  // Ascendants directs
-  let label
-  if (downs === 0 && ups > 0) {
-    if (ups === 1) label = t('Parent')
-    else if (ups === 2) label = t('Grand-parent')
-    else if (ups === 3) label = t('Arrière-grand-parent')
-    else label = t('Aïeul(e) {n}e gén.', { n: ups })
-  }
-  // Descendants directs
-  else if (ups === 0 && downs > 0) {
-    if (downs === 1) label = t('Enfant')
-    else if (downs === 2) label = t('Petit-enfant')
-    else if (downs === 3) label = t('Arrière-petit-enfant')
-    else label = t('Descendant(e) {n}e gén.', { n: downs })
-  }
-  // Fratrie
-  else if (ups === 1 && downs === 1) { label = t('Frère/Sœur') }
-  // Oncle / Tante
-  else if (ups === 2 && downs === 1) { label = t('Oncle/Tante') }
-  else if (ups === 3 && downs === 1) { label = t('Grand-oncle/tante') }
-  // Neveu / Nièce
-  else if (ups === 1 && downs === 2) { label = t('Neveu/Nièce') }
-  else if (ups === 1 && downs === 3) { label = t('Petit-neveu/nièce') }
-  // Cousins
-  else if (ups >= 2 && downs >= 2) {
-    const degree = Math.min(ups, downs) - 1
-    const removed = Math.abs(ups - downs)
-    if (degree === 1 && removed === 0) label = t('Cousin(e) germain(e)')
-    else if (degree === 1) label = t('Petit-cousin(e)')
-    else if (removed === 0) label = t('Cousin(e) {n}e degré', { n: degree })
-    else label = t('Cousin(e) éloigné(e)')
-  }
-  else { label = t('{n} liens', { n: ups + downs }) }
-
-  if (hasSpouse && label) label = t('{label} par alliance', { label })
-  return label
+export function computeRelationshipLabel(edgePath, nodePath, personOf) {
+  return nameKinship(kinshipPath(edgePath, nodePath, personOf))
 }
