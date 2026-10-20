@@ -50,6 +50,8 @@ const FAMILY_TAB_PX = 2880
 // Une belle-famille poussée plus loin que ça de son enfant ne se colle pas : seuls les parents du conjoint
 // restent au-dessus de lui, le reste devient un onglet
 const FAMILY_FIT_PX = 480
+// Une belle-famille qui grimpe au-dessus des parents du conjoint reste dessinée si elle est toute petite
+const FAMILY_INLINE_MAX = 6
 
 // Le fil d'une filiation union → enfant : une personne d'une autre famille, sur la ligne de l'enfant,
 // entre l'aplomb de l'union et l'enfant, est croisée. Frères et sœurs et leurs conjoint(e)s ne comptent pas
@@ -476,7 +478,14 @@ function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
         continue
       }
       const entry = { block, anchorId: id, side, pu, pc, snap: { tabsBefore, tabsAfter: tabs.length, externalBefore, externalAfter: new Set(externalEdges) } }
-      if (parentsOnly) entry.block = reduceToParents(entry)
+      // Une belle-famille collée ne déborde pas, au-dessus de la rangée des parents du conjoint, de la place de
+      // ces parents : des ancêtres plus larges grimperaient dans les rangées des aînés de la lignée et s'y
+      // glisseraient entre deux frères (Patch, 20/10, Marc et Sophie entre Anaïs et Germaine). Les parents
+      // restent, le reste devient un onglet. Des ancêtres en colonne au-dessus des parents restent dessinés.
+      // Une toute petite famille (jusqu'à FAMILY_INLINE_MAX personnes au-delà des parents) reste dessinée.
+      const deep = [...block.rows.keys()].some(g => g < gen - 1)
+      const beyondParents = deep ? [...block.members].filter(m => byId.get(m)?._type === 'person' && chainOf.get(m) !== pc).length : 0
+      if (parentsOnly || (deep && beyondParents > FAMILY_INLINE_MAX)) entry.block = reduceToParents(entry)
       built.push(entry)
       orient(chain, kidOfChain ?? (chain.length === 3 ? (chain[0] === id ? chain[2] : chain[0]) : null), side)
     }
