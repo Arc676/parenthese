@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 import { env } from '../config/env.js'
 import { hashPassword, verifyPassword } from '../lib/auth.js'
+import { createAccountIfAllowed, isRegistrationOpen } from '../lib/registration.js'
 import { revokeUserToken } from '../lib/token-revocation.js'
 import { deletedAccountVisitorKey } from '../lib/tree-visits.js'
 import { deleteTreeRecords, removeTreeMediaDirectories } from '../lib/tree-purge.js'
@@ -94,6 +95,13 @@ async function resolveAccessibleLastTree(
 }
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
+  // Ce que l'écran d'accueil propose : l'app cache « Créer un compte » quand l'instance n'en accepte plus
+  app.get(
+    '/options',
+    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
+    async (_request, reply) => reply.send({ registration: await isRegistrationOpen(app.prisma) }),
+  )
+
   app.post(
     '/register',
     {
@@ -110,6 +118,11 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(400).send({ error: 'invalid_payload', details: parsed.error.flatten() })
       }
 
+      // Inscription fermée : refusée avant toute lecture, la réponse ne dit pas si l'adresse a un compte
+      if (!(await isRegistrationOpen(app.prisma))) {
+        return reply.code(403).send({ error: 'registration_closed' })
+      }
+
       const email = parsed.data.email.trim().toLowerCase()
       const existing = await app.prisma.user.findUnique({ where: { email } })
       if (existing) {
@@ -117,7 +130,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const passwordHash = await hashPassword(parsed.data.password)
-      const user = await app.prisma.user.create({
+      const user = await createAccountIfAllowed(app.prisma, (tx) => tx.user.create({
         data: {
           email,
           passwordHash,
@@ -128,7 +141,11 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
           email: true,
           firstName: true,
         },
-      })
+      }))
+      // Un autre compte est né pendant le calcul du hash, sur une instance fermée
+      if (!user) {
+        return reply.code(403).send({ error: 'registration_closed' })
+      }
 
       const token = app.jwt.sign(
         {

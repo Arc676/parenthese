@@ -57,6 +57,8 @@ Trois conteneurs tournent : `db` (PostgreSQL 16), `api` (l'API Node) et `web` (n
 
 Pour ouvrir l'instance à la famille depuis Internet, placez un reverse proxy HTTPS devant le port `web` (Caddy, Traefik, nginx) et mettez l'adresse publique dans `CORS_ORIGIN`, par exemple `https://arbre.votre-domaine.fr`.
 
+Pour qu'une personne qui tombe sur l'adresse ne puisse pas s'inscrire et y créer ses arbres, mettez `ALLOW_REGISTRATION=false` dans `.env`, puis lancez `docker compose up -d`. Les comptes existants se connectent et créent leurs arbres comme avant, la famille ouvre toujours les arbres partagés avec le lien et le mot de passe, et l'application ne propose plus de créer de compte. Une instance sans aucun compte accepte quand même le premier, la variable peut donc être posée avant le tout premier démarrage : créez votre compte tout de suite, avant de donner l'adresse.
+
 Une instance auto-hébergée n'envoie aucune mesure d'audience : le suivi d'usage de parenthese.io ne s'active que si une clé PostHog est fournie au build, ce que cette configuration ne fait pas.
 
 Les liens d'aide et de vie privée de l'application mènent à parenthese.io. Pour pointer vers vos propres pages, renseignez `VITE_HELP_URL` et `VITE_PRIVACY_URL` quand vous construisez vous-même le front (voir `frontend/.env.example`).
@@ -69,7 +71,7 @@ docker compose ps              # état des conteneurs
 docker compose down            # arrêt, les données sont conservées
 ```
 
-Pour vérifier qu'une installation fonctionne de bout en bout, lancez `bash tools/docker-smoke.sh http://localhost` (avec le port si `WEB_PORT` n'est pas 80). Le script a besoin de `curl` et `jq`. Il passe par le port web comme un navigateur : page d'accueil, santé de l'API, création d'un compte, connexion, création puis suppression d'un arbre de test. Le compte de test (`smoke-...@example.com`) reste en base.
+Pour vérifier qu'une installation fonctionne de bout en bout, lancez `bash tools/docker-smoke.sh http://localhost` (avec le port si `WEB_PORT` n'est pas 80). Le script a besoin de `curl` et `jq`. Il passe par le port web comme un navigateur : page d'accueil, santé de l'API, création d'un compte, connexion, création puis suppression d'un arbre de test. Le compte de test (`smoke-...@example.com`) reste en base. Avec `ALLOW_REGISTRATION=false`, le script s'arrête à la création du compte, c'est le refus attendu.
 
 ### Un seul conteneur (Unraid, NAS)
 
@@ -79,7 +81,7 @@ Pour les systèmes qui installent un conteneur par application, `ghcr.io/iliesal
 docker run -d --name parenthese --restart unless-stopped -p 8080:80 -v /chemin/vers/appdata/parenthese:/data ghcr.io/iliesallali/parenthese-aio
 ```
 
-Rien à remplir. Au premier démarrage, le conteneur crée dans `/data` la base, son mot de passe et la clé des sessions, puis les réutilise. Les photos et vidéos vont dans `/data/media`. Sauvegardez tout le dossier `/data` conteneur arrêté, ou exportez la base pendant qu'il tourne avec `docker exec parenthese runuser -u postgres -- pg_dump parenthese > parenthese.sql`. La base est ici PostgreSQL 15, l'installation compose utilise la 16.
+Rien à remplir. Au premier démarrage, le conteneur crée dans `/data` la base, son mot de passe et la clé des sessions, puis les réutilise. Les photos et vidéos vont dans `/data/media`. Pour fermer la création de compte, ajoutez `-e ALLOW_REGISTRATION=false` (sur Unraid, « Allow registration » à `false`). Sauvegardez tout le dossier `/data` conteneur arrêté, ou exportez la base pendant qu'il tourne avec `docker exec parenthese runuser -u postgres -- pg_dump parenthese > parenthese.sql`. La base est ici PostgreSQL 15, l'installation compose utilise la 16.
 
 ### Où sont les données
 

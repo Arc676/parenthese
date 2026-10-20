@@ -59,7 +59,7 @@ function AvatarMenu({
   const body = guest ? (
     <>
       <NavMenuItem icon={<LogIn {...ICON} />} label={t('Se connecter')} onSelect={() => { onClose(); onLogin?.() }} />
-      <NavMenuItem icon={<UserPlus {...ICON} />} label={t('Créer mon arbre')} onSelect={() => { onClose(); onRegister?.() }} />
+      {onRegister && <NavMenuItem icon={<UserPlus {...ICON} />} label={t('Créer mon arbre')} onSelect={() => { onClose(); onRegister() }} />}
       <NavMenuSep />
       {helpRow}
     </>

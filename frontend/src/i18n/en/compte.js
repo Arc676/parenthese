@@ -43,6 +43,7 @@ export default {
   "Ouvrir un arbre partagé avec moi": "Open a tree shared with me",
   "Vous avez déjà un compte ?": "Already have an account?",
   "Pas encore de compte ?": "Don't have an account yet?",
+  "Cette instance n'accepte plus de nouveaux comptes. Demandez à la personne qui l'héberge.": "This instance no longer accepts new accounts. Ask the person who hosts it.",
   "Me connecter": "Sign in",
   "Vos *arbres*": "Your *trees*",
   "Ouvrez un arbre, ou commencez celui d'une autre branche de la famille.": "Open a tree, or start one for another branch of the family.",

@@ -28,6 +28,16 @@ function parseTrustProxy(value: string): boolean | string {
   return value
 }
 
+// « true » ou « false », sans tenir compte de la casse. z.coerce.boolean lirait « false » comme vrai.
+function parseBooleanFlag(name: string) {
+  return (value: string): boolean => {
+    const normalized = value.trim().toLowerCase()
+    if (normalized === 'true') return true
+    if (normalized === 'false') return false
+    throw new Error(`${name} must be "true" or "false"`)
+  }
+}
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
@@ -54,6 +64,10 @@ const envSchema = z.object({
   // d'un arbre choisissent leur connexion parmi cette liste : sans elle, la reconnaissance
   // des visages reste éteinte et le serveur ne peut pas servir de proxy vers un service interne.
   IMMICH_ALLOWED_API_URLS: z.string().default(''),
+  // Création de compte. À « false », seuls les comptes existants se connectent : une instance ouverte sur
+  // Internet ne laisse pas un inconnu qui trouve l'adresse créer ses arbres. Une instance sans aucun compte
+  // accepte quand même le premier, celui du propriétaire (voir lib/registration.ts).
+  ALLOW_REGISTRATION: z.string().default('true').transform(parseBooleanFlag('ALLOW_REGISTRATION')),
 })
 
 export const env = envSchema.parse(process.env)

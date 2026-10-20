@@ -75,3 +75,8 @@ export async function updateLastOpenedTree(token, payload) {
 
   return data?.lastTree || null
 }
+
+// Options de l'instance : inscription ouverte ou fermée (ALLOW_REGISTRATION côté API)
+export async function fetchAuthOptions() {
+  return apiRequest('/auth/options', { method: 'GET' })
+}

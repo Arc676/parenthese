@@ -52,6 +52,7 @@ import {
   uploadPersonMedia,
 } from './api/treeApi'
 import { fetchImmichConfig, getImmichErrorMessage, unassignImmichPerson } from './api/immichApi.js'
+import { fetchAuthOptions } from './api/authApi'
 import { useAuth } from './hooks/useAuth'
 import { useTreeAccess, getTreeTokenStorageKey, getSlugFromPathname, readTreeAccessRole, TREE_ID_FROM_ENV } from './hooks/useTreeAccess'
 import { useMediaManager } from './hooks/useMediaManager'
@@ -526,6 +527,8 @@ function App() {
   })
   const [treeNotFound, setTreeNotFound] = useState(false)
   const [accountEntryMode, setAccountEntryMode] = useState('login')
+  // Inscription fermée sur l'instance (ALLOW_REGISTRATION=false, #113) : plus de « Créer un compte » nulle part
+  const [registrationOpen, setRegistrationOpen] = useState(true)
   const [treeWizardVisible, setTreeWizardVisible] = useState(false)
   const [treeWizardLoading, setTreeWizardLoading] = useState(false)
   const [treeWelcomeVisible, setTreeWelcomeVisible] = useState(false)
@@ -2175,6 +2178,15 @@ function App() {
         return
       }
 
+      // Lue en parallèle, attendue avant le premier écran sans session pour ne pas montrer un bouton qui disparaît
+      let registrationAllowed = true
+      const authOptionsReady = fetchAuthOptions()
+        .then((options) => {
+          registrationAllowed = options?.registration !== false
+          if (active) setRegistrationOpen(registrationAllowed)
+        })
+        .catch(() => {})
+
       const slug = getSlugFromPathname()
       let resolvedTreeId = TREE_ID_FROM_ENV
       let resolvedTreeName = ''
@@ -2188,6 +2200,8 @@ function App() {
       if (!slug && !TREE_ID_FROM_ENV && !query.has('account')) {
         const userToken = auth.restoreUserToken()
         if (!userToken) {
+          await authOptionsReady
+          if (!active) return
           tree.setBootState('welcome')
           return
         }
@@ -2315,6 +2329,7 @@ function App() {
         }
       }
 
+      await authOptionsReady
       if (!active) return
 
       if (resolvedTreeId) {
@@ -2331,7 +2346,7 @@ function App() {
       }
 
       // ?account=register (CTA de la landing) : écran compte directement en création
-      if (query.get('account') === 'register') {
+      if (query.get('account') === 'register' && registrationAllowed) {
         setAccountEntryMode('register')
         trackAppEvent('account_screen_viewed', { mode: 'register', from_shared_tree: false, source: getSource() })
       }
@@ -2392,8 +2407,9 @@ function App() {
     tree.setGateError('')
     auth.setAccountError('')
     setAccountPanelVisible(false)
-    setAccountEntryMode(mode === 'register' ? 'register' : 'login')
-    trackAppEvent('account_screen_viewed', { mode: mode === 'register' ? 'register' : 'login', from_shared_tree: Boolean(pendingSharedTreeRef.current?.treeId) })
+    const entryMode = mode === 'register' && registrationOpen ? 'register' : 'login'
+    setAccountEntryMode(entryMode)
+    trackAppEvent('account_screen_viewed', { mode: entryMode, from_shared_tree: Boolean(pendingSharedTreeRef.current?.treeId) })
     media.resetMediaManager()
     setAdminPanelVisible(false)
     contrib.resetContribState()
@@ -2941,7 +2957,7 @@ function App() {
         <EntryChoice
           onFamilyLink={handleFamilyLinkChoice}
           onLogin={() => handleUseAccount('login')}
-          onRegister={() => handleUseAccount('register')}
+          onRegister={registrationOpen ? () => handleUseAccount('register') : undefined}
         />
       </div>
     )
@@ -2965,6 +2981,7 @@ function App() {
           onSubmit={handleGateUnlock}
           onUseDemo={handleUseDemo}
           onUseAccount={handleUseAccount}
+          canRegister={registrationOpen}
         />
       </div>
     )
@@ -2980,6 +2997,7 @@ function App() {
           trees={auth.accountTrees}
           activeTreeId={tree.treeContext.treeId}
           defaultMode={accountEntryMode}
+          canRegister={registrationOpen}
           pendingTreeName={pendingSharedTreeName}
           onLogin={handleLogin}
           onRegister={handleRegister}
@@ -3146,6 +3164,7 @@ function App() {
         onTreeSelect={handleOpenTreeFromAccount}
         onCreateTree={handleOpenTreeWizard}
         onProfileClick={handleUseAccount}
+        canRegister={registrationOpen}
         onAccountClick={() => setAccountPanelVisible(true)}
         onSettingsClick={() => setAdminPanelVisible(true)}
         onLogout={handleLogout}

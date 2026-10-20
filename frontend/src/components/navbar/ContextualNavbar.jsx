@@ -50,6 +50,7 @@ function ContextualNavbar({
   onTreeSelect,
   onCreateTree,
   onProfileClick,
+  canRegister = true,
   onAccountClick,
   onSettingsClick,
   onLogout,
@@ -408,7 +409,7 @@ function ContextualNavbar({
                   onCreateTree={onCreateTree}
                   onSettings={onSettingsClick}
                   onLogin={() => onProfileClick?.('login')}
-                  onRegister={handleCreateAccountClick}
+                  onRegister={canRegister ? handleCreateAccountClick : undefined}
                   onLogout={onLogout}
                 />
               )}
