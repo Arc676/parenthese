@@ -258,7 +258,10 @@ export function computeLayout(graphData = null) {
 
   // Ajuster les racines orphelines : si un ancêtre sans parents connus
   // a des enfants à gen N, il doit être à gen N-1 (pas gen 0).
-  {
+  // Répété jusqu'à stabilité : un enfant descendu par son conjoint fait à son tour descendre ses parents
+  // sans ascendance (sinon ils restent en haut, et l'enfant pend plusieurs rangées sous sa fratrie).
+  for (let pass = 0; pass < 12; pass++) {
+    const before = persons.map(p => genMap.get(p.id)).join()
     const rootIds = new Set(persons.filter(p => !filiationsByChild.has(p.id)).map(p => p.id))
     const maxChildGenByRoot = new Map()
     normalizedFiliations.forEach(f => {
@@ -298,6 +301,7 @@ export function computeLayout(graphData = null) {
         genMap.set(u.partner2Id, maxG)
       })
     }
+    if (persons.map(p => genMap.get(p.id)).join() === before) break
   }
 
   // ----------------------------------------------------------

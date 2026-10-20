@@ -27,12 +27,14 @@ const NODE_SPACING = 30
 const FAMILY_GAP = 60
 
 // Le fil d'une filiation union → enfant : une personne d'une autre famille, sur la ligne de l'enfant,
-// entre l'aplomb de l'union et l'enfant, est croisée. Frères et sœurs et conjoint(e)s de l'enfant ne comptent pas.
+// entre l'aplomb de l'union et l'enfant, est croisée. Frères et sœurs et leurs conjoint(e)s ne comptent pas
+// (un petit conjoint collé à un frère faisait passer le fil en pastille).
 export function filCroiseAutreFamille(nodes, childrenOfUnion, spouseKeysOf, u, c) {
   const byIdLocal = new Map(nodes.map(n => [n.id, n]))
   const kid = byIdLocal.get(c)
   const cx = (id) => byIdLocal.get(id).x + byIdLocal.get(id).width / 2
-  const excluded = new Set([c, ...(childrenOfUnion.get(u) || []), ...(spouseKeysOf.get(c) || [])])
+  const fratrie = [...new Set([c, ...(childrenOfUnion.get(u) || [])])]
+  const excluded = new Set([...fratrie, ...fratrie.flatMap(k => [...(spouseKeysOf.get(k) || [])])])
   const lo = Math.min(cx(u), cx(c)), hi = Math.max(cx(u), cx(c))
   return nodes.some(n => n._type === 'person' && n._generation === kid._generation && !excluded.has(n.id)
     && n.x + n.width > lo && n.x < hi)
@@ -213,6 +215,26 @@ export function computeBlockLayout(graphData = null) {
       else if (d > 0 && fits(ideal - d)) found = true
     }
     if (!found) { block.place(cursor); cursor += block.width + FAMILY_GAP * 2 }
+  }
+
+  // Couple dont les deux conjoints ont leurs parents dans l'arbre, chacun du côté de la famille de l'autre :
+  // on intervertit les deux conjoints (même place, l'union reste au milieu), les deux fils ne se croisent plus.
+  // Répété : intervertir un couple peut remettre à l'endroit ou à l'envers celui de ses enfants.
+  const centerOf = (id) => pos.get(id) + byId.get(id).width / 2
+  for (let pass = 0; pass < 4; pass++) {
+    let swapped = 0
+    for (const chain of chains) {
+      if (chain.length !== 3 || !pos.has(chain[0])) continue
+      const [a, , b] = chain
+      const pa = parentUnionOf.get(a), pb = parentUnionOf.get(b)
+      if (!pa || !pb || pa === pb || !pos.has(pa) || !pos.has(pb)) continue
+      if ((centerOf(a) - centerOf(b)) * (centerOf(pa) - centerOf(pb)) >= 0) continue
+      const xa = pos.get(a), xb = pos.get(b)
+      pos.set(a, xb + byId.get(b).width - byId.get(a).width)
+      pos.set(b, xa)
+      swapped++
+    }
+    if (!swapped) break
   }
 
   // Réinjecter le X, normalisé à 0 ; Y inchangé (générations)

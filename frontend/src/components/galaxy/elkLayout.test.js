@@ -267,3 +267,31 @@ describe('separated parents', () => {
     expect(separatedPairUnions([filiations[0]], [])).toEqual([])
   })
 })
+
+describe('rangées des ancêtres sans parents', () => {
+  // Henri + Isabelle (sans ascendance) ont Joseph et Nicolas. Nicolas épouse Madeleine (sans ascendance) ;
+  // leur fille Anne épouse Jean, d'une lignée qui remonte sur cinq générations. Anne descend au niveau de Jean,
+  // Nicolas avec elle : ses parents et son frère doivent suivre, au lieu de rester tout en haut.
+  const ids = ['henri', 'isabelle', 'joseph', 'nicolas', 'madeleine', 'anne', 'jean', 'l0', 'l0w', 'l1', 'l1w', 'l2', 'l2w', 'l3', 'l3w', 'l4', 'l4w']
+  const persons = ids.map((id) => ({ id }))
+  const unions = [
+    { id: 'uHI', partner1Id: 'henri', partner2Id: 'isabelle', displayOrder: 1 },
+    { id: 'uNM', partner1Id: 'nicolas', partner2Id: 'madeleine', displayOrder: 2 },
+    { id: 'uAJ', partner1Id: 'anne', partner2Id: 'jean', displayOrder: 3 },
+    ...[0, 1, 2, 3, 4].map((i) => ({ id: `uL${i}`, partner1Id: `l${i}`, partner2Id: `l${i}w`, displayOrder: 4 + i })),
+  ]
+  const link = (id, childId, unionId) => ({ id, childId, unionId, parentId: null, parentageType: 'biologique', displayOrder: 1 })
+  const filiations = [
+    link('f1', 'joseph', 'uHI'), link('f2', 'nicolas', 'uHI'), link('f3', 'anne', 'uNM'),
+    link('f4', 'l1', 'uL0'), link('f5', 'l2', 'uL1'), link('f6', 'l3', 'uL2'), link('f7', 'l4', 'uL3'), link('f8', 'jean', 'uL4'),
+  ]
+
+  it('fait descendre les parents et la fratrie de celui qui a suivi son conjoint', () => {
+    const result = computeLayout({ persons, unions, filiations })
+    const gen = new Map(result.children.filter((n) => n._type === 'person').map((n) => [n.id.slice(2), n._generation]))
+    expect(gen.get('anne')).toBe(gen.get('jean'))
+    expect(gen.get('nicolas')).toBe(gen.get('anne') - 1)
+    expect(gen.get('joseph')).toBe(gen.get('nicolas'))
+    expect(gen.get('henri')).toBe(gen.get('nicolas') - 1)
+  })
+})

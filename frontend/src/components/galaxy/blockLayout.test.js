@@ -102,8 +102,35 @@ describe('filCroiseAutreFamille', () => {
     expect(filCroiseAutreFamille(nodes, childrenOfUnion, spouseKeysOf, 'u', 'c')).toBe(false)
   })
 
+  it('ne croise pas pour le conjoint d\'un frère ou d\'une sœur', () => {
+    const nodes = base().filter(n => n.id !== 'other').concat(at('beaufrere', 420))
+    const spouses = new Map([...spouseKeysOf, ['sib', new Set(['beaufrere'])]])
+    expect(filCroiseAutreFamille(nodes, childrenOfUnion, spouses, 'u', 'c')).toBe(false)
+  })
+
   it('ignore une personne d\'une autre génération sur la même abscisse', () => {
     const nodes = base().filter(n => n.id !== 'other').concat(at('x', 400, 'person', 2))
     expect(filCroiseAutreFamille(nodes, childrenOfUnion, spouseKeysOf, 'u', 'c')).toBe(false)
+  })
+})
+
+describe('computeBlockLayout, couple tourné vers les familles de chacun', () => {
+  // Marc (fratrie de Louis et Hélène) épouse Nadia (fratrie de Pierre et Odile). La fratrie de Nadia est saisie
+  // en premier, Marc avant Nadia : Marc se retrouvait à gauche du couple alors que sa famille est à droite,
+  // et les deux fils se croisaient.
+  const graph = {
+    persons: ['pierre', 'odile', 'louis', 'helene', 'marc', 'claire', 'julien', 'sophie', 'eric', 'luc', 'paul', 'mireille', 'nadia', 'anais'].map(person),
+    unions: [union('uPO', 'pierre', 'odile'), { ...union('uLH', 'louis', 'helene'), displayOrder: 2 }, { ...union('uMN', 'marc', 'nadia'), displayOrder: 3 }],
+    filiations: [
+      ...['luc', 'paul', 'mireille', 'nadia'].map((k, i) => ({ ...fil(`f-${k}`, k, 'uPO'), displayOrder: i + 1 })),
+      ...['marc', 'claire', 'julien', 'sophie', 'eric'].map((k, i) => ({ ...fil(`f-${k}`, k, 'uLH'), displayOrder: i + 1 })),
+      fil('f-anais', 'anais', 'uMN'),
+    ],
+  }
+
+  it('place chaque conjoint du côté de ses propres parents', () => {
+    const { children } = computeBlockLayout(graph)
+    const x = (id) => { const n = children.find(c => c.id === id); return n.x + n.width / 2 }
+    expect(Math.sign(x('p-marc') - x('p-nadia'))).toBe(Math.sign(x('u-uLH') - x('u-uPO')))
   })
 })
