@@ -207,7 +207,7 @@ export default {
   'Création en cours': 'Creating',
   'Créer': 'Create',
 
-  // Création d'un arbre (InitialTreeWizard, TreeCreationWizard, CreateMyTreeButton)
+  // Création d'un arbre (TreeCreationWizard)
   'Vous': 'You',
   'Année de naissance (optionnel)': 'Year of birth (optional)',
   'Parent 1': 'Parent 1',

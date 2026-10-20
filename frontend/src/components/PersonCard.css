@@ -119,6 +119,9 @@
 
 /* ── Onglets et corps ── */
 .pc-tabs { flex: none; }
+/* Quatre onglets en modification (Liens en plus) : « Souvenirs · 3 » ne passe jamais à la ligne, il prend la place
+   que les onglets courts lui laissent */
+.pc-tabs .pz-tab { flex: 1 1 auto; padding: 0 10px; white-space: nowrap; }
 .pc-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0 -6px; padding: 0 6px 2px; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--pz-line) transparent; }
 .pc-inline-msg { font: 500 13px/1.45 var(--pz-sans); }
 .pc-inline-msg--loading { padding: 10px 12px; border-radius: var(--pz-r-s); background: var(--pz-bg); color: var(--pz-muted); }

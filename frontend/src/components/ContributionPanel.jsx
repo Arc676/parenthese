@@ -7,7 +7,7 @@ import './SettingsPanels.css'
 import PzBusy from './PzBusy.jsx'
 import { HELP_URL } from '../utils/siteLinks.js'
 import { t, dateLocale } from '../i18n/index.js'
-import { normalizeSex, SEX_CHOICES } from '../utils/personSex.js'
+import { sexLabel } from '../utils/personSex.js'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -88,7 +88,7 @@ const PERSON_FIELD_LABELS = {
 
 function displayVal(v, key) {
   // Sexe : « Non précisé » plutôt que « vide »
-  if (key === 'sex') return SEX_CHOICES.find((choice) => choice.value === normalizeSex(v))?.label ?? null
+  if (key === 'sex') return sexLabel(v)
   if (v === null || v === undefined || v === '') return null
   return String(v)
 }

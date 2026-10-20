@@ -200,7 +200,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
 
       <form className="apn-form" onSubmit={handleSubmit}>
         <div className="apn-scroll">
-          <div className="pz-row2 apn-row apn-name-row">
+          <div className="pz-row2 apn-row">
             <div className="pz-field">
               <label htmlFor="ap-firstName">{t('Prénom')}</label>
               <input
@@ -219,7 +219,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
             {/* Visible tant que le prénom est vide, et tant qu'elle est cochée (pour pouvoir la décocher).
                 Hors de la colonne Prénom pour tenir sur une ligne : sous les deux champs sur ordinateur, sous Prénom sur téléphone */}
             {(!firstName.trim() || unknownFirstName) && (
-              <label className="apn-deceased apn-unknown">
+              <label className="apn-deceased apn-row-check">
                 <input
                   type="checkbox"
                   checked={unknownFirstName}
@@ -278,15 +278,14 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
 
           <div className="pz-field">
             <span className="pz-label" id="ap-sex-label">{t('Sexe')} <span className="apn-optional">{t('facultatif')}</span></span>
-            <div className="pz-tabs apn-types apn-sex" role="radiogroup" aria-labelledby="ap-sex-label">
+            <div className="pz-tabs apn-types apn-sex" role="group" aria-labelledby="ap-sex-label">
               {SEX_CHOICES.map(({ value, label }) => (
                 <button
-                  key={label}
+                  key={value}
                   type="button"
-                  role="radio"
-                  aria-checked={sex === value}
+                  aria-pressed={sex === value}
                   className={`pz-tab ${sex === value ? 'is-active' : ''}`}
-                  onClick={() => setSex(value)}
+                  onClick={() => setSex(sex === value ? null : value)}
                 >
                   {label}
                 </button>
@@ -302,13 +301,14 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
             <div className="pz-field">
               <label htmlFor="ap-deathDate">{t('Décès')}</label>
               <DateField key={`d-${dateFieldsKey}`} id="ap-deathDate" value={deathDate} onChange={setDeathDate} />
-              {!deathDate && (
-                <label className="apn-deceased">
-                  <input type="checkbox" checked={isDeceased} onChange={(e) => setIsDeceased(e.target.checked)} />
-                  {sex === 'male' ? t('Décédé, date inconnue') : sex === 'female' ? t('Décédée, date inconnue') : t('Décédé(e), date inconnue')}
-                </label>
-              )}
             </div>
+            {/* Hors de la colonne Décès pour tenir sur une ligne, comme la case du prénom */}
+            {!deathDate && (
+              <label className="apn-deceased apn-row-check">
+                <input type="checkbox" checked={isDeceased} onChange={(e) => setIsDeceased(e.target.checked)} />
+                {sex === 'male' ? t('Décédé, date inconnue') : sex === 'female' ? t('Décédée, date inconnue') : t('Décédé(e), date inconnue')}
+              </label>
+            )}
           </div>
 
           <section className="apn-section">

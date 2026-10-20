@@ -5,6 +5,7 @@
 
 import { t } from '../i18n/index.js'
 import { buildMediaUrl } from '../utils/mediaToken.js'
+import { normalizeSex } from '../utils/kinship/facts.js'
 
 // Démo : noms et lieux restent français, les textes descriptifs sont traduits.
 export let persons = [
@@ -119,7 +120,8 @@ function mapRemotePersonToLocal(person, current = null) {
     region: person?.region || null,
     profession: person?.profession || null,
     nationality: person?.nationality || null,
-    sex: person?.sex ?? current?.sex ?? null,
+    // Le serveur renvoie déjà male/female/other/null ; relu ici aussi (anciennes valeurs M/F)
+    sex: normalizeSex(person?.sex ?? current?.sex),
     photo: current?.photo || null,
     avatarFromImmich: person?.avatarFromImmich ?? false,
     avatarCrop: person ? (person.avatarCrop ?? null) : (current?.avatarCrop ?? null),

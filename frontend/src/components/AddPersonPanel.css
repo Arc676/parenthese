@@ -110,9 +110,10 @@
 /* Décédé(e) sans date connue (issue #77) */
 .apn-deceased { display: inline-flex; align-items: center; gap: 7px; margin-top: 6px; font: 400 13px var(--pz-sans); color: var(--pz-ink-2); cursor: pointer; }
 .apn-deceased input { width: 15px; height: 15px; accent-color: var(--pz-a500); }
-/* « Je ne connais pas son prénom » : une ligne, sous Prénom et Nom (ordinateur), sous Prénom (téléphone, ordre du DOM) */
-.apn-name-row > .apn-unknown { grid-column: 1 / -1; grid-row: 2; margin-top: -6px; white-space: nowrap; justify-self: start; }
-@media (max-width: 480px) { .apn-name-row > .apn-unknown { grid-row: auto; } }
+/* Case sous une ligne de deux champs (« Je ne connais pas son prénom », « Décédé(e), date inconnue ») : sur une ligne,
+   sous les deux champs sur ordinateur, sous son champ sur téléphone (ordre du DOM) */
+.apn-row > .apn-row-check { grid-column: 1 / -1; grid-row: 2; margin-top: -6px; white-space: nowrap; justify-self: start; }
+@media (max-width: 480px) { .apn-row > .apn-row-check { grid-row: auto; } }
 
 /* Colonnes alignées en haut : la case « décédé(e) » sous le décès ne décale pas la naissance */
 .apn-row { align-items: start; }

@@ -926,15 +926,14 @@ const PersonCard = ({
                 {editMode && (
                   <div className="pc-row pc-row--seg" data-pc-field="sex">
                     <span className="pc-label" id="pc-sex-label">{t('Sexe')}</span>
-                    <div className="pz-tabs pc-seg" role="radiogroup" aria-labelledby="pc-sex-label">
+                    <div className="pz-tabs pc-seg" role="group" aria-labelledby="pc-sex-label">
                       {SEX_CHOICES.map(({ value, label }) => (
                         <button
-                          key={label}
+                          key={value}
                           type="button"
-                          role="radio"
-                          aria-checked={editSex === value}
+                          aria-pressed={editSex === value}
                           className={`pz-tab ${editSex === value ? 'is-active' : ''}`}
-                          onClick={() => handleFieldChange('sex', value)}
+                          onClick={() => handleFieldChange('sex', editSex === value ? null : value)}
                         >
                           {label}
                         </button>
