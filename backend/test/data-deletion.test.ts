@@ -155,6 +155,71 @@ describe('DELETE /auth/me', () => {
     await app.close()
   })
 
+  describe("compte sans mot de passe (né d'une connexion OIDC)", () => {
+    const signedAt = async (app: FastifyInstance, minutesAgo: number) => {
+      await app.ready()
+      return (app as any).jwt.sign({
+        kind: 'user', sub: 'user-1', jti: randomUUID(), userId: 'user-1', email: 'user@example.com',
+        iat: Math.floor(Date.now() / 1000) - minutesAgo * 60,
+      }, { expiresIn: '1h' })
+    }
+
+    beforeEach(() => {
+      prismaMock.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'user@example.com', passwordHash: null })
+    })
+
+    it('se supprime avec son email retapé, juste après une connexion', async () => {
+      const app = createApp()
+      const response = await app.inject({
+        method: 'DELETE', url: '/auth/me',
+        headers: { authorization: `Bearer ${await signedAt(app, 2)}` },
+        payload: { confirmEmail: ' User@Example.com ' },
+      })
+      expect(response.statusCode).toBe(200)
+      expect(prismaMock.user.delete).toHaveBeenCalled()
+      await app.close()
+    })
+
+    it('refuse un autre email', async () => {
+      const app = createApp()
+      const response = await app.inject({
+        method: 'DELETE', url: '/auth/me',
+        headers: { authorization: `Bearer ${await signedAt(app, 2)}` },
+        payload: { confirmEmail: 'autre@example.com' },
+      })
+      expect(response.statusCode).toBe(403)
+      expect(response.json()).toEqual({ error: 'invalid_password' })
+      expect(prismaMock.user.delete).not.toHaveBeenCalled()
+      await app.close()
+    })
+
+    it('refuse une session de plus de 15 minutes, même avec le bon email', async () => {
+      const app = createApp()
+      const response = await app.inject({
+        method: 'DELETE', url: '/auth/me',
+        headers: { authorization: `Bearer ${await signedAt(app, 20)}` },
+        payload: { confirmEmail: 'user@example.com' },
+      })
+      expect(response.statusCode).toBe(403)
+      expect(response.json()).toEqual({ error: 'recent_sign_in_required' })
+      expect(prismaMock.user.delete).not.toHaveBeenCalled()
+      await app.close()
+    })
+
+    it("n'accepte pas un email à la place du mot de passe pour un compte qui en a un", async () => {
+      prismaMock.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'user@example.com', passwordHash })
+      const app = createApp()
+      const response = await app.inject({
+        method: 'DELETE', url: '/auth/me',
+        headers: { authorization: `Bearer ${await signedAt(app, 2)}` },
+        payload: { confirmEmail: 'user@example.com' },
+      })
+      expect(response.statusCode).toBe(403)
+      expect(prismaMock.user.delete).not.toHaveBeenCalled()
+      await app.close()
+    }, 15000)
+  })
+
   it('rejects a wrong password without deleting anything', async () => {
     const ownedFile = await writeMediaFile('tree-owned', 'person-1/photo.jpg')
     const app = createApp()

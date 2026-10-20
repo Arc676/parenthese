@@ -59,6 +59,22 @@ Pour ouvrir l'instance à la famille depuis Internet, placez un reverse proxy HT
 
 Pour qu'une personne qui tombe sur l'adresse ne puisse pas s'inscrire et y créer ses arbres, mettez `ALLOW_REGISTRATION=false` dans `.env`, puis lancez `docker compose up -d`. Les comptes existants se connectent et créent leurs arbres comme avant, la famille ouvre toujours les arbres partagés avec le lien et le mot de passe, et l'application ne propose plus de créer de compte. Une instance sans aucun compte accepte quand même le premier, la variable peut donc être posée avant le tout premier démarrage : créez votre compte tout de suite, avant de donner l'adresse.
 
+#### Connexion par votre fournisseur d'identité (OIDC)
+
+Parenthèse peut confier la connexion à un fournisseur OpenID Connect que vous faites déjà tourner (Authentik, Authelia, Keycloak, Pocket ID, Zitadel…) : la famille garde un seul compte et sa double authentification. Créez chez lui une application OIDC (client confidentiel, flux « authorization code ») dont l'adresse de retour est l'adresse publique de Parenthèse suivie de `/auth/oidc/callback`, puis renseignez dans `.env` :
+
+```bash
+OIDC_ISSUER=https://auth.votre-domaine.fr/application/o/parenthese/   # exactement comme le fournisseur l'annonce
+OIDC_CLIENT_ID=parenthese
+OIDC_CLIENT_SECRET=...                                                # vide pour un client public (PKCE seul)
+OIDC_REDIRECT_URI=https://arbre.votre-domaine.fr/auth/oidc/callback
+OIDC_PROVIDER_NAME=Authentik                                          # nom affiché sur le bouton
+```
+
+L'écran de connexion affiche alors « Se connecter avec Authentik ». À la première connexion, Parenthèse relie le compte du fournisseur au compte Parenthèse qui a le même email, ou en crée un si `ALLOW_REGISTRATION` le permet. Inscription fermée, le fournisseur ne connecte que les personnes qui ont déjà un compte (le premier compte d'une instance vide reste accepté). Un email n'est pris en compte que si le fournisseur le dit vérifié (`email_verified`) ; `OIDC_REQUIRE_VERIFIED_EMAIL=false` lève ce contrôle, pour un fournisseur qui ne l'envoie pas et où personne ne choisit lui-même son adresse. Une fois relié, un compte suit l'identifiant de l'utilisateur chez le fournisseur, pas son email.
+
+`PASSWORD_LOGIN=false` retire les mots de passe Parenthèse : la connexion passe par le fournisseur seulement (l'API refuse de démarrer sans `OIDC_ISSUER`). Un compte créé par le fournisseur n'a pas de mot de passe ; pour le supprimer, on retape son email. `OIDC_SCOPES` (par défaut `openid email profile`) et `OIDC_APP_URL` (où l'app s'ouvre après la connexion, par défaut l'origine de `OIDC_REDIRECT_URI`) se changent rarement.
+
 Une instance auto-hébergée n'envoie aucune mesure d'audience : le suivi d'usage de parenthese.io ne s'active que si une clé PostHog est fournie au build, ce que cette configuration ne fait pas.
 
 Les liens d'aide et de vie privée de l'application mènent à parenthese.io. Pour pointer vers vos propres pages, renseignez `VITE_HELP_URL` et `VITE_PRIVACY_URL` quand vous construisez vous-même le front (voir `frontend/.env.example`).

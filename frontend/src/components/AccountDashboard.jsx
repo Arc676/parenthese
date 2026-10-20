@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { ChevronRight, KeyRound, LogOut, Plus, Sparkles, X } from 'lucide-react'
+import { ChevronRight, KeyRound, LogIn, LogOut, Plus, Sparkles, X } from 'lucide-react'
 import logoUrl from '../assets/parenthese-logo.svg?url'
 import './AccountScreens.css'
 import PzBusy from './PzBusy.jsx'
@@ -24,6 +24,10 @@ const AccountDashboard = ({
   activeTreeId,
   defaultMode = 'login',
   canRegister = true,
+  passwordLogin = true,
+  oidcName = '',
+  onOidcLogin,
+  hasPassword = true,
   pendingTreeName = '',
   onLogin,
   onRegister,
@@ -63,7 +67,7 @@ const AccountDashboard = ({
 
     setDeleting(true)
     setDeleteError('')
-    const errorMessage = await onDeleteAccount(deletePassword)
+    const errorMessage = await onDeleteAccount(hasPassword ? { password: deletePassword } : { confirmEmail: deletePassword })
     setDeleting(false)
 
     if (errorMessage) {
@@ -134,67 +138,82 @@ const AccountDashboard = ({
               </p>
             )}
 
-            <form className="pz-auth-form" onSubmit={handleAuthSubmit}>
-              {isRegister && (
+            {/* Fournisseur d'identité de l'instance (OIDC, #115) : il connecte, et crée le compte si l'instance en accepte */}
+            {onOidcLogin && (
+              <button type="button" className="pz-btn pz-btn--primary pz-btn--block account-oidc" onClick={onOidcLogin} disabled={loading}>
+                <LogIn size={16} aria-hidden="true" />
+                {t('Se connecter avec {name}', { name: oidcName })}
+              </button>
+            )}
+
+            {/* Sans formulaire à mot de passe, le refus du fournisseur s'affiche ici */}
+            {!passwordLogin && errorMessage && <div className="account-error pz-error" role="alert">{errorMessage}</div>}
+
+            {onOidcLogin && passwordLogin && <div className="pz-divider">{t('ou')}</div>}
+
+            {passwordLogin && (
+              <form className="pz-auth-form" onSubmit={handleAuthSubmit}>
+                {isRegister && (
+                  <div className="pz-field">
+                    <label htmlFor="accountFirstName">{t('Prénom')}</label>
+                    <input
+                      id="accountFirstName"
+                      type="text"
+                      autoComplete="given-name"
+                      placeholder="Camille"
+                      value={firstName}
+                      maxLength={100}
+                      onChange={(event) => setFirstName(event.target.value)}
+                      required
+                    />
+                  </div>
+                )}
+
                 <div className="pz-field">
-                  <label htmlFor="accountFirstName">{t('Prénom')}</label>
+                  <label htmlFor="accountEmail">{t('Email')}</label>
                   <input
-                    id="accountFirstName"
-                    type="text"
-                    autoComplete="given-name"
-                    placeholder="Camille"
-                    value={firstName}
-                    maxLength={100}
-                    onChange={(event) => setFirstName(event.target.value)}
+                    id="accountEmail"
+                    type="email"
+                    autoComplete="email"
+                    placeholder={t('camille@exemple.fr')}
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
                     required
                   />
                 </div>
-              )}
 
-              <div className="pz-field">
-                <label htmlFor="accountEmail">{t('Email')}</label>
-                <input
-                  id="accountEmail"
-                  type="email"
-                  autoComplete="email"
-                  placeholder={t('camille@exemple.fr')}
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  required
-                />
-              </div>
+                <div className="pz-field">
+                  <label htmlFor="accountPassword">{t('Mot de passe')}</label>
+                  <input
+                    id="accountPassword"
+                    type="password"
+                    autoComplete={isRegister ? 'new-password' : 'current-password'}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    minLength={8}
+                    required
+                  />
+                  {isRegister && <p className="pz-hint">{t('8 caractères minimum.')}</p>}
+                </div>
 
-              <div className="pz-field">
-                <label htmlFor="accountPassword">{t('Mot de passe')}</label>
-                <input
-                  id="accountPassword"
-                  type="password"
-                  autoComplete={isRegister ? 'new-password' : 'current-password'}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  minLength={8}
-                  required
-                />
-                {isRegister && <p className="pz-hint">{t('8 caractères minimum.')}</p>}
-              </div>
+                {errorMessage && <div className="account-error pz-error" role="alert">{errorMessage}</div>}
 
-              {errorMessage && <div className="account-error pz-error" role="alert">{errorMessage}</div>}
+                <button type="submit" className="pz-btn pz-btn--primary pz-btn--block" disabled={!canSubmitAuth}>
+                  <PzBusy busy={loading} busyLabel={isRegister ? t('Création du compte') : t('Connexion')}>{isRegister ? t('Créer mon compte') : t('Se connecter')}</PzBusy>
+                </button>
 
-              <button type="submit" className="pz-btn pz-btn--primary pz-btn--block" disabled={!canSubmitAuth}>
-                <PzBusy busy={loading} busyLabel={isRegister ? t('Création du compte') : t('Connexion')}>{isRegister ? t('Créer mon compte') : t('Se connecter')}</PzBusy>
-              </button>
-
-              {isRegister && (
-                <p className="pz-small pz-auth-legal">
-                  {richText(
-                    t('En créant un compte, vous acceptez {slot}.'),
-                    <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer">
-                      {t('la façon dont Parenthèse traite vos données')}
-                    </a>,
-                  )}
-                </p>
-              )}
-            </form>
+                {isRegister && (
+                  <p className="pz-small pz-auth-legal">
+                    {richText(
+                      t('En créant un compte, vous acceptez {slot}.'),
+                      <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer">
+                        {t('la façon dont Parenthèse traite vos données')}
+                      </a>,
+                    )}
+                  </p>
+                )}
+              </form>
+            )}
 
             <div className="pz-divider">{t('ou')}</div>
 
@@ -328,11 +347,12 @@ const AccountDashboard = ({
 
             <form className="pz-auth-form" onSubmit={handleDeleteSubmit}>
               <div className="pz-field">
-                <label htmlFor="accountDeletePassword">{t('Mot de passe actuel')}</label>
+                {/* Compte né d'une connexion OIDC, sans mot de passe : il retape son adresse email */}
+                <label htmlFor="accountDeletePassword">{hasPassword ? t('Mot de passe actuel') : t('Votre adresse email, pour confirmer')}</label>
                 <input
                   id="accountDeletePassword"
-                  type="password"
-                  autoComplete="current-password"
+                  type={hasPassword ? 'password' : 'email'}
+                  autoComplete={hasPassword ? 'current-password' : 'off'}
                   value={deletePassword}
                   onChange={(event) => setDeletePassword(event.target.value)}
                   disabled={deleting}

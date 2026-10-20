@@ -82,7 +82,8 @@ model User {
   id                            String                @id @default(cuid())
   email                         String                @unique
   firstName                     String?
-  passwordHash                  String
+  // Vide pour un compte né d'une connexion OIDC : il n'a pas de mot de passe Parenthèse
+  passwordHash                  String?
   lastOpenedTreeId              String?
   lastOpenedAccessMode          String?
   lastOpenedRole                String?
@@ -94,10 +95,26 @@ model User {
   submittedContributionSessions ContributionSession[] @relation("ContributionSubmittedBy")
   reviewedContributionSessions  ContributionSession[] @relation("ContributionReviewedBy")
   treeVisits                    TreeVisit[]
+  identities                    UserIdentity[]
   lastOpenedTree                Tree?                 @relation("UserLastOpenedTree", fields: [lastOpenedTreeId], references: [id], onDelete: SetNull)
 
   @@index([lastOpenedAt])
   @@map("users")
+}
+
+// Compte d'un fournisseur OIDC relié à un compte Parenthèse : l'émetteur et le « sub » de l'ID token, jamais l'email,
+// qui peut changer chez le fournisseur.
+model UserIdentity {
+  id        String   @id @default(cuid())
+  userId    String
+  issuer    String
+  subject   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([issuer, subject])
+  @@index([userId])
+  @@map("user_identities")
 }
 
 model Tree {
