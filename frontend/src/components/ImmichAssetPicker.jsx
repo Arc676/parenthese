@@ -111,13 +111,14 @@ export default function ImmichAssetPicker({ treeId, token, onSelect, onClose }) 
     } catch (err) { if (!controller.signal.aborted) setError(getImmichErrorMessage(err, t)) }
     finally { if (!controller.signal.aborted) setBusy(false) }
   }
+  // Erreur Immich : affichée en haut des résultats (visible sans défiler sur téléphone), ou sous l'aperçu
+  const errorBlock = <div className="iap-error"><p className="pz-error" role="alert">{error}</p>{!preview && <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" disabled={busy || loading} onClick={() => setSearch((current) => ({ ...current }))}>{t('Réessayer')}</button>}</div>
   return createPortal(<div className="pz-overlay iap-overlay" onClick={(event) => event.stopPropagation()} onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose() }} onKeyDown={handleKey}>
     <section ref={dialog} className="pz-modal iap" role="dialog" aria-modal="true" aria-labelledby={`${uid}-title`} tabIndex={-1}>
       <button type="button" className="pz-btn pz-btn--ghost pz-btn--icon pz-modal-close" onClick={onClose} aria-label={t('Fermer')} disabled={busy}><X size={18} /></button>
       <header className="pz-modal-head iap-head">
         <p className="pz-eyebrow"><Sparkles size={14} />{t('Depuis Immich')}</p>
         <h2 id={`${uid}-title`} className="pz-title">{preview ? t('Un souvenir à regarder de plus près') : t('Retrouver vos souvenirs')}</h2>
-        <p className="pz-small">{t('Choisissez une image pour l’agrandir, puis ajoutez-la aux souvenirs.')}</p>
       </header>
       {preview ? <>
         <div className="iap-preview-toolbar"><button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={closePreview} disabled={busy}><ArrowLeft size={16} />{t('Retour aux photos')}</button><span className="pz-tag">{preview.type === 'VIDEO' ? t('Vidéo') : t('Photo')}</span></div>
@@ -126,15 +127,15 @@ export default function ImmichAssetPicker({ treeId, token, onSelect, onClose }) 
       </> : <>
         <div className="iap-controls">
           <div className="iap-search" role="search" aria-label={t('Recherche dans Immich')}>
-            <Search size={18} aria-hidden="true" /><input ref={searchInput} value={draft} maxLength={500} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); submitSearch() } }} placeholder={t('Un repas au jardin, des vacances à la mer…')} aria-label={t('Décrire la photo recherchée')} disabled={busy} />
+            <Search size={18} aria-hidden="true" /><input ref={searchInput} value={draft} maxLength={500} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); submitSearch() } }} placeholder={t('Un repas au jardin, des vacances à la mer…')} title={t('La recherche par contexte utilise la recherche intelligente activée dans Immich.')} aria-label={search.type === 'VIDEO' ? t('Décrire la vidéo recherchée') : t('Décrire la photo recherchée')} disabled={busy} />
             <button type="button" className="pz-btn pz-btn--primary pz-btn--sm" onClick={submitSearch} disabled={busy}>{t('Rechercher')}</button>
           </div>
           <div className="iap-filters">
             <div className="pz-tabs iap-types" role="group" aria-label={t('Type')}>
               {[['IMAGE', t('Photos'), Image], ['VIDEO', t('Vidéos'), Video]].map(([value, label, Icon]) => <button key={value} type="button" className={`pz-tab${search.type === value ? ' is-active' : ''}`} aria-pressed={search.type === value} onClick={() => changeSearch({ type: value })} disabled={busy}><Icon size={15} />{label}</button>)}
             </div>
-            <button type="button" className={`pz-btn pz-btn--sm ${search.personId ? 'pz-btn--soft' : 'pz-btn--secondary'}`} aria-expanded={faceOpen} onClick={() => setFaceOpen((value) => !value)} disabled={busy}><UserRound size={16} />{selectedFace?.name || t('Filtrer par visage')}</button>
-            {(search.query || search.personId) && <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => { setDraft(''); changeSearch({ query: '', personId: '' }) }} disabled={busy}><X size={14} />{t('Effacer les filtres')}</button>}
+            <button type="button" className={`pz-btn pz-btn--sm iap-face-btn ${search.personId ? 'pz-btn--soft' : 'pz-btn--secondary'}`} aria-expanded={faceOpen} onClick={() => setFaceOpen((value) => !value)} disabled={busy}><UserRound size={16} /><span>{selectedFace?.name || t('Filtrer par visage')}</span></button>
+            {(search.query || search.personId) && <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm iap-clear" aria-label={t('Effacer les filtres')} title={t('Effacer les filtres')} onClick={() => { setDraft(''); changeSearch({ query: '', personId: '' }) }} disabled={busy}><X size={14} /><span className="iap-clear-label">{t('Effacer les filtres')}</span></button>}
           </div>
           {faceOpen && <div className="iap-faces">
             <label className="pz-field"><span>{t('Personne reconnue dans Immich')}</span><input value={faceQuery} onChange={(event) => setFaceQuery(event.target.value)} placeholder={t('Rechercher par nom')} disabled={busy} /></label>
@@ -147,9 +148,9 @@ export default function ImmichAssetPicker({ treeId, token, onSelect, onClose }) 
             {people?.length > 0 && filteredPeople.length === 0 && <p className="pz-small">{t('Aucune personne trouvée.')}</p>}
             {faceError && <p className="pz-error" role="alert">{faceError}</p>}
           </div>}
-          <p className="pz-hint">{t('La recherche par contexte utilise la recherche intelligente activée dans Immich.')}</p>
         </div>
         <div className="iap-results" aria-busy={loading}>
+          {error && !preview && errorBlock}
           {loading ? <div className="iap-empty" role="status"><PzBusy busy busyLabel={t('Chargement…')} /><p>{t('À la recherche de vos souvenirs…')}</p></div> : result?.assets.length ? <div className="iap-grid">{result.assets.map((asset) => <article key={asset.id} className={`iap-asset${selected.includes(asset.id) ? ' is-selected' : ''}`}>
             <button type="button" className="iap-open" data-asset-id={asset.id} aria-label={t('Agrandir {name}', { name: asset.name })} onClick={() => { previewTrigger.current = asset.id; setPreview(asset); requestAnimationFrame(() => dialog.current?.focus()) }} disabled={busy}>
               <AssetImage treeId={treeId} token={token} asset={asset} /><span className="iap-zoom"><ZoomIn size={17} /></span>{asset.type === 'VIDEO' && <span className="iap-video"><Video size={14} />{t('Vidéo')}</span>}
@@ -159,7 +160,7 @@ export default function ImmichAssetPicker({ treeId, token, onSelect, onClose }) 
         </div>
         {!loading && result && <nav className="iap-pagination" aria-label={t('Pages des souvenirs Immich')}><button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" disabled={busy || search.page === 1} onClick={() => setSearch((current) => ({ ...current, page: current.page - 1 }))}><ChevronLeft size={17} />{t('Précédent')}</button><span className="pz-small">{t('Page {page}', { page: search.page })}</span><button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" disabled={busy || !result.hasNextPage} onClick={() => setSearch((current) => ({ ...current, page: current.page + 1 }))}>{t('Suivant')}<ChevronRight size={17} /></button></nav>}
       </>}
-      {error && <div className="iap-error"><p className="pz-error" role="alert">{error}</p>{!preview && <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" disabled={busy || loading} onClick={() => setSearch((current) => ({ ...current }))}>{t('Réessayer')}</button>}</div>}
+      {error && preview && errorBlock}
       <footer className="iap-footer"><p className="pz-small">{selected.length === 1 ? t('1 souvenir sélectionné') : selected.length > 1 ? t('{n} souvenirs sélectionnés', { n: selected.length }) : t('Photo : 5 Mo · Vidéo : 20 Mo')}<span>{t('Vos médias seront copiés dans Parenthèse.')}</span></p>
         {preview ? <button type="button" className="pz-btn pz-btn--primary" onClick={() => select(preview)} disabled={busy || selected.includes(preview.id)}><Check size={17} /><PzBusy busy={busy} busyLabel={t('Téléchargement…')}>{selected.includes(preview.id) ? t('Ajouté') : t('Choisir ce souvenir')}</PzBusy></button> : <button type="button" className="pz-btn pz-btn--primary" onClick={onClose} disabled={busy}><PzBusy busy={busy} busyLabel={t('Téléchargement…')}>{t('Terminer la sélection')}</PzBusy></button>}
       </footer>
