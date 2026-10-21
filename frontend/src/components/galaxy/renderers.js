@@ -203,7 +203,7 @@ export function drawCoupleLinks(ctx, coupleBarMeta, posMap, nodeMap, nodeRandomD
 export const renvoiHitAreas = []
 // Badges « Famille X » sous les conjoints dont la famille est un onglet : { x0, y0, x1, y1, anchorId }
 export const familyHitAreas = []
-// Zones « + photo » : portraits vides, chez le propriétaire (cercle du nœud, rempli au dessin)
+// Zones « + photo » : portraits vides, chez le propriétaire en modification (cercle du nœud, rempli au dessin)
 export const photoPlaceholderHitAreas = []
 const renvoiPills = []
 const familyPills = [] // badges « Famille X » : { text, cx, cy, anchorId, tabKey, alpha }
@@ -1022,7 +1022,7 @@ function drawPersonImage(ctx, img, person, x, y, w, h, hint = 0) {
     ctx.fillRect(x, y, w, h)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    // Au survol, chez le propriétaire, les initiales cèdent la place à « + photo »
+    // Au survol, chez le propriétaire en modification, les initiales cèdent la place à « + photo »
     const baseAlpha = ctx.globalAlpha
     if (hint > 0.01) {
       ctx.fillStyle = `rgba(248, 228, 219, ${hint})`
