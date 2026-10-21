@@ -921,7 +921,7 @@ describe('Sexe dans le GEDCOM (issue #114)', () => {
     await app.close()
   })
 
-  it('aller-retour : other sort en SEX X, non précisé sans ligne SEX, et tout se relit à l’identique', async () => {
+  it('aller-retour : other sort en SEX U (GEDCOM 5.5.1), non précisé sans ligne SEX, le reste se relit à l’identique', async () => {
     const app = createApp()
     await app.ready()
     const token = (app as any).jwt.sign({ kind: 'tree_access', sub: 'tree:tree-1:visitor', treeId: 'tree-1', role: 'visitor', accessVersion: new Date('2026-02-11T10:00:00.000Z').getTime() })
@@ -940,10 +940,12 @@ describe('Sexe dans le GEDCOM (issue #114)', () => {
     const response = await app.inject({ method: 'GET', url: '/trees/tree-1/export/gedcom', headers: { authorization: `Bearer ${token}` } })
     expect(response.statusCode).toBe(200)
     const text = response.body.replace(/\r\n/g, '\n')
-    expect(text).toContain('1 NAME Camille /Martin/\n1 SEX X\n')
+    expect(text).toContain('1 NAME Camille /Martin/\n1 SEX U\n')
+    expect(text).not.toContain('SEX X')
     expect(text).toMatch(/1 NAME Claude \/Martin\/\n(?!1 SEX)/)
 
-    expect(await importer(app, text)).toEqual({ Jean: 'male', Marie: 'female', Camille: 'other', Claude: null })
+    // SEX U se relit comme non précisé : 5.5.1 n'a pas de valeur pour « autre ». SEX X reste lu à l'import (ligne 915).
+    expect(await importer(app, text)).toEqual({ Jean: 'male', Marie: 'female', Camille: null, Claude: null })
     await app.close()
   })
 })
