@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useState } from 'react'
-import { Pencil, X } from 'lucide-react'
+import { Pencil, UserPlus, X } from 'lucide-react'
+import { MediaPeopleList, MediaPeopleMarkers } from './MediaPeople.jsx'
 import {
   buildOpenStreetMapEmbedUrl,
   buildOpenStreetMapUrl,
@@ -23,8 +24,27 @@ const findLinkedEventId = (events, mediaId) => {
   return events.find((event) => (event.mediaIds || []).map(String).includes(id))?.id ?? null
 }
 
-const MediaViewer = ({ media, person, onClose, canEdit = false, onLoadLifeEvents, onSave }) => {
+const MediaViewer = ({
+  media,
+  person,
+  onClose,
+  canEdit = false,
+  onLoadLifeEvents,
+  onSave,
+  // Personnes identifiées : canTag ouvre l'identification (admin en direct, famille en proposition)
+  getPerson = () => null,
+  allPersons = [],
+  canTag = false,
+  onSavePeople,
+  onOpenPerson,
+}) => {
   const [mapState, setMapState] = useState({ loading: false, error: '', data: null })
+  const [tagging, setTagging] = useState(false)
+  const [draftPeople, setDraftPeople] = useState([])
+  const [activeTagId, setActiveTagId] = useState(null)
+  const [savingPeople, setSavingPeople] = useState(false)
+  const [peopleError, setPeopleError] = useState('')
+  const [peopleNotice, setPeopleNotice] = useState('')
   const [editing, setEditing] = useState(false)
   const [lifeEvents, setLifeEvents] = useState([])
   const [draft, setDraft] = useState({ title: '', citationText: '', lifeEventId: null })
@@ -39,6 +59,58 @@ const MediaViewer = ({ media, person, onClose, canEdit = false, onLoadLifeEvents
   }
 
   const isCitation = media?.type === 'citation'
+  const savedPeople = Array.isArray(media?.people) ? media.people : []
+  const shownPeople = tagging ? draftPeople : savedPeople
+
+  const startTagging = () => {
+    setPeopleError('')
+    setPeopleNotice('')
+    setDraftPeople(savedPeople.map((tag) => ({ ...tag })))
+    setActiveTagId(null)
+    setTagging(true)
+  }
+
+  const cancelTagging = () => {
+    setTagging(false)
+    setActiveTagId(null)
+    setPeopleError('')
+  }
+
+  // Ajoutée, la personne devient celle dont on place le point (photo seulement)
+  const addTag = (personId) => {
+    setDraftPeople((current) => [...current, { personId, x: null, y: null }])
+    setActiveTagId(media?.type === 'photo' ? personId : null)
+  }
+
+  const removeTag = (personId) => {
+    setDraftPeople((current) => current.filter((tag) => tag.personId !== personId))
+    setActiveTagId((current) => (current === personId ? null : current))
+  }
+
+  const placeActiveTag = (event) => {
+    if (!tagging || !activeTagId) return
+    const box = event.currentTarget.getBoundingClientRect()
+    const clamp = (value) => Math.min(1, Math.max(0, value))
+    const x = Number(clamp((event.clientX - box.left) / box.width).toFixed(4))
+    const y = Number(clamp((event.clientY - box.top) / box.height).toFixed(4))
+    setDraftPeople((current) => current.map((tag) => (tag.personId === activeTagId ? { ...tag, x, y } : tag)))
+    setActiveTagId(null)
+  }
+
+  const savePeople = async () => {
+    setSavingPeople(true)
+    setPeopleError('')
+    try {
+      const result = await onSavePeople(draftPeople)
+      setTagging(false)
+      setActiveTagId(null)
+      if (result?.status === 'pending') setPeopleNotice(t('Merci. La personne qui gère l’arbre va relire votre proposition.'))
+    } catch (error) {
+      setPeopleError(getAccountErrorMessage(error))
+    } finally {
+      setSavingPeople(false)
+    }
+  }
 
   const startEditing = async () => {
     setSaveError('')
@@ -234,9 +306,18 @@ const MediaViewer = ({ media, person, onClose, canEdit = false, onLoadLifeEvents
       )
     }
 
+    // La boîte épouse l'image : les points (x, y en proportion) tombent pile sur les visages
     return (
       <div className="media-photo-frame">
-        <img src={mediaUrl} alt={media?.label || t('Photo')} />
+        <div className={`mv-photo-box${tagging ? ' is-tagging' : ''}${activeTagId ? ' is-placing' : ''}`} onClick={placeActiveTag}>
+          <img src={mediaUrl} alt={media?.label || t('Photo')} />
+          <MediaPeopleMarkers
+            people={shownPeople}
+            getPerson={getPerson}
+            activeId={activeTagId}
+            onOpenPerson={tagging ? (id) => setActiveTagId(id) : onOpenPerson}
+          />
+        </div>
       </div>
     )
   }
@@ -534,6 +615,48 @@ const MediaViewer = ({ media, person, onClose, canEdit = false, onLoadLifeEvents
             </span>
             <span className="pz-tag">{typeLabels[mediaType] || mediaType}</span>
           </div>
+          {(mediaType === 'photo' || mediaType === 'video') && !editing && (
+            tagging ? (
+              <div className="mv-people-edit">
+                <p className="mv-people-hint">
+                  {mediaType === 'photo'
+                    ? (activeTagId ? t('Touchez son visage sur la photo.') : t('Ajoutez les personnes, puis touchez leur visage sur la photo.'))
+                    : t('Ajoutez les personnes de la vidéo.')}
+                </p>
+                <MediaPeopleList
+                  people={draftPeople}
+                  getPerson={getPerson}
+                  allPersons={allPersons}
+                  editing
+                  canPlace={mediaType === 'photo'}
+                  activeId={activeTagId}
+                  onActivate={setActiveTagId}
+                  onAdd={addTag}
+                  onRemove={removeTag}
+                />
+                {peopleError && <p className="mv-edit-error" role="alert">{peopleError}</p>}
+                <div className="mv-edit-actions">
+                  <button type="button" className="pz-btn pz-btn--ghost" onClick={cancelTagging} disabled={savingPeople}>
+                    {t('Annuler')}
+                  </button>
+                  <button type="button" className="pz-btn pz-btn--primary" onClick={savePeople} disabled={savingPeople}>
+                    {t('Enregistrer')}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mv-people">
+                <MediaPeopleList people={savedPeople} getPerson={getPerson} onOpenPerson={onOpenPerson} />
+                {canTag && onSavePeople && (
+                  <button type="button" className="pz-btn pz-btn--soft pz-btn--sm mv-people-btn" onClick={startTagging}>
+                    <UserPlus size={15} strokeWidth={2} aria-hidden="true" />
+                    {savedPeople.length ? t('Modifier les personnes') : mediaType === 'video' ? t('Qui est sur la vidéo ?') : t('Qui est sur la photo ?')}
+                  </button>
+                )}
+                {peopleNotice && <p className="mv-people-notice" role="status">{peopleNotice}</p>}
+              </div>
+            )
+          )}
           {mediaSource && !editing && (
             <p className="mv-source">
               {t('Source')}{' '}

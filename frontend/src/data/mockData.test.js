@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { getPersonById, getPersonMedias, loadGraphData } from './mockData'
+import { getPersonById, getPersonMedias, getPersonTaggedMedias, loadGraphData } from './mockData'
 
 describe('loadGraphData avatar mapping', () => {
   it('uses dedicated avatarUrlPath and does not derive person photo from medias', () => {
@@ -88,5 +88,45 @@ describe('loadGraphData, surnom', () => {
     })
     expect(getPersonById('p-1').nickname).toBe('Loulou')
     expect(getPersonById('p-2').nickname).toBeNull()
+  })
+})
+
+describe('personnes identifiées sur un souvenir', () => {
+  it('montre le souvenir aux personnes identifiées, pas à son propriétaire, et écarte les inconnues', () => {
+    const person = (id, firstName) => ({ id, firstName, lastName: 'Martin', birthDate: null, deathDate: null, notes: null, avatarUrlPath: null })
+    loadGraphData(
+      {
+        persons: [person('p-1', 'Alice'), person('p-2', 'Bob'), person('p-3', 'Chloé')],
+        unions: [],
+        filiations: [],
+        medias: [
+          {
+            id: 'm-1',
+            personId: 'p-1',
+            type: 'photo',
+            urlPath: '/trees/t-1/media/m-1',
+            caption: 'Mariage',
+            displayOrder: 1,
+            isFeatured: false,
+            people: [
+              { personId: 'p-1', x: 0.2, y: 0.3 },
+              { personId: 'p-2', x: null, y: null },
+              { personId: 'disparue', x: 0.5, y: 0.5 },
+            ],
+          },
+        ],
+        annotations: [],
+      },
+      { mediaToken: 'tok', apiBaseUrl: '' },
+    )
+
+    expect(getPersonMedias('p-1').map((m) => m.id)).toEqual(['m-1'])
+    expect(getPersonTaggedMedias('p-1')).toEqual([])
+    expect(getPersonTaggedMedias('p-2').map((m) => m.id)).toEqual(['m-1'])
+    expect(getPersonTaggedMedias('p-3')).toEqual([])
+    expect(getPersonMedias('p-1')[0].people).toEqual([
+      { personId: 'p-1', x: 0.2, y: 0.3 },
+      { personId: 'p-2', x: null, y: null },
+    ])
   })
 })

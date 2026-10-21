@@ -156,7 +156,7 @@
 .contrib-change-group { display: grid; gap: 6px; }
 .contrib-group-header { font: 500 11.5px var(--pz-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--pz-faint); padding-top: 4px; }
 
-.contrib-change-card { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--pz-line); border-radius: 12px; background: var(--pz-surface); transition: border-color 160ms ease, background-color 160ms ease; }
+.contrib-change-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 10px 12px; border: 1px solid var(--pz-line); border-radius: 12px; background: var(--pz-surface); transition: border-color 160ms ease, background-color 160ms ease; }
 .contrib-change-card--approved { border-color: #b9d8b2; background: var(--pz-success-bg); }
 .contrib-change-card--rejected { border-color: #f1c9c4; background: var(--pz-danger-bg); }
 .contrib-change-card--rejected .contrib-change-fields { opacity: .6; }

@@ -26,6 +26,11 @@ const { prismaMock } = vi.hoisted(() => ({
     mediaItem: {
       aggregate: vi.fn(),
     },
+    mediaPersonTag: {
+      findMany: vi.fn().mockResolvedValue([]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      createMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
     auditLog: {
       create: vi.fn(),
     },
@@ -1201,6 +1206,7 @@ describe('Immich integration: suppression logique d’une personne', () => {
         calls.push({ model: name, method: 'updateMany', args })
         return { count: 0 }
       },
+      deleteMany: async () => ({ count: 0 }),
     })
     const db = new Proxy({} as Record<string, unknown>, {
       get: (_target, name: string) => model(name),

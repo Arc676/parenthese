@@ -470,6 +470,21 @@ export async function updatePersonMedia(treeId, personId, mediaId, payload, toke
   return data
 }
 
+// Personnes identifiées sur un souvenir : la liste remplace la précédente. Administrateur, enregistré tout de
+// suite ; famille, une proposition (status « pending ») relue par l'administrateur
+export async function updateMediaPeople(treeId, mediaId, payload, token) {
+  return apiRequest(
+    `/trees/${encodeURIComponent(treeId)}/media/${encodeURIComponent(mediaId)}/people`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
 export async function uploadPersonAvatar(treeId, personId, payload, token) {
   const data = await apiRequest(`/trees/${encodeURIComponent(treeId)}/persons/${encodeURIComponent(personId)}/avatar`, {
     method: 'POST',

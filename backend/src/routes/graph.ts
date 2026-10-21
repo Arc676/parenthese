@@ -119,7 +119,7 @@ export const graphRoutes: FastifyPluginAsync = async (app) => {
     // Journal des visites (onglet Visites des administrateurs), sans attendre
     void recordTreeVisit(app, request, treeId, visitKind, actor.kind === 'user' ? actor.userId : null)
 
-    const [persons, unions, links, medias, annotations] = await Promise.all([
+    const [persons, unions, links, medias, annotations, mediaPeople] = await Promise.all([
       app.prisma.person.findMany({
         where: {
           treeId,
@@ -156,9 +156,14 @@ export const graphRoutes: FastifyPluginAsync = async (app) => {
         },
         orderBy: [{ zIndex: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
       }),
+      app.prisma.mediaPersonTag.findMany({
+        where: { treeId },
+        select: { mediaId: true, personId: true, x: true, y: true },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      }),
     ])
 
-    const graph = buildGraphPayload(treeId, persons, unions, links, medias, annotations)
+    const graph = buildGraphPayload(treeId, persons, unions, links, medias, annotations, mediaPeople)
 
     return reply.send({
       treeId,

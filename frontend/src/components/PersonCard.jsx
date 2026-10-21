@@ -1,7 +1,7 @@
-﻿import { useState, useEffect, useRef, forwardRef } from 'react'
+import { useState, useEffect, useRef, forwardRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Save, Trash2, Plus, X, Search, Check, Play, ImagePlus, Camera, Crop, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react'
-import { getParents, getChildren, getPersonUnions, getPersonMedias, getDemoLife, getPersonById, filiations, persons, unions } from '../data/mockData'
+import { getParents, getChildren, getPersonUnions, getPersonMedias, getPersonTaggedMedias, getDemoLife, getPersonById, filiations, persons, unions } from '../data/mockData'
 import { fetchPersonLife } from '../api/treeApi.js'
 import LifeTimeline from './LifeTimeline.jsx'
 import MomentSheet from './MomentSheet.jsx'
@@ -80,7 +80,7 @@ const PersonCard = ({
   saveOnLeaveRef = null,
 }) => {
   // Souvenirs d'abord quand il y en a, ou quand on peut en ajouter : c'est là qu'est le bouton
-  const [tab, setTab] = useState(() => (getPersonMedias(person.id).length > 0 || canManageMedia ? 'medias' : 'infos'))
+  const [tab, setTab] = useState(() => (getPersonMedias(person.id).length > 0 || getPersonTaggedMedias(person.id).length > 0 || canManageMedia ? 'medias' : 'infos'))
   const [lifeState, setLifeState] = useState({ personId: null, data: null, loading: false, failed: false })
 
   const lifeRequestedFor = useRef(null)
@@ -461,6 +461,8 @@ const PersonCard = ({
     return childFiliations[0]
   })()
   const personMedias = getPersonMedias(person.id)
+  // Souvenirs des autres où la personne est identifiée : après les siens, ouverts au nom de leur propriétaire
+  const taggedMedias = getPersonTaggedMedias(person.id).filter((m) => m.type === 'photo' || m.type === 'video')
   // Filiation d'adoption entre un enfant et un parent (lien direct ou via une union)
   const parentageAdopted = (childId, parentId) => filiations.some((f) => (
     String(f.childId) === String(childId)
@@ -813,7 +815,7 @@ const PersonCard = ({
         {/* ── Souvenirs ── */}
         {tab === 'medias' && (
           <div className="pc-souvenirs">
-            {personMedias.length === 0 && (
+            {personMedias.length === 0 && taggedMedias.length === 0 && (
               <div className="pc-empty">
                 <p className="pz-sub">{t('Pas encore de souvenir pour {name}.', { name: firstNameLabel(person) })}</p>
                 <p className="pz-small">{canManageMedia ? t('Une photo, une anecdote, sa voix. Vous pouvez ajouter le premier.') : t('Une photo, une anecdote, sa voix.')}</p>
@@ -857,6 +859,31 @@ const PersonCard = ({
                   </button>
                 )}
               </div>
+            )}
+
+            {taggedMedias.length > 0 && (
+              <section className="pc-tagged" aria-label={t('Avec {name}', { name: firstNameLabel(person) })}>
+                <h3 className="pc-tagged-title">{t('Avec {name}', { name: firstNameLabel(person) })}</h3>
+                <div className="pc-grid">
+                  {taggedMedias.map((media) => {
+                    const owner = getPersonById(media.personId)
+                    return (
+                      <button
+                        key={media.id}
+                        type="button"
+                        className={`pc-tile pc-tile--${media.type}`}
+                        onClick={() => owner && onMediaSelect?.(media, owner)}
+                        title={media.label || TYPE_LABELS[media.type]}
+                      >
+                        {media.type === 'photo' && media.url
+                          ? <img src={media.url} alt={media.label || ''} loading="lazy" />
+                          : <span className="pc-tile-video"><Play size={18} fill="currentColor" strokeWidth={0} /></span>}
+                        {media.label && <span className="pc-tile-label">{media.label}</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              </section>
             )}
 
             {otherMedias.length > 0 && (
