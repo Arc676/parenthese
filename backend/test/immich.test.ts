@@ -65,6 +65,161 @@ function mockImmichPerson(options: { thumbnailPath?: string; thumbnailStatus?: n
   })
 }
 
+describe('Souvenirs Immich', () => {
+  it('combine le contexte et un visage sur la recherche intelligente Immich', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    fetchMock.mockResolvedValue(await jsonResponse({ assets: { items: [], nextPage: null } }))
+    const response = await app.inject({ method: 'GET', url: `/trees/tree-1/immich/assets?q=repas%20au%20jardin&personId=${immichPersonId}&page=2`, headers: { authorization: `Bearer ${token}` } })
+    expect(response.statusCode).toBe(200)
+    expect(fetchMock.mock.calls[0][0]).toBe('http://immich.test/api/search/smart')
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ page: 2, size: 30, type: 'IMAGE', isTrashed: false, query: 'repas au jardin', personIds: [immichPersonId] })
+    await app.close()
+  })
+
+  it('filtre par visage sans contexte via les métadonnées', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    fetchMock.mockResolvedValue(await jsonResponse({ assets: { items: [], nextPage: null } }))
+    const response = await app.inject({ method: 'GET', url: `/trees/tree-1/immich/assets?personId=${immichPersonId}&q=%20%20`, headers: { authorization: `Bearer ${token}` } })
+    expect(response.statusCode).toBe(200)
+    expect(fetchMock.mock.calls[0][0]).toBe('http://immich.test/api/search/metadata')
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ personIds: [immichPersonId] })
+    await app.close()
+  })
+
+  it('refuse un visage invalide et un contexte excessif avant tout appel distant', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    for (const query of ['personId=invalid', `q=${'x'.repeat(501)}`]) {
+      expect((await app.inject({ method: 'GET', url: `/trees/tree-1/immich/assets?${query}`, headers: { authorization: `Bearer ${token}` } })).statusCode).toBe(400)
+    }
+    expect(fetchMock).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('charge un aperçu agrandi sans demander le fichier original', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    fetchMock.mockResolvedValue(new Response(new Uint8Array(jpegBytes)))
+    const response = await app.inject({ method: 'GET', url: `/trees/tree-1/immich/assets/${immichPersonId}/preview`, headers: { authorization: `Bearer ${token}` } })
+    expect(response.statusCode).toBe(200)
+    expect(fetchMock.mock.calls[0][0]).toBe(`http://immich.test/api/assets/${immichPersonId}/thumbnail?size=preview`)
+    expect(response.headers['content-type']).toBe('image/jpeg')
+    await app.close()
+  })
+
+  it('réserve la photothèque aux administrateurs et ne contacte pas Immich en cas de refus', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    prismaMock.treeMembership.findUnique.mockResolvedValue(null)
+    const response = await app.inject({ method: 'GET', url: '/trees/tree-1/immich/assets', headers: { authorization: `Bearer ${token}` } })
+    expect(response.statusCode).toBe(403)
+    expect(fetchMock).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('pagine les vidéos sans exposer les métadonnées privées', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    fetchMock.mockResolvedValue(await jsonResponse({ assets: { items: [{ id: immichPersonId, type: 'VIDEO', originalFileName: 'famille.mp4', originalPath: '/private/video.mp4' }], nextPage: '3' } }))
+    const response = await app.inject({ method: 'GET', url: '/trees/tree-1/immich/assets?page=2&type=VIDEO', headers: { authorization: `Bearer ${token}` } })
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({ assets: [{ id: immichPersonId, type: 'VIDEO', name: 'famille.mp4' }], hasNextPage: true })
+    expect(fetchMock.mock.calls[0][0]).toBe('http://immich.test/api/search/metadata')
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ page: 2, type: 'VIDEO', size: 30 })
+    await app.close()
+  })
+
+  it('refuse les originaux trop gros avant de les lire', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    fetchMock.mockResolvedValue(new Response('too large', { headers: { 'content-length': String(21 * 1024 * 1024) } }))
+    const response = await app.inject({ method: 'GET', url: `/trees/tree-1/immich/assets/${immichPersonId}/original`, headers: { authorization: `Bearer ${token}` } })
+    expect(response.statusCode).toBe(413)
+    await app.close()
+  })
+
+  it('sert une photo avec son type réel et refuse le HTML', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    const options = { method: 'GET' as const, url: `/trees/tree-1/immich/assets/${immichPersonId}/original`, headers: { authorization: `Bearer ${token}` } }
+    fetchMock.mockResolvedValueOnce(new Response(new Uint8Array(jpegBytes)))
+    const response = await app.inject(options)
+    expect(response.statusCode).toBe(200)
+    expect(response.headers['content-type']).toBe('image/jpeg')
+    fetchMock.mockResolvedValueOnce(new Response('<html>unsafe</html>'))
+    expect((await app.inject(options)).statusCode).toBe(400)
+    await app.close()
+  })
+
+  it.each(['preview', 'original'])('coupe une image à 5 Mo en flux sur %s, même déclarée vidéo', async (variant) => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    const cancel = vi.fn()
+    let sent = 0
+    const stream = new ReadableStream({
+      pull(controller) {
+        // La signature JPEG arrive en trois chunks, sans Content-Length.
+        if (sent < 3) controller.enqueue(new Uint8Array(jpegBytes.subarray(sent, ++sent)))
+        else { sent++; controller.enqueue(new Uint8Array(1024 * 1024)) }
+      }, cancel,
+    }, { highWaterMark: 0 })
+    fetchMock.mockResolvedValueOnce(new Response(stream, { headers: { 'content-type': 'video/mp4' } }))
+    const response = await app.inject({ method: 'GET', url: `/trees/tree-1/immich/assets/${immichPersonId}/${variant}`, headers: { authorization: `Bearer ${token}` } })
+    expect(response.statusCode).toBe(413)
+    expect(cancel).toHaveBeenCalledOnce()
+    expect(sent).toBe(8) // 3 octets + 5 Mo : aucun chunk supplémentaire lu.
+    await app.close()
+  })
+
+  it('refuse une image annoncée au-dessus de 5 Mo avant toute lecture', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    const pull = vi.fn()
+    const cancel = vi.fn()
+    fetchMock.mockResolvedValueOnce(new Response(new ReadableStream({ pull, cancel }, { highWaterMark: 0 }), {
+      headers: { 'content-type': 'image/jpeg', 'content-length': String(6 * 1024 * 1024) },
+    }))
+    const response = await app.inject({ method: 'GET', url: `/trees/tree-1/immich/assets/${immichPersonId}/original`, headers: { authorization: `Bearer ${token}` } })
+    expect(response.statusCode).toBe(413)
+    expect(pull).not.toHaveBeenCalled()
+    expect(cancel).toHaveBeenCalledOnce()
+    await app.close()
+  })
+
+  it('conserve la limite vidéo de 20 Mo au-delà de 5 Mo', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    const video = Buffer.alloc(6 * 1024 * 1024)
+    video.set(Buffer.from([0, 0, 0, 24, ...Buffer.from('ftypisom')]))
+    fetchMock.mockResolvedValueOnce(new Response(new Uint8Array(video)))
+    const response = await app.inject({ method: 'GET', url: `/trees/tree-1/immich/assets/${immichPersonId}/original`, headers: { authorization: `Bearer ${token}` } })
+    expect(response.statusCode).toBe(200)
+    expect(response.rawPayload.equals(video)).toBe(true)
+    await app.close()
+  })
+
+  it('importe les octets d’une vidéo et coupe un flux qui dépasse la limite', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    const options = { method: 'GET' as const, url: `/trees/tree-1/immich/assets/${immichPersonId}/original`, headers: { authorization: `Bearer ${token}` } }
+    const video = Buffer.from([0, 0, 0, 24, ...Buffer.from('ftypisom'), 0, 0, 0, 0])
+    fetchMock.mockResolvedValueOnce(new Response(new Uint8Array(video)))
+    const response = await app.inject(options)
+    expect(response.statusCode).toBe(200)
+    expect(response.headers['content-type']).toBe('video/mp4')
+    expect(response.rawPayload).toEqual(video)
+    const cancel = vi.fn()
+    fetchMock.mockResolvedValueOnce(new Response(new ReadableStream({
+      start(controller) { controller.enqueue(new Uint8Array(21 * 1024 * 1024)) }, cancel,
+    })))
+    expect((await app.inject(options)).statusCode).toBe(413)
+    expect(cancel).toHaveBeenCalled()
+    await app.close()
+  })
+})
+
 async function createUserToken(app: FastifyInstance, userId = 'user-1'): Promise<string> {
   await app.ready()
   return (app as any).jwt.sign(

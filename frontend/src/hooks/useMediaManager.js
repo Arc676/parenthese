@@ -62,7 +62,7 @@ export function useMediaManager({
     submittedByLabel = null,
   }) => {
     if (!canUploadMedia || !selectedPerson || !treeContext.treeId || !treeContext.accessToken) {
-      return
+      return false
     }
 
     // Prénom de la personne qui propose (famille), retenu pour la fois suivante
@@ -105,7 +105,7 @@ export function useMediaManager({
         loading: false,
         error: validationError,
       }))
-      return
+      return false
     }
 
     setMediaManagerState((current) => ({
@@ -157,12 +157,14 @@ export function useMediaManager({
         error: '',
         notice: noticeFor(created),
       }))
+      return true
     } catch (error) {
       setMediaManagerState((current) => ({
         ...current,
         loading: false,
         error: getAccountErrorMessage(error),
       }))
+      return false
     }
   }
 

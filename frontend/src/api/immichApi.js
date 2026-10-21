@@ -12,6 +12,9 @@ function withAuth(options = {}, token) {
 
 export function getImmichErrorMessage(error, t) {
   const code = error?.payload?.error || ''
+  if (code === 'immich_asset_too_large') return t('Fichier trop volumineux (photo : 5 Mo, vidéo : 20 Mo).')
+  if (code === 'immich_asset_not_found') return t('Média introuvable dans Immich.')
+  if (code === 'invalid_immich_media') return t('Format de média non pris en charge.')
   if (code === 'immich_not_configured') return t('Immich n’est pas configuré pour cet arbre.')
   if (code === 'immich_unreachable') return t('Immich est injoignable.')
   if (code === 'immich_auth_failed') return t('La clé d’accès à Immich a été refusée.')
@@ -24,6 +27,41 @@ export function getImmichErrorMessage(error, t) {
   if (code === 'forbidden') return t('Seuls les administrateurs de l’arbre peuvent associer un visage Immich.')
   if (error?.status === 0 || error?.message === 'Failed to fetch') return t('Immich est injoignable.')
   return error?.message || t('Erreur inattendue.')
+}
+
+export function listImmichAssets(treeId, token, page = 1, type = 'IMAGE', { query, personId, signal } = {}) {
+  const search = new URLSearchParams({ page: String(page), type })
+  if (query?.trim()) search.set('q', query.trim())
+  if (personId) search.set('personId', personId)
+  return apiRequest(`/trees/${encodeURIComponent(treeId)}/immich/assets?${search}`, withAuth({ signal }, token))
+}
+
+export async function fetchImmichAsset(treeId, assetId, token, variant = 'thumbnail', signal) {
+  const response = await fetch(`${API_BASE_URL}/trees/${encodeURIComponent(treeId)}/immich/assets/${encodeURIComponent(assetId)}/${variant}`, {
+    headers: { Authorization: `Bearer ${token}` }, signal,
+  })
+  if (!response.ok) {
+    const error = new Error('immich_asset_failed')
+    error.status = response.status
+    error.payload = await response.json().catch(() => ({}))
+    throw error
+  }
+  return response.blob()
+}
+
+// Les photos utilisent la version préparée par Immich, y compris les HEIC/RAW.
+// Le nom suit le format réellement reçu ; les vidéos gardent leur original.
+export async function downloadImmichMemory(treeId, asset, token, signal) {
+  const photo = asset.type === 'IMAGE'
+  const blob = await fetchImmichAsset(treeId, asset.id, token, photo ? 'preview' : 'original', signal)
+  if (!(photo ? blob.type.startsWith('image/') : blob.type.startsWith('video/'))) {
+    const error = new Error('invalid_immich_media')
+    error.payload = { error: 'invalid_immich_media' }
+    throw error
+  }
+  const extension = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' }[blob.type]
+  const name = asset.name || asset.id
+  return new File([blob], photo && extension ? `${name.replace(/\.[^.]+$/, '')}${extension}` : name, { type: blob.type })
 }
 
 // Connexion Immich de l'arbre : métadonnées sûres (jamais la clé, jamais l'adresse) et instances

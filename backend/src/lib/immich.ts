@@ -4,6 +4,7 @@ import type { PrismaClient } from '@prisma/client'
 
 import { env } from '../config/env.js'
 import { decryptImmichApiKey } from './immich-secret.js'
+import { sniffMimeType } from './media-files.js'
 
 // Client Immich : la reconnaissance des visages lit les personnes et leurs vignettes.
 // Contrat vérifié sur la spécification OpenAPI officielle d'Immich v3.1.0 :
@@ -85,12 +86,14 @@ export class ImmichClient {
     return `${this.apiUrl}${path}`
   }
 
-  private async fetch(path: string): Promise<Response> {
+  private async fetch(path: string, body?: unknown): Promise<Response> {
     const url = this.buildUrl(path)
     let response: Response
     try {
       response = await fetch(url, {
-        headers: { 'x-api-key': this.apiKey, Accept: 'application/json' },
+        method: body === undefined ? 'GET' : 'POST',
+        body: body === undefined ? undefined : JSON.stringify(body),
+        headers: { 'x-api-key': this.apiKey, Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
         signal: AbortSignal.timeout(IMMICH_TIMEOUT_MS),
         // Aucune redirection suivie : la clé ne doit jamais partir vers une autre adresse.
         redirect: 'error',
@@ -124,6 +127,28 @@ export class ImmichClient {
     } catch {
       return false
     }
+  }
+
+  async listAssets(page: number, type: 'IMAGE' | 'VIDEO', filters: { query?: string; personId?: string } = {}) {
+    const query = filters.query?.trim()
+    const response = await this.fetch(query ? '/api/search/smart' : '/api/search/metadata', {
+      page, size: 30, type, isTrashed: false,
+      ...(query ? { query } : {}),
+      ...(filters.personId ? { personIds: [filters.personId] } : {}),
+    })
+    const payload = await this.readJson(response) as { assets?: { items?: Array<{ id: string; type: string; originalFileName: string }>; nextPage?: string | null } }
+    if (!Array.isArray(payload.assets?.items)) throw new ImmichUnavailableError('Liste de médias Immich illisible')
+    return {
+      assets: payload.assets.items.filter((asset) => isImmichPersonId(asset.id) && asset.type === type).map((asset) => ({
+        id: asset.id, type: asset.type, name: asset.originalFileName,
+      })),
+      hasNextPage: Boolean(payload.assets.nextPage),
+    }
+  }
+
+  async getAssetBytes(assetId: string, thumbnail: boolean, maxBytes: number, preview = false): Promise<Buffer | null> {
+    const variant = preview ? 'thumbnail?size=preview' : thumbnail ? 'thumbnail?size=thumbnail' : 'original'
+    return this.readBytes(`/api/assets/${encodeURIComponent(assetId)}/${variant}`, maxBytes, 5 * 1024 * 1024)
   }
 
   // Toutes les personnes (sans les masquées), en suivant la pagination d'Immich.
@@ -178,9 +203,14 @@ export class ImmichClient {
   // Vignette d'une personne, en octets bruts (JPEG côté Immich). Absente -> ImmichNotFoundError.
   // Lue en flux : au-delà de maxBytes, la lecture s'arrête et renvoie null sans charger le reste.
   async getPersonThumbnail(personId: string, maxBytes: number): Promise<Buffer | null> {
-    const response = await this.fetch(`/api/people/${encodeURIComponent(personId)}/thumbnail`)
+    return this.readBytes(`/api/people/${encodeURIComponent(personId)}/thumbnail`, maxBytes)
+  }
+
+  private async readBytes(path: string, maxBytes: number, maxImageBytes = maxBytes): Promise<Buffer | null> {
+    const response = await this.fetch(path)
+    let limit = response.headers.get('content-type')?.startsWith('image/') ? Math.min(maxBytes, maxImageBytes) : maxBytes
     const declared = Number(response.headers.get('content-length'))
-    if (Number.isFinite(declared) && declared > maxBytes) {
+    if (Number.isFinite(declared) && declared > limit) {
       await response.body?.cancel().catch(() => {})
       return null
     }
@@ -191,12 +221,19 @@ export class ImmichClient {
     const reader = response.body.getReader()
     const chunks: Buffer[] = []
     let total = 0
+    let signature = Buffer.alloc(0)
     try {
       for (;;) {
         const { done, value } = await reader.read()
         if (done) break
         total += value.byteLength
-        if (total > maxBytes) {
+        // Ne pas se fier au Content-Type : même avec une signature répartie sur
+        // plusieurs chunks, une image est bornée à 5 Mo dès ses premiers octets.
+        if (signature.length < 12) {
+          signature = Buffer.concat([signature, Buffer.from(value.subarray(0, 12 - signature.length))])
+          if (sniffMimeType(signature, 'video')?.startsWith('image/')) limit = Math.min(limit, maxImageBytes)
+        }
+        if (total > limit || (Number.isFinite(declared) && declared > limit)) {
           await reader.cancel().catch(() => {})
           return null
         }

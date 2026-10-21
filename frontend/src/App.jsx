@@ -3312,6 +3312,8 @@ function App() {
         />
       )}
       <MediaManagerPanel
+        treeId={tree.treeContext.treeId}
+        token={tree.treeContext.accessToken || auth.userAuth.token}
         visible={media.mediaManagerState.visible}
         person={tree.selectedPerson}
         medias={media.selectedPersonMedias}
