@@ -46,6 +46,11 @@
 .mv-person-name { font: 400 16px/1.2 var(--pz-serif); color: var(--pz-ink); }
 .mv-person-name em { font-style: italic; font-weight: 300; }
 .mv-person-years { font: 400 12.5px var(--pz-sans); color: var(--pz-muted); font-variant-numeric: tabular-nums; }
+.mv-people { display: grid; justify-items: start; gap: 8px; }
+.mv-people-btn { gap: 6px; }
+.mv-people-edit { display: grid; gap: 10px; }
+.mv-people-hint { margin: 0; font: 400 14px/1.45 var(--pz-sans); color: var(--pz-ink-2); }
+.mv-people-notice { margin: 0; font: 400 13.5px/1.45 var(--pz-sans); color: var(--pz-success); }
 .mv-source { margin: 0; font: 400 13px/1.5 var(--pz-sans); color: var(--pz-muted); overflow-wrap: anywhere; }
 .mv-source a { color: var(--pz-a700); text-underline-offset: 3px; }
 
@@ -58,8 +63,12 @@
   background: var(--pz-bg);
 }
 
+/* La boîte suit la taille rendue de l'image : les points des visages s'y posent en pourcentage */
+.media-photo-frame { display: grid; place-items: center; }
+.mv-photo-box { position: relative; max-width: 100%; }
+
 .media-photo-frame img {
-  width: 100%;
+  max-width: 100%;
   max-height: 68dvh;
   object-fit: contain;
   display: block;

@@ -3309,6 +3309,23 @@ function App() {
               media: { ...current, label: payload.caption, lifeEventId: payload.lifeEventId },
             })
           }}
+          getPerson={(id) => persons.find((p) => p.id === id) || null}
+          allPersons={persons}
+          canTag={Boolean((tree.canEditCurrentTree || tree.canSubmitContribution) && !isDemoMode)}
+          onSavePeople={async (people) => {
+            const { person, media: current } = tree.selectedMedia
+            const result = await media.handleUpdateMediaPeople(person.id, current.id, people)
+            // Appliqué tout de suite (administrateur) : la visionneuse rouvre le souvenir avec ses personnes
+            if (result?.status === 'approved') tree.setSelectedMedia({ person, media: { ...current, people: result.people ?? people } })
+            return result
+          }}
+          onOpenPerson={async (personId) => {
+            const target = persons.find((p) => p.id === personId)
+            if (!target) return
+            tree.setSelectedMedia(null)
+            if (!(await chooseSelectedPerson(target))) return
+            galaxyZoomApiRef.current?.focusPerson?.(target.id)
+          }}
         />
       )}
       <MediaManagerPanel

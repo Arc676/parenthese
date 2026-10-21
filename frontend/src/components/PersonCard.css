@@ -168,6 +168,9 @@
 .pc-tile--add { display: grid; place-items: center; color: var(--pz-a700); background: transparent; border: 1.5px dashed var(--pz-a300); }
 
 .pc-list { display: grid; gap: 6px; }
+/* Souvenirs des autres où la personne est identifiée */
+.pc-tagged { display: grid; gap: 8px; }
+.pc-tagged-title { margin: 4px 0 0; font: 500 13px/1.3 var(--pz-sans); color: var(--pz-muted); }
 .pc-list-item {
   display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px; cursor: pointer; text-align: left;
   border: 1px solid var(--pz-line); border-radius: var(--pz-r-m); background: var(--pz-surface);

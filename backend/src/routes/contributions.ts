@@ -8,6 +8,7 @@ import { sanitizeAnnotationContentForRead } from '../lib/annotation-content.js'
 import { softDeletePersonCascade, softDeleteUnionCascade } from '../lib/entity-deletion.js'
 import { removeStoredFile } from '../lib/media-files.js'
 import { syncPersonMediaOrder } from '../lib/media-order.js'
+import { mediaPeopleSchema, normalizeMediaPeople, replaceMediaPeople } from '../lib/media-people.js'
 
 import type { Actor, MembershipRole } from '../types/auth.js'
 import { findParentChildValidationError, findUnionValidationError } from '../utils/relationship-guards.js'
@@ -155,9 +156,10 @@ const reorderSchema = z.object({
 
 type ContributionStatus = 'pending' | 'approved' | 'rejected'
 
-// Les souvenirs et les moments arrivent par leurs propres routes, jamais par une session envoyée en bloc
+// Les souvenirs, les moments et les personnes d'un souvenir arrivent par leurs propres routes, jamais par une
+// session envoyée en bloc
 type ParsedChange = Omit<z.infer<typeof contributionChangeSchema>, 'entityType'> & {
-  entityType: z.infer<typeof contributionChangeSchema>['entityType'] | 'life_event'
+  entityType: z.infer<typeof contributionChangeSchema>['entityType'] | 'life_event' | 'media_people'
 }
 
 type TxClient = Prisma.TransactionClient
@@ -190,7 +192,7 @@ function recordTempRef(after: unknown, createdId: string, refs: RefMap) {
 }
 
 // Personnes d'abord, puis unions, puis liens : un lien vers une personne ajoutée s'applique après elle
-const ENTITY_ORDER: Record<string, number> = { person: 0, union: 1, parent_child_link: 2, media: 3, annotation: 4 }
+const ENTITY_ORDER: Record<string, number> = { person: 0, union: 1, parent_child_link: 2, media: 3, annotation: 4, media_people: 5 }
 function byApplicationOrder<T extends { entityType: string; action: string }>(changes: T[]): T[] {
   const rank = (change: T) => (ENTITY_ORDER[change.entityType] ?? 9) * 10 + (change.action === 'create' ? 0 : 1)
   return changes.map((change, index) => ({ change, index }))
@@ -338,6 +340,26 @@ async function applyContributionChange(
     })
     if (updated.count === 0) {
       throw new ContributionRouteError(400, 'invalid_entity_reference')
+    }
+    return { entityId: change.entityId }
+  }
+
+  // Personnes identifiées sur un souvenir : la liste proposée remplace l'actuelle. Souvenir supprimé entre
+  // l'envoi et la relecture : rien à faire, la relecture continue.
+  if (change.entityType === 'media_people') {
+    if (change.action !== 'update' || !change.entityId) {
+      throw new ContributionRouteError(400, 'unsupported_change_action_for_media_people')
+    }
+    const people = mediaPeopleSchema.safeParse(isRecord(change.after) ? change.after.people : undefined)
+    if (!people.success) {
+      throw new ContributionRouteError(400, 'invalid_media_people')
+    }
+    const media = await tx.mediaItem.findFirst({
+      where: { id: change.entityId, treeId, status: 'approved', deletedAt: null },
+      select: { id: true },
+    })
+    if (media) {
+      await replaceMediaPeople(tx, treeId, change.entityId, normalizeMediaPeople(people.data), actorUserId)
     }
     return { entityId: change.entityId }
   }
@@ -1063,6 +1085,115 @@ export async function resolveSubmissionContext(app: FastifyInstance, actor: Acto
 }
 
 export const contributionRoutes: FastifyPluginAsync = async (app) => {
+  // Personnes identifiées sur un souvenir. Administrateur : enregistré tout de suite. Famille (membre, lien
+  // de partage) : une proposition, appliquée à la relecture, ou tout de suite si l'arbre l'autorise.
+  app.put('/trees/:id/media/:mediaId/people', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (request, reply) => {
+    const params = z.object({ id: z.string().min(1), mediaId: z.string().min(1) }).safeParse(request.params)
+    if (!params.success) {
+      return reply.code(400).send({ error: 'invalid_params' })
+    }
+    const payload = z.object({
+      people: mediaPeopleSchema,
+      submittedByLabel: z.string().trim().min(1).max(120).optional(),
+    }).safeParse(request.body)
+    if (!payload.success) {
+      return reply.code(400).send({ error: 'invalid_payload' })
+    }
+    const treeId = params.data.id
+    const mediaId = params.data.mediaId
+
+    try {
+      const context = await resolveSubmissionContext(app, request.actor, treeId)
+      const actor = request.actor
+      const membership = actor?.kind === 'user'
+        ? await app.prisma.treeMembership.findUnique({ where: { treeId_userId: { treeId, userId: actor.userId } }, select: { role: true } })
+        : null
+      const isAdmin = Boolean(membership && hasAdminRight(membership.role))
+
+      const media = await app.prisma.mediaItem.findFirst({
+        where: { id: mediaId, treeId, status: 'approved', deletedAt: null },
+        select: { id: true, personId: true },
+      })
+      if (!media) {
+        return reply.code(404).send({ error: 'media_not_found' })
+      }
+
+      const people = normalizeMediaPeople(payload.data.people)
+      const known = people.length
+        ? await app.prisma.person.count({ where: { treeId, id: { in: people.map((person) => person.personId) }, deletedAt: null } })
+        : 0
+      if (known !== people.length) {
+        return reply.code(400).send({ error: 'invalid_person_reference' })
+      }
+
+      if (context.autoStatus === 'pending') {
+        const pendingCount = await app.prisma.contributionSession.count({ where: { treeId, status: 'pending' } })
+        if (pendingCount >= MAX_PENDING_SESSIONS_PER_TREE) {
+          return reply.code(429).send({ error: 'too_many_pending_contributions' })
+        }
+      }
+
+      const now = new Date()
+      const saved = await app.prisma.$transaction(async (tx) => {
+        const before = await tx.mediaPersonTag.findMany({
+          where: { treeId, mediaId },
+          select: { personId: true, x: true, y: true },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        })
+        const applied = context.autoStatus === 'approved'
+          ? await replaceMediaPeople(tx, treeId, mediaId, people, context.submittedByUserId)
+          : null
+
+        // L'administrateur n'a rien à relire : pas de session, comme pour ses propres souvenirs
+        if (!isAdmin) {
+          const session = await tx.contributionSession.create({
+            data: {
+              treeId,
+              submittedByUserId: context.submittedByUserId,
+              submittedByLabel: payload.data.submittedByLabel?.trim() || context.submittedByLabel,
+              mode: context.mode,
+              status: context.autoStatus,
+              title: 'Personnes sur un souvenir',
+              reviewedAt: context.autoStatus === 'approved' ? now : undefined,
+              reviewedBy: context.autoStatus === 'approved' ? context.submittedByUserId : undefined,
+            },
+          })
+          await tx.contributionChange.create({
+            data: {
+              sessionId: session.id,
+              entityType: 'media_people',
+              entityId: mediaId,
+              action: 'update',
+              beforeJson: toPrismaJson({ mediaId, ownerPersonId: media.personId, people: before }),
+              afterJson: toPrismaJson({ mediaId, ownerPersonId: media.personId, people }),
+              decision: context.autoStatus === 'approved' ? 'approved' : undefined,
+            },
+          })
+        }
+
+        await tx.auditLog.create({
+          data: {
+            treeId,
+            actorType: context.actorType,
+            actorId: context.actorId,
+            action: 'media_people_updated',
+            entityType: 'media_item',
+            entityId: mediaId,
+            payloadJson: { status: context.autoStatus, count: people.length },
+          },
+        })
+        return applied
+      })
+
+      return reply.send({ status: context.autoStatus, people: saved ?? people })
+    } catch (error) {
+      if (error instanceof ContributionRouteError) {
+        return reply.code(error.statusCode).send({ error: error.code })
+      }
+      throw error
+    }
+  })
+
   app.post('/trees/:id/contributions/sessions', { bodyLimit: UPLOAD_BODY_LIMIT, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const params = treeIdParamSchema.safeParse(request.params)
     if (!params.success) {

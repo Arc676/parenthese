@@ -26,6 +26,7 @@ function formatEntityType(entityType) {
   if (entityType === 'annotation') return t('annotation')
   if (entityType === 'media') return t('souvenir')
   if (entityType === 'life_event') return t('moment')
+  if (entityType === 'media_people') return t('personnes sur un souvenir')
   return t('élément')
 }
 
@@ -49,6 +50,17 @@ function getMediaPreview(change, treeId) {
     ? buildMediaUrl(`/trees/${encodeURIComponent(treeId)}/media/${encodeURIComponent(change.entityId)}`, API_BASE_URL)
     : null
   return { type: data.type, label, caption, url, isYoutube }
+}
+
+// Personnes identifiées sur un souvenir : la photo, qui y était, qui est proposé
+function getMediaPeoplePreview(change, treeId) {
+  const after = (change.afterJson && typeof change.afterJson === 'object') ? change.afterJson : {}
+  const before = (change.beforeJson && typeof change.beforeJson === 'object') ? change.beforeJson : {}
+  const names = (list) => (Array.isArray(list) ? list : []).map((tag) => nameOfPersonRef(tag?.personId)).filter(Boolean)
+  const url = change.entityId && treeId
+    ? buildMediaUrl(`/trees/${encodeURIComponent(treeId)}/media/${encodeURIComponent(change.entityId)}`, API_BASE_URL)
+    : null
+  return { url, before: names(before.people), after: names(after.people) }
 }
 
 // Moment proposé par la famille : quand, où, et ce qu'elle en dit. Ses fichiers sont dans « Souvenirs »
@@ -137,6 +149,10 @@ function getPersonDisplayName(change, sessionChanges = []) {
   if (change.entityType === 'life_event') {
     const data = change.afterJson || {}
     return data.title || t('Moment')
+  }
+  if (change.entityType === 'media_people') {
+    const owner = nameOfPersonRef(change.afterJson?.ownerPersonId)
+    return owner ? t('Photo de {name}', { name: owner }) : t('Personnes sur un souvenir')
   }
   // Une modification ne porte que les champs changés : le nom vient alors de l'« avant » (lu en base)
   const after = change.afterJson && typeof change.afterJson === 'object' ? change.afterJson : null
@@ -510,8 +526,8 @@ const ContributionPanel = ({
                       {/* ── Cartes de changement (collapsibles) ── */}
                       {!isCollapsed && (() => {
                         // Grouper les changements par entityType
-                        const groupOrder = ['life_event', 'media', 'person', 'union', 'parent_child_link', 'annotation']
-                        const groupLabels = { life_event: t('Moments'), media: t('Souvenirs'), person: t('Personnes'), union: t('Unions'), parent_child_link: t('Liens'), annotation: t('Annotations') }
+                        const groupOrder = ['life_event', 'media', 'media_people', 'person', 'union', 'parent_child_link', 'annotation']
+                        const groupLabels = { life_event: t('Moments'), media: t('Souvenirs'), media_people: t('Sur les photos'), person: t('Personnes'), union: t('Unions'), parent_child_link: t('Liens'), annotation: t('Annotations') }
                         const groupMap = {}
                         for (const ch of (session.changes || [])) {
                           const key = ch.entityType || 'other'
@@ -533,6 +549,7 @@ const ContributionPanel = ({
                           const annPreview = change.entityType === 'annotation' ? getAnnotationPreview(change, treeId) : null
                           const mediaPreview = change.entityType === 'media' ? getMediaPreview(change, treeId) : null
                           const momentPreview = change.entityType === 'life_event' ? getMomentPreview(change) : null
+                          const peoplePreview = change.entityType === 'media_people' ? getMediaPeoplePreview(change, treeId) : null
 
                           return (
                             <div
@@ -599,6 +616,22 @@ const ContributionPanel = ({
                                   )}
                                   {mediaPreview.caption && (
                                     <p className="contrib-media-caption">{mediaPreview.type === 'citation' ? t('« {text} »', { text: mediaPreview.caption }) : mediaPreview.caption}</p>
+                                  )}
+                                </div>
+                              )}
+
+                              {peoplePreview && (
+                                <div className="contrib-media-preview">
+                                  {peoplePreview.url && (
+                                    <a href={peoplePreview.url} target="_blank" rel="noreferrer" className="contrib-media-photo">
+                                      <img src={peoplePreview.url} alt={t('Photo du souvenir')} onError={(e) => { e.currentTarget.style.display = 'none' }} />
+                                    </a>
+                                  )}
+                                  <p className="contrib-media-caption">
+                                    {peoplePreview.after.length ? t('Sur la photo, {names}', { names: peoplePreview.after.join(', ') }) : t('Plus personne sur la photo')}
+                                  </p>
+                                  {peoplePreview.before.length > 0 && (
+                                    <p className="contrib-media-caption">{t('Avant, {names}', { names: peoplePreview.before.join(', ') })}</p>
                                   )}
                                 </div>
                               )}

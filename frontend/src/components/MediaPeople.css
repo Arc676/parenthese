@@ -1,0 +1,123 @@
+/* Personnes identifiées sur un souvenir : points sur les visages, liste « Sur la photo », identification */
+
+.mp-avatar { width: 24px; height: 24px; flex: none; border-radius: 50%; object-fit: cover; }
+.mp-avatar--initial { display: grid; place-items: center; background: var(--pz-a100); color: var(--pz-a700); font: 400 12px/1 var(--pz-serif); }
+
+/* Point sur un visage : rond blanc cerclé, le prénom apparaît au survol ou au focus (toujours en identification) */
+.mp-marker {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: 0 0 0 1px rgba(42, 38, 34, .3), 0 2px 8px rgba(42, 38, 34, .25);
+  cursor: pointer;
+}
+.mp-marker.is-active { border-color: var(--pz-a500); box-shadow: 0 0 0 3px rgba(210, 105, 74, .35), 0 2px 8px rgba(42, 38, 34, .25); }
+.mp-marker:focus-visible { outline: 2px solid var(--pz-a700); outline-offset: 3px; }
+.mp-marker-name {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--pz-media-badge-bg);
+  color: #fff;
+  font: 500 12.5px/1.3 var(--pz-sans);
+  white-space: nowrap;
+  pointer-events: none;
+  visibility: hidden;
+}
+.mp-marker:hover .mp-marker-name,
+.mp-marker:focus-visible .mp-marker-name,
+.mv-photo-box.is-tagging .mp-marker-name,
+.mv-photo-box.show-names .mp-marker-name { visibility: visible; }
+@media (hover: none) { .mp-marker-name { visibility: visible; } }
+
+/* Photo cliquable pendant le placement d'un point */
+.mv-photo-box.is-placing img { cursor: crosshair; }
+
+/* Liste « Sur la photo » */
+.mp-list { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.mp-list-label { font: 500 13px/1.3 var(--pz-sans); color: var(--pz-muted); margin-right: 2px; }
+.mp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 3px 12px 3px 4px;
+  border: 1px solid var(--pz-line);
+  border-radius: 999px;
+  background: var(--pz-surface);
+  color: var(--pz-ink);
+  font: 500 13.5px/1.2 var(--pz-sans);
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) { .mp-chip:hover { border-color: var(--pz-a300); background: var(--pz-a50); } }
+.mp-chip:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 2px; }
+
+/* Identification */
+.mp-edit { display: grid; gap: 8px; }
+.mp-edit-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.mp-edit-row { display: flex; align-items: center; gap: 4px; border-radius: var(--pz-r-s); }
+.mp-edit-row.is-active { background: var(--pz-a50); }
+.mp-edit-pick {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--pz-r-s);
+  background: transparent;
+  color: var(--pz-ink);
+  font: 400 14.5px/1.3 var(--pz-sans);
+  text-align: left;
+  cursor: pointer;
+}
+.mp-edit-pick:disabled { cursor: default; }
+.mp-edit-pick:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 1px; }
+.mp-edit-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-edit-state { display: inline-flex; align-items: center; gap: 4px; flex: none; font: 500 12.5px/1.2 var(--pz-sans); color: var(--pz-a700); }
+.mp-edit-row:not(.is-active) .mp-edit-state { color: var(--pz-muted); }
+
+.mp-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--pz-line);
+  border-radius: 999px;
+  background: var(--pz-surface);
+  color: var(--pz-muted);
+}
+.mp-search:focus-within { border-color: var(--pz-a500); box-shadow: 0 0 0 3px var(--pz-a100); }
+.mp-search-input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--pz-ink); font: 400 15px/1.3 var(--pz-sans); }
+
+.mp-results { list-style: none; margin: 0; padding: 4px; display: grid; gap: 2px; border: 1px solid var(--pz-line); border-radius: var(--pz-r-m); background: var(--pz-surface); box-shadow: var(--pz-shadow); }
+.mp-result {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--pz-r-s);
+  background: transparent;
+  color: var(--pz-ink);
+  font: 400 14.5px/1.3 var(--pz-sans);
+  text-align: left;
+  cursor: pointer;
+}
+.mp-result svg { color: var(--pz-a700); flex: none; }
+@media (hover: hover) and (pointer: fine) { .mp-result:hover { background: var(--pz-a50); } }
+.mp-result:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 1px; }
+.mp-result-year { margin-left: auto; font: 400 12.5px var(--pz-sans); color: var(--pz-muted); font-variant-numeric: tabular-nums; }

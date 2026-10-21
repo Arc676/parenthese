@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { uploadPersonMedia, reorderPersonMedia, deletePersonMedia, updatePersonMedia, fetchPersonLife } from '../api/treeApi'
+import { uploadPersonMedia, reorderPersonMedia, deletePersonMedia, updatePersonMedia, updateMediaPeople, fetchPersonLife } from '../api/treeApi'
 import { getPersonMedias } from '../data/mockData'
 import { fileToBase64, getAccountErrorMessage } from '../utils/errorMessages'
 import { getUploadMimeType, resolveUploadMediaType, validateMediaFile } from '../utils/mediaUpload'
-import { saveContributorName } from '../utils/contributorName'
+import { readContributorName, saveContributorName } from '../utils/contributorName'
 import { t } from '../i18n/index.js'
 
 // Souvenir envoyé par la famille : en attente de la relecture du propriétaire
@@ -285,6 +285,23 @@ export function useMediaManager({
     await refreshAfterMediaMutation(personId)
   }
 
+  // Personnes identifiées sur un souvenir : administrateur, appliqué et arbre rafraîchi ; famille, une
+  // proposition (status « pending »), rien ne change avant la relecture
+  const handleUpdateMediaPeople = async (ownerPersonId, mediaId, people) => {
+    if (!canUploadMedia || !treeContext.treeId || !treeContext.accessToken) {
+      throw new Error('forbidden')
+    }
+    const name = canEditCurrentTree ? '' : readContributorName()
+    const result = await updateMediaPeople(
+      treeContext.treeId,
+      mediaId,
+      { people, ...(name ? { submittedByLabel: name } : {}) },
+      treeContext.accessToken,
+    )
+    if (result?.status === 'approved') await refreshAfterMediaMutation(ownerPersonId)
+    return result
+  }
+
   const loadPersonLifeEvents = (personId) => fetchPersonLife(treeContext.treeId, personId, treeContext.accessToken)
 
   const resetMediaManager = () => {
@@ -302,6 +319,7 @@ export function useMediaManager({
     refreshMomentMedia,
     handleDeletePersonMedia,
     handleUpdatePersonMedia,
+    handleUpdateMediaPeople,
     loadPersonLifeEvents,
     resetMediaManager,
   }

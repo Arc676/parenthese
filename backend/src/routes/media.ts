@@ -982,8 +982,9 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: 'media_not_found' })
     }
 
-    // Supprimé = effacé du disque (la ligne reste pour le journal)
+    // Supprimé = effacé du disque (la ligne reste pour le journal), et plus personne n'y est identifié
     await removeStoredFile(getStorageRoot(), existingMedia?.filePath)
+    await app.prisma.mediaPersonTag.deleteMany({ where: { treeId: params.data.id, mediaId: params.data.mediaId } })
 
     await syncPersonMediaOrder(app.prisma, params.data.id, params.data.personId)
 

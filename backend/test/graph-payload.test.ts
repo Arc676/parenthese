@@ -169,3 +169,33 @@ describe('buildGraphPayload', () => {
     expect(graph.filiations[1].id).toBe('l-1')
   })
 })
+
+describe('buildGraphPayload, personnes identifiées sur un souvenir', () => {
+  const person = (id: string) => ({ id, treeId: 't-1', firstName: id, lastName: 'X', birthDate: null, deathDate: null, avatarPath: null, deletedAt: null })
+  const media = { id: 'm-1', treeId: 't-1', personId: 'p-1', type: 'photo', mimeType: 'image/jpeg', filePath: 'f', caption: null, source: null, displayOrder: 1, isFeatured: false }
+
+  it('attaches people in order with their point, and drops a person missing from the tree', () => {
+    const graph = buildGraphPayload(
+      't-1',
+      [person('p-1'), person('p-2')] as any,
+      [],
+      [],
+      [media] as any,
+      [],
+      [
+        { mediaId: 'm-1', personId: 'p-2', x: 0.3, y: 0.6 },
+        { mediaId: 'm-1', personId: 'p-1', x: null, y: null },
+        { mediaId: 'm-1', personId: 'p-gone', x: 0.5, y: 0.5 },
+      ],
+    )
+    expect(graph.medias[0].people).toEqual([
+      { personId: 'p-2', x: 0.3, y: 0.6 },
+      { personId: 'p-1', x: null, y: null },
+    ])
+  })
+
+  it('gives an empty list when nobody is identified', () => {
+    const graph = buildGraphPayload('t-1', [person('p-1')] as any, [], [], [media] as any)
+    expect(graph.medias[0].people).toEqual([])
+  })
+})

@@ -25,6 +25,11 @@ const { prismaMock } = vi.hoisted(() => ({
     mediaItem: {
       aggregate: vi.fn(),
     },
+    mediaPersonTag: {
+      findMany: vi.fn().mockResolvedValue([]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      createMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
     auditLog: {
       create: vi.fn(),
     },

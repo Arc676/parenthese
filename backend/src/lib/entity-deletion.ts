@@ -47,7 +47,15 @@ export async function softDeletePersonCascade(
 
   const medias = await db.mediaItem.findMany({
     where: { treeId, personId, deletedAt: null },
-    select: { filePath: true, thumbPath: true },
+    select: { id: true, filePath: true, thumbPath: true },
+  })
+
+  // Identifications : la personne disparaît des photos des autres, et ses souvenirs n'ont plus personne
+  await db.mediaPersonTag.deleteMany({
+    where: {
+      treeId,
+      OR: [{ personId }, ...(medias.length > 0 ? [{ mediaId: { in: medias.map((media) => media.id) } }] : [])],
+    },
   })
 
   const [deletedUnions, deletedLinks, deletedMedia] = await Promise.all([
