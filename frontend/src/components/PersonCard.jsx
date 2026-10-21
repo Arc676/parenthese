@@ -54,10 +54,6 @@ const PersonCard = ({
   onAvatarUpload,
   onAvatarDelete,
   onAvatarCrop,
-  pendingPortraitCrop = null,
-  onPendingPortraitCropDone = null,
-  photoSourceRequest = null,
-  onPhotoSourceRequestDone = null,
   treeId = null,
   immichToken = null,
   onImmichChange,
@@ -257,21 +253,6 @@ const PersonCard = ({
   }
   const chooseFileSource = () => { setShowSourceMenu(false); avatarInputRef.current?.click() }
   const chooseImmichSource = () => { setShowSourceMenu(false); setShowImmichPanel(true) }
-
-  // Clic sur « + photo » dans l'arbre : la photo vient d'être envoyée, le recadrage s'ouvre tout de suite
-  useEffect(() => {
-    if (!pendingPortraitCrop || String(pendingPortraitCrop.personId) !== String(person.id)) return
-    setCropState({ src: pendingPortraitCrop.src, mode: 'new', ownsUrl: true })
-    onPendingPortraitCropDone?.()
-  }, [pendingPortraitCrop, person.id, onPendingPortraitCropDone])
-
-  // Clic sur « + photo » dans l'arbre, en modification avec Immich : même menu que le badge, sans clic de plus
-  useEffect(() => {
-    if (!photoSourceRequest || String(photoSourceRequest.personId) !== String(person.id)) return
-    if (immichConfigured === null) return
-    onPhotoSourceRequestDone?.()
-    if (immichUsable) openAvatarPicker()
-  }, [photoSourceRequest, person.id, immichConfigured, immichUsable, onPhotoSourceRequestDone]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Focus search input when relation search opens
   useEffect(() => {

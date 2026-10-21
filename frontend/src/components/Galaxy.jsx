@@ -42,7 +42,7 @@ const DROP_SPRING = { stiffness: 480, dampingRatio: 0.72 }
 const centerX = (node) => node.x + node.width / 2
 const prefersReducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, photoHint = false, onPhotoPlaceholderClick = null, reorderEnabled = false, onReorderSiblings = null, familyTabs = true }) => {
+const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, reorderEnabled = false, onReorderSiblings = null, familyTabs = true }) => {
   const canvasRef = useRef(null)
   const layoutDataRef = useRef(null)
   // Onglets de familles (réglage `familyTabs`) : la liste des familles de l'arbre, calculée une fois par
@@ -78,8 +78,6 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   // Clic sur un badge : l'onglet de cette famille (ou, depuis un onglet, celui d'où l'on vient)
   const openFamily = useCallback((tabKey) => { if (tabKey != null) setActiveKey(String(tabKey)) }, [])
   // Propriétaire : un portrait vide survolé montre « + photo »
-  const photoHintRef = useRef(photoHint)
-  useEffect(() => { photoHintRef.current = photoHint }, [photoHint])
   const [layoutReady, setLayoutReady] = useState(false)
   const transformRef = useRef({ x: 0, y: 0, scale: 1 })
 
@@ -169,7 +167,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     canvasRef, transformRef, targetTransformRef,
     layoutDataRef, nodeRandomDataRef, entranceRef,
     hoveredNodeIdRef: hoveredNodeId, hoveredMediaKeyRef: hoveredMediaKey, mouseWorldPosRef: mouseWorldPos,
-    getAnimatedPos, onPersonSelect, onMediaSelect, onPhotoPlaceholderClick, onOpenFamily: openFamily,
+    getAnimatedPos, onPersonSelect, onMediaSelect, onOpenFamily: openFamily,
     annotationHandlers,
     minScale: MIN_SCALE,
     maxScale: MAX_SCALE,
@@ -907,7 +905,6 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
         mediaHoverState: mediaHoverState.current,
         entrance, entranceActive, elapsed,
         view,
-        photoHint: photoHintRef.current,
         liftScales: liftScalesRef.current,
       })
       drawRenvoiPills(ctx)
