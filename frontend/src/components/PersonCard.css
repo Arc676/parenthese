@@ -44,16 +44,6 @@
 }
 .pc-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pc-photo-initials { font: 400 30px/1 var(--pz-serif); color: var(--pz-a700); }
-.pc-photo--add {
-  border: 1.5px dashed var(--pz-a300); background: var(--pz-a50); box-shadow: none; cursor: pointer;
-  align-content: center; gap: 5px; padding: 6px; color: var(--pz-a700);
-  font: 500 11.5px/1.15 var(--pz-sans); text-align: center;
-  transition: background-color 160ms ease, border-color 160ms ease, transform 140ms var(--pz-ease);
-}
-@media (hover: hover) and (pointer: fine) { .pc-photo--add:hover { background: var(--pz-a100); border-color: var(--pz-a500); } }
-.pc-photo--add:active:not(:disabled) { transform: scale(.97); }
-.pc-photo--add:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 3px; }
-.pc-photo--add:disabled { opacity: .6; cursor: default; }
 /* Menu du choix de source du portrait : au-dessus de la fiche (z-index 1000), sous la modale Immich (2200) */
 .pc-source-backdrop { position: fixed; inset: 0; z-index: 1100; }
 .pc-source-menu { position: fixed; z-index: 1150; min-width: 220px; }
