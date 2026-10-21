@@ -2,6 +2,19 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
+## 1.2.1 (2026-10-21)
+
+### Fixes
+
+- Clicking a person without a photo opens their profile again. The file picker only opens from "+ photo" in edit mode (#124, reported by @coutadeurf, #125).
+- GEDCOM export stays valid 5.5.1. Sex "other" is written as `SEX U`, and `SEX X` is still read on import (#126).
+
+### Self-hosting
+
+- With `PASSWORD_LOGIN=false`, an account that had a password and was linked to OIDC can delete itself by retyping its email after a recent sign-in (#126).
+- An email already linked to an OIDC identity can't be claimed by a different subject at the provider (#126).
+- HEIC and AVIF files are recognised as images instead of video, and are refused cleanly until they can be converted (#126).
+
 ## 1.2.0 (2026-10-20)
 
 ### Tree layout
