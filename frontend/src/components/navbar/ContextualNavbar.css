@@ -89,7 +89,10 @@
   user-select: none;
 }
 
+/* Posée sur le rond : en cellule de grille, height: 100% suivait la hauteur naturelle de la photo (ovale) */
 .nav-avatar-photo {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;

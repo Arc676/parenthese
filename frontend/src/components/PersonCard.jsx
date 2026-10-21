@@ -688,25 +688,12 @@ const PersonCard = ({
               disabled={avatarActionLoading}
             />
           )}
-          {/* Portrait vide chez le propriétaire : le cadre lui-même invite à poser la photo, sans passer par l'édition */}
-          {!person.photo && onAvatarUpload && !editMode ? (
-            <button
-              type="button"
-              className="pc-photo pc-photo--add"
-              onClick={() => avatarInputRef.current?.click()}
-              disabled={avatarActionLoading}
-              aria-label={t('Ajouter une photo')}
-              title={t('Ajouter une photo')}
-            >
-              <ImagePlus size={22} strokeWidth={1.8} aria-hidden="true" />
-            </button>
-          ) : (
-            <div className="pc-photo">
-              {person.photo
-                ? <img src={person.photo} alt={fullNameLabel(person)} onLoad={(event) => setPhotoSize({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight })} style={photoStyle} />
-                : <span className="pc-photo-initials">{initials}</span>}
-            </div>
-          )}
+          {/* Hors modification, le portrait se regarde : la photo s'ajoute ou se change en mode modification */}
+          <div className="pc-photo">
+            {person.photo
+              ? <img src={person.photo} alt={fullNameLabel(person)} onLoad={(event) => setPhotoSize({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight })} style={photoStyle} />
+              : <span className="pc-photo-initials">{initials}</span>}
+          </div>
           {editMode && onAvatarUpload && (
             <button
               ref={sourceBtnRef}
