@@ -538,6 +538,86 @@ components:
       required: [decision]
 
 paths:
+  /auth/options:
+    get:
+      tags: [Auth]
+      summary: What the sign-in screen can offer on this instance
+      responses:
+        '200':
+          description: Instance options
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  registration:
+                    type: boolean
+                    description: false when ALLOW_REGISTRATION=false and the instance already has an account
+                  passwordLogin:
+                    type: boolean
+                    description: false when PASSWORD_LOGIN=false (sign-in through the OIDC provider only)
+                  oidc:
+                    type: object
+                    nullable: true
+                    description: OIDC provider shown on the sign-in screen, null when OIDC_ISSUER is not set
+                    properties:
+                      name:
+                        type: string
+                required: [registration, passwordLogin, oidc]
+
+  /auth/oidc/start:
+    get:
+      tags: [Auth]
+      summary: Start an OIDC sign-in (browser navigation)
+      description: Sets a signed, httpOnly cookie holding state, nonce and PKCE verifier, then redirects to the provider. Only exists when OIDC_ISSUER is set.
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Either / or /arbre/<slug>, anything else falls back to /
+      responses:
+        '302':
+          description: Redirect to the provider, or back to the app with "#oidc_error=oidc_unavailable"
+
+  /auth/oidc/callback:
+    get:
+      tags: [Auth]
+      summary: Provider redirect target (browser navigation)
+      description: Checks the cookie, then lets openid-client exchange the code and verify the ID token (signature, issuer, audience, expiry, nonce, state, PKCE). Finds the account by provider subject, links a verified email, or creates an account when registration allows it.
+      responses:
+        '302':
+          description: Back to the app with "#oidc=<one-time handoff>" or "#oidc_error=oidc_failed|oidc_email_unverified|oidc_email_missing|registration_closed"
+
+  /auth/oidc/exchange:
+    post:
+      tags: [Auth]
+      summary: Trade the one-time handoff for a session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+              required: [code]
+      responses:
+        '200':
+          description: Session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Handoff invalid, expired or already used (invalid_handoff)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /auth/register:
     post:
       tags: [Auth]
@@ -557,6 +637,12 @@ paths:
                 $ref: '#/components/schemas/AuthResponse'
         '400':
           description: Invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Registration closed on this instance (registration_closed), or PASSWORD_LOGIN=false (password_login_disabled)
           content:
             application/json:
               schema:
@@ -593,6 +679,12 @@ paths:
                 $ref: '#/components/schemas/AuthResponse'
         '400':
           description: Invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: PASSWORD_LOGIN=false (password_login_disabled)
           content:
             application/json:
               schema:

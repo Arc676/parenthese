@@ -2,3 +2,5 @@
 * text=auto
 # Scripts lancés sous Linux (serveur, conteneurs, CI) : fins de ligne LF même sur un clone Windows
 *.sh text eol=lf
+# Témoins texte du placement : comparés octet pour octet par vitest, toujours en LF
+frontend/src/components/galaxy/__snapshots__/** text eol=lf

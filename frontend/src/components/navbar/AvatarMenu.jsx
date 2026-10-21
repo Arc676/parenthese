@@ -1,94 +1,135 @@
-import { Check, ChevronRight, Globe, LogOut, Plus, Settings } from 'lucide-react'
+import { Check, ChevronRight, Globe, HelpCircle, LogIn, LogOut, Plus, Settings, Share2, TreeDeciduous, UserPlus } from 'lucide-react'
 import { t } from '../../i18n/index.js'
 import LanguageSwitch from './LanguageSwitch'
+import { NavMenu, NavMenuGroup, NavMenuItem, NavMenuSep } from './NavMenu'
 import './AvatarMenu.css'
 
+const ICON = { size: 18, strokeWidth: 2, 'aria-hidden': true }
+
+/**
+ * Menu du rond de compte. Connecté : identité, propositions à relire, arbres, paramètres, aide, langue, déconnexion.
+ * Sans compte : se connecter, créer son arbre, aide, langue.
+ */
 function AvatarMenu({
+  phone = false,
+  triggerRef,
+  guest = false,
+  onClose,
   userDisplayName,
   userEmail,
   linkedPersonName = '',
   trees = [],
   activeTreeId,
   activeTreeName = '',
+  isOwner = false,
+  pendingContributions = 0,
+  onContributionsClick,
+  onShareClick,
+  helpUrl = '',
   onAccountClick,
   onSelectTree,
   onCreateTree,
   onSettings,
+  onLogin,
+  onRegister,
   onLogout,
 }) {
-  const hasSeveralTrees = trees.length > 1
-  const currentTreeName = (
-    trees.find((entry) => String(entry.id) === String(activeTreeId))?.name
-    || activeTreeName
-    || trees[0]?.name
-    || t('Aucun arbre')
-  )
-
   const displayName = linkedPersonName || userDisplayName || t('Mon compte')
+  const currentTreeName = trees.find((entry) => String(entry.id) === String(activeTreeId))?.name
+    || activeTreeName || trees[0]?.name || t('Aucun arbre')
 
-  return (
-    <div className="avatar-menu account-menu pz-menu" role="menu">
-      <button type="button" className="am-head" onClick={onAccountClick} role="menuitem">
-        <span className="am-head-mono" aria-hidden="true">{displayName.trim().charAt(0).toUpperCase()}</span>
-        <span className="am-head-text">
-          <strong>{displayName}</strong>
-          <span>{userEmail || t('Mon compte')}</span>
-        </span>
-        <ChevronRight size={16} aria-hidden="true" className="am-head-chevron" />
-      </button>
-
-      <div className="pz-menu-sep" />
-      <p className="pz-menu-label">{hasSeveralTrees ? t('Vos arbres') : t('Arbre ouvert')}</p>
-
-      {hasSeveralTrees ? (
-        trees.map((tree) => {
-          const isActive = String(tree.id) === String(activeTreeId)
-          return (
-            <button
-              key={tree.id}
-              type="button"
-              role="menuitem"
-              className={`pz-menu-item ${isActive ? 'is-active' : ''}`}
-              onClick={() => onSelectTree?.(tree.id)}
-            >
-              <span className="am-tree-mono" aria-hidden="true">{(tree.name || '?').trim().charAt(0).toUpperCase()}</span>
-              <span className="am-tree-name">{tree.name}</span>
-              {isActive && <Check size={16} aria-hidden="true" className="am-check" />}
-            </button>
-          )
-        })
+  const helpRow = (
+    <div className="navm-row">
+      {helpUrl ? (
+        <NavMenuItem
+          icon={<HelpCircle {...ICON} />}
+          label={t('Aide')}
+          onSelect={() => { window.open(helpUrl, '_blank', 'noopener'); onClose() }}
+        />
       ) : (
-        <div className="pz-menu-item am-single" aria-current="true">
-          <span className="am-tree-mono" aria-hidden="true">{currentTreeName.trim().charAt(0).toUpperCase()}</span>
-          <span className="am-tree-name">{currentTreeName}</span>
-        </div>
-      )}
-
-      <button type="button" role="menuitem" className="pz-menu-item" onClick={onCreateTree}>
-        <Plus size={16} aria-hidden="true" />
-        <span>{t('Créer un nouvel arbre')}</span>
-      </button>
-
-      <div className="pz-menu-sep" />
-
-      <div className="pz-lang-row">
-        <span className="pz-lang-row-label">
-          <Globe size={16} aria-hidden="true" />
+        <span className="navm-item navm-text" aria-hidden="true">
+          <span className="navm-ic"><Globe {...ICON} /></span>
           <span>{t('Langue')}</span>
         </span>
-        <LanguageSwitch />
-      </div>
-
-      <button type="button" role="menuitem" className="pz-menu-item" onClick={onSettings}>
-        <Settings size={16} aria-hidden="true" />
-        <span>{t("Paramètres de l'arbre")}</span>
-      </button>
-
-      <button type="button" role="menuitem" className="pz-menu-item pz-menu-item--danger" onClick={onLogout}>
-        <LogOut size={16} aria-hidden="true" />
-        <span>{t('Déconnexion')}</span>
-      </button>
+      )}
+      <LanguageSwitch />
     </div>
+  )
+
+  const body = guest ? (
+    <>
+      <NavMenuItem icon={<LogIn {...ICON} />} label={t('Se connecter')} onSelect={() => { onClose(); onLogin?.() }} />
+      {onRegister && <NavMenuItem icon={<UserPlus {...ICON} />} label={t('Créer mon arbre')} onSelect={() => { onClose(); onRegister() }} />}
+      <NavMenuSep />
+      {helpRow}
+    </>
+  ) : (
+    <>
+      <button type="button" role="menuitem" className="navm-item navm-head" onClick={() => { onClose(); onAccountClick?.() }}>
+        <span className="navm-head-mono" aria-hidden="true">{displayName.trim().charAt(0).toUpperCase()}</span>
+        <span className="navm-text">
+          <strong>{displayName}</strong>
+          <small>{userEmail || t('Mon compte')}</small>
+        </span>
+        <ChevronRight size={16} aria-hidden="true" className="navm-chevron" />
+      </button>
+
+      {isOwner && onContributionsClick && pendingContributions > 0 && (
+        <NavMenuItem
+          icon={<Share2 {...ICON} />}
+          label={t('Propositions à relire')}
+          onSelect={() => { onClose(); onContributionsClick() }}
+          right={<span className="navm-badge">{pendingContributions > 99 ? '99+' : pendingContributions}</span>}
+        />
+      )}
+
+      <NavMenuSep />
+      <NavMenuGroup label={t('Mes arbres')}>
+        {trees.length > 1 ? trees.map((tree) => {
+          // L'arbre en cours : affiché comme courant (coche terracotta), non cliquable, pas grisé
+          const isActive = String(tree.id) === String(activeTreeId)
+          return (
+            <NavMenuItem
+              key={tree.id}
+              icon={<span className="navm-tree-mono" aria-hidden="true">{(tree.name || '?').trim().charAt(0).toUpperCase()}</span>}
+              label={tree.name}
+              onSelect={isActive ? undefined : () => { onClose(); onSelectTree?.(tree.id) }}
+              disabled={isActive}
+              className={isActive ? 'navm-current' : undefined}
+              right={isActive ? <Check size={16} aria-hidden="true" className="navm-check" /> : null}
+            />
+          )
+        }) : (
+          <NavMenuItem
+            icon={<TreeDeciduous {...ICON} />}
+            label={currentTreeName}
+            disabled
+            className="navm-current"
+            right={<Check size={16} aria-hidden="true" className="navm-check" />}
+          />
+        )}
+        <NavMenuItem icon={<Plus {...ICON} />} label={t('Créer un nouvel arbre')} onSelect={() => { onClose(); onCreateTree?.() }} />
+      </NavMenuGroup>
+
+      {isOwner && onShareClick && (
+        <NavMenuItem icon={<Share2 {...ICON} />} label={t("Partager l'arbre")} onSelect={() => { onClose(); onShareClick() }} />
+      )}
+
+      {isOwner && (
+        <NavMenuItem icon={<Settings {...ICON} />} label={t("Paramètres de l'arbre")} onSelect={() => { onClose(); onSettings?.() }} />
+      )}
+
+      <NavMenuSep />
+      {helpRow}
+      <NavMenuSep />
+      <NavMenuItem danger icon={<LogOut {...ICON} />} label={t('Se déconnecter')} onSelect={() => { onClose(); onLogout?.() }} />
+    </>
+  )
+
+  return (
+    <NavMenu phone={phone} label={t('Menu compte')} onClose={onClose} triggerRef={triggerRef}>
+      {body}
+    </NavMenu>
   )
 }
 

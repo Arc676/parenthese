@@ -28,7 +28,14 @@ export type MediaJwtPayload = {
   accessVersion?: number
 }
 
-export type AnyJwtPayload = UserJwtPayload | TreeAccessJwtPayload | MediaJwtPayload
+// Passage d'une connexion OIDC à l'app (60 s, à usage unique, échangé sur /auth/oidc/exchange) : jamais une session
+export type OidcHandoffJwtPayload = {
+  kind: 'oidc_handoff'
+  sub: string
+  jti: string
+}
+
+export type AnyJwtPayload = UserJwtPayload | TreeAccessJwtPayload | MediaJwtPayload | OidcHandoffJwtPayload
 
 export type UserActor = {
   kind: 'user'

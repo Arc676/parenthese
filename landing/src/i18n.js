@@ -29,7 +29,7 @@ export const COPY = {
     appQuery: '',
     otherLang: { href: '/en/', hrefLang: 'en', label: 'EN', title: 'English version' },
     logoHome: 'Parenthèse, accueil',
-    nav: { how: 'Comment ça marche', demo: 'Un exemple', privacy: 'Vie privée' },
+    nav: { how: 'Comment ça marche', demo: 'Un exemple', privacy: 'Vie privée', login: 'Se connecter' },
     privacyHref: '/donnees-et-vie-privee/',
     cta: 'Créer mon arbre',
     heroCanvas: 'Arbre de famille animé',
@@ -116,6 +116,7 @@ export const COPY = {
     footer: {
       label: 'Pied de page',
       guides: 'Guides',
+      login: 'Se connecter',
       privacy: 'Vie privée',
       source: 'Code source',
       madeBy: 'Fait par Ilies Allali',
@@ -138,7 +139,7 @@ export const COPY = {
     appQuery: 'lang=en',
     otherLang: { href: '/', hrefLang: 'fr', label: 'FR', title: 'Version française' },
     logoHome: 'Parenthèse, home',
-    nav: { how: 'How it works', demo: 'An example', privacy: 'Privacy' },
+    nav: { how: 'How it works', demo: 'An example', privacy: 'Privacy', login: 'Sign in' },
     privacyHref: '/en/privacy/',
     cta: 'Start your tree',
     heroCanvas: 'Animated family tree',
@@ -225,6 +226,7 @@ export const COPY = {
     footer: {
       label: 'Footer',
       guides: 'Guides',
+      login: 'Sign in',
       privacy: 'Privacy',
       source: 'Source code',
       madeBy: 'Made by Ilies Allali',

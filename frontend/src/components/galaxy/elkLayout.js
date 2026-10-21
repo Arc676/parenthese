@@ -3,7 +3,7 @@ import {
   PERSON_W, PERSON_H, UNION_W, UNION_H,
   UNKNOWN_W, UNKNOWN_H, COMPACT_W, COMPACT_JOIN_GAP,
   JITTER_RADIUS, FLOAT_AMPLITUDE, FLOAT_SPEED,
-  ANGLE_VARIATION, MAX_ORBIT_MEDIAS, ORBIT_RADIUS,
+  ANGLE_VARIATION, MAX_ORBIT_MEDIAS, ORBIT_RADIUS, SEPARATED_PAIR_PREFIX,
 } from './constants'
 
 // ============================================================
@@ -38,6 +38,38 @@ function makePairKey(a, b) {
   const left = String(a)
   const right = String(b)
   return left < right ? `${left}|${right}` : `${right}|${left}`
+}
+
+// Deux parents d'un même enfant sans couple enregistré (séparés, jamais mariés) : un couple « séparé »
+// propre au dessin les relie en pointillés, au lieu d'un « Inconnu » à côté de chacun. Rien en base.
+
+export function separatedPairUnions(filiations = [], unions = []) {
+  const coupled = new Set(unions.filter(u => u.partner1Id && u.partner2Id).map(u => makePairKey(u.partner1Id, u.partner2Id)))
+  const unionPartners = new Map(unions.map(u => [u.id, [u.partner1Id, u.partner2Id]]))
+  const byChild = new Map()
+  filiations.forEach((f) => {
+    if (!f.childId) return
+    if (!byChild.has(f.childId)) byChild.set(f.childId, { direct: new Set(), viaUnion: new Set() })
+    const entry = byChild.get(f.childId)
+    if (f.unionId) (unionPartners.get(f.unionId) || []).forEach(id => id != null && entry.viaUnion.add(String(id)))
+    else if (f.parentId) entry.direct.add(String(f.parentId))
+  })
+  const pairs = new Map()
+  byChild.forEach(({ direct, viaUnion }) => {
+    const parents = [...direct].filter(id => !viaUnion.has(id)).sort()
+    if (parents.length < 2) return
+    const key = makePairKey(parents[0], parents[1])
+    if (coupled.has(key) || pairs.has(key)) return
+    const original = (id) => filiations.find(f => String(f.parentId) === id)?.parentId ?? id
+    pairs.set(key, {
+      id: `${SEPARATED_PAIR_PREFIX}${parents[0]}:${parents[1]}`,
+      partner1Id: original(parents[0]),
+      partner2Id: original(parents[1]),
+      separated: true,
+      displayOrder: Number.MAX_SAFE_INTEGER,
+    })
+  })
+  return [...pairs.values()]
 }
 
 // ============================================================
@@ -168,10 +200,11 @@ const LARGE_FAMILY_GAP = 80
 const LARGE_FAMILY_THRESHOLD = 3
 const CLUSTER_SPREAD_FACTOR = 6
 
-export function computeLayout(graphData = null) {
+export function computeLayout(graphData = null, referenceId = null) {
   const persons = graphData?.persons || globalPersons
-  const unions = graphData?.unions || globalUnions
   const filiations = graphData?.filiations || globalFiliations
+  const savedUnions = graphData?.unions || globalUnions
+  const unions = [...savedUnions, ...separatedPairUnions(filiations, savedUnions)]
 
   const normalizedFiliations = normalizeFiliationsForLayout(filiations, unions)
 
@@ -183,89 +216,123 @@ export function computeLayout(graphData = null) {
   })
 
   // ----------------------------------------------------------
-  // PHASE 1 : Assigner les générations (Y)
+  // PHASE 1 : Rangées = génération de parenté depuis la personne de référence
+  //
+  // Les conjoints sont soudés (toujours la même rangée). Chaque foyer (personnes
+  // reliées par des unions) est visité en largeur depuis le foyer de la référence :
+  // parents une rangée au-dessus, enfants une rangée en dessous. Une branche courte
+  // mariée dans une branche longue suit donc entière (parents, fratrie, cousins),
+  // au lieu de rester accrochée à son ancêtre le plus ancien.
+  //
+  // Une filiation qui contredit la rangée déjà attribuée (cousins de degrés
+  // différents, oncle et nièce, erreur de saisie) est comptée dans
+  // generationConflicts et dessinée telle quelle. Une famille non reliée à la
+  // référence est calée par ses années de naissance si elle en a, sinon posée en haut.
   // ----------------------------------------------------------
-  const genMap = new Map()
-
-  function calcGen(pid, visited = new Set()) {
-    if (genMap.has(pid)) return genMap.get(pid)
-    if (visited.has(pid)) return 0
-    visited.add(pid)
-    const parentFils = filiationsByChild.get(pid) || []
-    if (parentFils.length === 0) { genMap.set(pid, 0); return 0 }
-
-    let best = Number.MAX_SAFE_INTEGER
-    for (const f of parentFils) {
-      if (f.unionId) {
-        const u = unionsById.get(f.unionId)
-        if (!u) continue
-        const g = Math.max(
-          calcGen(u.partner1Id, new Set(visited)),
-          calcGen(u.partner2Id, new Set(visited)),
-        ) + 1
-        if (g < best) best = g
-      } else if (f.parentId) {
-        const g = calcGen(f.parentId, new Set(visited)) + 1
-        if (g < best) best = g
-      }
-    }
-    const gen = best === Number.MAX_SAFE_INTEGER ? 0 : best
-    genMap.set(pid, gen)
-    return gen
-  }
-
-  persons.forEach(p => calcGen(p.id))
-
-  // Aligner les partenaires sur la même génération
+  const personIds = new Set(persons.map(p => p.id))
+  const uf = new Map(persons.map(p => [p.id, p.id]))
+  const find = (x) => { while (uf.get(x) !== x) { uf.set(x, uf.get(uf.get(x))); x = uf.get(x) } return x }
+  const relatives = new Map(persons.map(p => [p.id, new Set()]))
   unions.forEach(u => {
-    const maxG = Math.max(genMap.get(u.partner1Id) ?? 0, genMap.get(u.partner2Id) ?? 0)
-    genMap.set(u.partner1Id, maxG)
-    genMap.set(u.partner2Id, maxG)
+    if (!personIds.has(u.partner1Id) || !personIds.has(u.partner2Id)) return
+    uf.set(find(u.partner1Id), find(u.partner2Id))
+    relatives.get(u.partner1Id).add(u.partner2Id)
+    relatives.get(u.partner2Id).add(u.partner1Id)
   })
 
-  // Ajuster les racines orphelines : si un ancêtre sans parents connus
-  // a des enfants à gen N, il doit être à gen N-1 (pas gen 0).
-  {
-    const rootIds = new Set(persons.filter(p => !filiationsByChild.has(p.id)).map(p => p.id))
-    const maxChildGenByRoot = new Map()
-    normalizedFiliations.forEach(f => {
-      const childGen = genMap.get(f.childId)
-      if (childGen === undefined) return
-      const parentIds = []
-      if (f.unionId) {
-        const u = unionsById.get(f.unionId)
-        if (u?.partner1Id) parentIds.push(u.partner1Id)
-        if (u?.partner2Id) parentIds.push(u.partner2Id)
-      } else if (f.parentId) {
-        parentIds.push(f.parentId)
-      }
-      for (const pid of parentIds) {
-        if (!rootIds.has(pid)) continue
-        if ((maxChildGenByRoot.get(pid) ?? -1) < childGen) maxChildGenByRoot.set(pid, childGen)
-      }
-    })
-
-    let anyAdjusted = false
-    for (const [pid, maxChildGen] of maxChildGenByRoot) {
-      const idealGen = maxChildGen - 1
-      if (idealGen > 0) { genMap.set(pid, idealGen); anyAdjusted = true }
+  // Arêtes entre foyers : foyer des parents → foyer de l'enfant (+1), et retour (−1)
+  const kinAdj = new Map()
+  const kinEdges = new Set()
+  const addKin = (parentId, childId) => {
+    if (!personIds.has(parentId) || !personIds.has(childId)) return
+    relatives.get(parentId).add(childId)
+    relatives.get(childId).add(parentId)
+    const a = find(parentId), b = find(childId)
+    if (kinEdges.has(`${a}>${b}`)) return
+    kinEdges.add(`${a}>${b}`)
+    if (!kinAdj.has(a)) kinAdj.set(a, [])
+    if (!kinAdj.has(b)) kinAdj.set(b, [])
+    kinAdj.get(a).push([b, 1])
+    kinAdj.get(b).push([a, -1])
+  }
+  normalizedFiliations.forEach(f => {
+    if (f.unionId) {
+      const u = unionsById.get(f.unionId)
+      if (u) { addKin(u.partner1Id, f.childId); addKin(u.partner2Id, f.childId) }
+    } else if (f.parentId) {
+      addKin(f.parentId, f.childId)
     }
+  })
 
-    if (anyAdjusted) {
-      unions.forEach(u => {
-        const maxG = Math.max(genMap.get(u.partner1Id) ?? 0, genMap.get(u.partner2Id) ?? 0)
-        genMap.set(u.partner1Id, maxG)
-        genMap.set(u.partner2Id, maxG)
-      })
-      persons.forEach(p => { if (!rootIds.has(p.id)) genMap.delete(p.id) })
-      persons.forEach(p => calcGen(p.id))
-      unions.forEach(u => {
-        const maxG = Math.max(genMap.get(u.partner1Id) ?? 0, genMap.get(u.partner2Id) ?? 0)
-        genMap.set(u.partner1Id, maxG)
-        genMap.set(u.partner2Id, maxG)
-      })
+  // Référence : la personne donnée, sinon celle qui a le plus de proches à deux degrés
+  const closeness = (id) => {
+    const seen = new Set(relatives.get(id))
+    for (const r of relatives.get(id)) for (const rr of relatives.get(r)) seen.add(rr)
+    seen.delete(id)
+    return seen.size
+  }
+  const byCloseness = persons.map((p, i) => [p.id, closeness(p.id), i])
+    .sort((a, b) => b[1] - a[1] || a[2] - b[2])
+    .map(([id]) => id)
+  const reference = personIds.has(referenceId) ? referenceId : byCloseness[0]
+
+  const clusterGen = new Map()
+  const components = []
+  const conflictKeys = new Set()
+  const visitFrom = (start) => {
+    const members = [start]
+    clusterGen.set(start, 0)
+    for (let i = 0; i < members.length; i++) {
+      const c = members[i]
+      for (const [n, w] of (kinAdj.get(c) || [])) {
+        const v = clusterGen.get(c) + w
+        if (!clusterGen.has(n)) { clusterGen.set(n, v); members.push(n) }
+        else if (clusterGen.get(n) !== v) conflictKeys.add(c < n ? `${c}|${n}` : `${n}|${c}`)
+      }
+    }
+    components.push(members)
+  }
+  if (reference != null) visitFrom(find(reference))
+  for (const id of byCloseness) { const c = find(id); if (!clusterGen.has(c)) visitFrom(c) }
+  const generationConflicts = conflictKeys.size
+
+  // Familles non reliées à la référence : calées sur ses années de naissance, sinon posées en haut
+  const birthYear = (p) => {
+    const raw = p.birthYear ?? p.birthDate
+    const y = raw != null ? parseInt(String(raw).slice(0, 4), 10) : NaN
+    return Number.isFinite(y) ? y : null
+  }
+  const clusterIndex = new Map()
+  components.forEach((members, i) => members.forEach(c => clusterIndex.set(c, i)))
+  const dated = components.map(() => [])
+  persons.forEach(p => {
+    const y = birthYear(p)
+    if (y != null) dated[clusterIndex.get(find(p.id))].push([clusterGen.get(find(p.id)), y])
+  })
+  let slope = 30, intercept = null
+  const main = dated[0] || []
+  if (main.length) {
+    const mg = main.reduce((s, [g]) => s + g, 0) / main.length
+    const my = main.reduce((s, [, y]) => s + y, 0) / main.length
+    const sxx = main.reduce((s, [g]) => s + (g - mg) ** 2, 0)
+    const sxy = main.reduce((s, [g, y]) => s + (g - mg) * (y - my), 0)
+    if (sxx > 0) slope = Math.min(60, Math.max(15, sxy / sxx))
+    intercept = my - slope * mg
+  }
+  const lowestGen = (i) => Math.min(...components[i].map(c => clusterGen.get(c)))
+  const offsets = components.map(() => 0)
+  for (let i = 1; i < components.length; i++) {
+    if (intercept != null && dated[i].length) {
+      const ks = dated[i].map(([g, y]) => (y - intercept) / slope - g).sort((a, b) => a - b)
+      offsets[i] = Math.round(ks[Math.floor(ks.length / 2)])
+    } else {
+      offsets[i] = lowestGen(0) - lowestGen(i)
     }
   }
+  const genMap = new Map()
+  persons.forEach(p => { const c = find(p.id); genMap.set(p.id, clusterGen.get(c) + offsets[clusterIndex.get(c)]) })
+  const lowest = persons.length ? Math.min(...genMap.values()) : 0
+  persons.forEach(p => genMap.set(p.id, genMap.get(p.id) - lowest))
 
   // ----------------------------------------------------------
   // Conjoints isolés : mariés une seule fois, sans parent ni enfant dans l'arbre.
@@ -330,7 +397,7 @@ export function computeLayout(graphData = null) {
   // Entrées d'union unifiées (réelles + virtuelles)
   const allUnionEntries = [
     ...unions.map(u => ({
-      elkId: `u-${u.id}`, p1Key: `p-${u.partner1Id}`, p2Key: `p-${u.partner2Id}`, virtual: false,
+      elkId: `u-${u.id}`, p1Key: `p-${u.partner1Id}`, p2Key: `p-${u.partner2Id}`, virtual: Boolean(u.separated),
     })),
     ...virtualUnions.map(vu => ({
       elkId: vu.elkId, p1Key: `p-${vu.parentId}`, p2Key: vu.unknownElkId, virtual: true,
@@ -733,7 +800,7 @@ export function computeLayout(graphData = null) {
   // --- PASS B (bottom-up) : placement initial centré sur les enfants ---
   const sortedGensDesc = [...componentOrderPerGen.keys()].sort((a, b) => b - a)
   if (sortedGensDesc.length === 0) {
-    return { children: allNodes, edges: allEdges }
+    return { children: allNodes, edges: allEdges, generationConflicts, referenceId: reference ?? null }
   }
   const genMax = sortedGensDesc[0]
   const genMin = sortedGensDesc[sortedGensDesc.length - 1]
@@ -773,7 +840,7 @@ export function computeLayout(graphData = null) {
     node.y = node._generation * (PERSON_H + LAYER_SPACING)
   }
 
-  return { children: allNodes, edges: allEdges }
+  return { children: allNodes, edges: allEdges, generationConflicts, referenceId: reference ?? null }
 }
 
 // ============================================================
@@ -782,7 +849,7 @@ export function computeLayout(graphData = null) {
 export function generateNodeRandomData(children, edges = []) {
   const data = new Map()
   // Enfant d'un renvoi : la pastille « Voir les parents » occupe le haut du portrait, l'orbite reste sur les côtés
-  const renvoiChildren = new Set(edges.filter(e => e._renvoi).map(e => e.targets[0]))
+  const renvoiChildren = new Set([...edges.filter(e => e._renvoi).map(e => e.targets[0]), ...children.filter(n => n._familyTab).map(n => n.id)])
   const deg = (d) => d * Math.PI / 180
   // Partenaire d'un conjoint isolé : ses souvenirs en orbite passent du côté opposé au petit portrait
   const compactSide = new Map()

@@ -1,30 +1,25 @@
-/* Menu du compte (DA terracotta), s'ouvre au-dessus de l'avatar en bas à droite */
-.avatar-menu.account-menu {
-  position: absolute;
-  bottom: calc(100% + 10px);
-  right: 0;
-  width: min(320px, 88vw);
-  max-height: min(72vh, 540px);
-  overflow-y: auto;
-  transform-origin: bottom right;
-  scrollbar-width: thin;
-  scrollbar-color: var(--pz-line) transparent;
-}
-
-.am-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
+/* Menu du compte : contenu propre, la coque (popover ou feuille) vit dans NavMenu.css */
+.navm-head {
+  min-height: 60px;
   padding: 10px;
-  border: 0;
   border-radius: 12px;
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
 }
-@media (hover: hover) and (pointer: fine) { .am-head:hover { background: var(--pz-line-soft); } }
-.am-head-mono {
+.navm-head strong {
+  display: block;
+  font: 400 18px/1.2 var(--pz-serif);
+  color: var(--pz-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.navm-head small {
+  font: 400 12.5px var(--pz-sans);
+  color: var(--pz-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.navm-head-mono {
   width: 40px;
   height: 40px;
   flex: none;
@@ -35,15 +30,11 @@
   color: var(--pz-a700);
   font: 400 19px/1 var(--pz-serif);
 }
-.am-head-text { display: grid; gap: 2px; min-width: 0; flex: 1; }
-.am-head-text strong { font: 400 18px/1.2 var(--pz-serif); color: var(--pz-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.am-head-text span { font: 400 12.5px var(--pz-sans); color: var(--pz-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.am-head-chevron { color: var(--pz-faint); flex: none; }
+.navm-chevron { color: var(--pz-faint); flex: none; }
 
-.am-tree-mono {
+.navm-tree-mono {
   width: 26px;
   height: 26px;
-  flex: none;
   display: grid;
   place-items: center;
   border-radius: 8px;
@@ -51,7 +42,8 @@
   color: var(--pz-a700);
   font: 400 14px/1 var(--pz-serif);
 }
-.am-tree-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.am-check { color: var(--pz-a700) !important; }
-.am-single { cursor: default; }
-@media (hover: hover) and (pointer: fine) { .am-single:hover { background: transparent; } }
+.navm-check { color: var(--pz-a700); }
+.navm-current { cursor: default; }
+.navm-current:hover { background: transparent !important; }
+/* Arbre en cours : désactivé pour le clavier et le clic, mais texte à sa couleur normale (pas la mise en retrait de .navm-item:disabled) */
+.navm-item.navm-current:disabled { opacity: 1; cursor: default; color: var(--pz-ink); }

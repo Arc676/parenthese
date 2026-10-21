@@ -57,6 +57,26 @@ Trois conteneurs tournent : `db` (PostgreSQL 16), `api` (l'API Node) et `web` (n
 
 Pour ouvrir l'instance à la famille depuis Internet, placez un reverse proxy HTTPS devant le port `web` (Caddy, Traefik, nginx) et mettez l'adresse publique dans `CORS_ORIGIN`, par exemple `https://arbre.votre-domaine.fr`.
 
+Pour qu'une personne qui tombe sur l'adresse ne puisse pas s'inscrire et y créer ses arbres, mettez `ALLOW_REGISTRATION=false` dans `.env`, puis lancez `docker compose up -d`. Les comptes existants se connectent et créent leurs arbres comme avant, la famille ouvre toujours les arbres partagés avec le lien et le mot de passe, et l'application ne propose plus de créer de compte. Une instance sans aucun compte accepte quand même le premier, la variable peut donc être posée avant le tout premier démarrage : créez votre compte tout de suite, avant de donner l'adresse.
+
+#### Connexion par votre fournisseur d'identité (OIDC)
+
+*Expérimental dans la 1.2.0 : testé contre un fournisseur OpenID certifié, vos retours sur de vraies installations sont les bienvenus dans les issues.*
+
+Parenthèse peut confier la connexion à un fournisseur OpenID Connect que vous faites déjà tourner (Authentik, Authelia, Keycloak, Pocket ID, Zitadel…) : la famille garde un seul compte et sa double authentification. Créez chez lui une application OIDC (client confidentiel, flux « authorization code ») dont l'adresse de retour est l'adresse publique de Parenthèse suivie de `/auth/oidc/callback`, puis renseignez dans `.env` :
+
+```bash
+OIDC_ISSUER=https://auth.votre-domaine.fr/application/o/parenthese/   # exactement comme le fournisseur l'annonce
+OIDC_CLIENT_ID=parenthese
+OIDC_CLIENT_SECRET=...                                                # vide pour un client public (PKCE seul)
+OIDC_REDIRECT_URI=https://arbre.votre-domaine.fr/auth/oidc/callback
+OIDC_PROVIDER_NAME=Authentik                                          # nom affiché sur le bouton
+```
+
+L'écran de connexion affiche alors « Se connecter avec Authentik ». À la première connexion, Parenthèse relie le compte du fournisseur au compte Parenthèse qui a le même email, ou en crée un si `ALLOW_REGISTRATION` le permet. Inscription fermée, le fournisseur ne connecte que les personnes qui ont déjà un compte (le premier compte d'une instance vide reste accepté). Un email n'est pris en compte que si le fournisseur le dit vérifié (`email_verified`) ; `OIDC_REQUIRE_VERIFIED_EMAIL=false` lève ce contrôle, pour un fournisseur qui ne l'envoie pas et où personne ne choisit lui-même son adresse. Une fois relié, un compte suit l'identifiant de l'utilisateur chez le fournisseur, pas son email.
+
+`PASSWORD_LOGIN=false` retire les mots de passe Parenthèse : la connexion passe par le fournisseur seulement (l'API refuse de démarrer sans `OIDC_ISSUER`). Un compte créé par le fournisseur n'a pas de mot de passe ; pour le supprimer, on retape son email. `OIDC_SCOPES` (par défaut `openid email profile`) et `OIDC_APP_URL` (où l'app s'ouvre après la connexion, par défaut l'origine de `OIDC_REDIRECT_URI`) se changent rarement.
+
 Une instance auto-hébergée n'envoie aucune mesure d'audience : le suivi d'usage de parenthese.io ne s'active que si une clé PostHog est fournie au build, ce que cette configuration ne fait pas.
 
 Les liens d'aide et de vie privée de l'application mènent à parenthese.io. Pour pointer vers vos propres pages, renseignez `VITE_HELP_URL` et `VITE_PRIVACY_URL` quand vous construisez vous-même le front (voir `frontend/.env.example`).
@@ -69,7 +89,7 @@ docker compose ps              # état des conteneurs
 docker compose down            # arrêt, les données sont conservées
 ```
 
-Pour vérifier qu'une installation fonctionne de bout en bout, lancez `bash tools/docker-smoke.sh http://localhost` (avec le port si `WEB_PORT` n'est pas 80). Le script a besoin de `curl` et `jq`. Il passe par le port web comme un navigateur : page d'accueil, santé de l'API, création d'un compte, connexion, création puis suppression d'un arbre de test. Le compte de test (`smoke-...@example.com`) reste en base.
+Pour vérifier qu'une installation fonctionne de bout en bout, lancez `bash tools/docker-smoke.sh http://localhost` (avec le port si `WEB_PORT` n'est pas 80). Le script a besoin de `curl` et `jq`. Il passe par le port web comme un navigateur : page d'accueil, santé de l'API, création d'un compte, connexion, création puis suppression d'un arbre de test. Le compte de test (`smoke-...@example.com`) reste en base. Avec `ALLOW_REGISTRATION=false`, le script s'arrête à la création du compte, c'est le refus attendu.
 
 ### Un seul conteneur (Unraid, NAS)
 
@@ -79,7 +99,7 @@ Pour les systèmes qui installent un conteneur par application, `ghcr.io/iliesal
 docker run -d --name parenthese --restart unless-stopped -p 8080:80 -v /chemin/vers/appdata/parenthese:/data ghcr.io/iliesallali/parenthese-aio
 ```
 
-Rien à remplir. Au premier démarrage, le conteneur crée dans `/data` la base, son mot de passe et la clé des sessions, puis les réutilise. Les photos et vidéos vont dans `/data/media`. Sauvegardez tout le dossier `/data` conteneur arrêté, ou exportez la base pendant qu'il tourne avec `docker exec parenthese runuser -u postgres -- pg_dump parenthese > parenthese.sql`. La base est ici PostgreSQL 15, l'installation compose utilise la 16.
+Rien à remplir. Au premier démarrage, le conteneur crée dans `/data` la base, son mot de passe et la clé des sessions, puis les réutilise. Les photos et vidéos vont dans `/data/media`. Pour fermer la création de compte, ajoutez `-e ALLOW_REGISTRATION=false` (sur Unraid, « Allow registration » à `false`). Sauvegardez tout le dossier `/data` conteneur arrêté, ou exportez la base pendant qu'il tourne avec `docker exec parenthese runuser -u postgres -- pg_dump parenthese > parenthese.sql`. La base est ici PostgreSQL 15, l'installation compose utilise la 16.
 
 ### Où sont les données
 
@@ -99,7 +119,7 @@ docker run --rm -v parenthese_media:/data -v "$PWD":/backup alpine tar -czf /bac
 
 La première commande sauvegarde la base. Elle contient les personnes, leurs liens, les comptes et les contributions, et elle sait à qui appartient chaque photo, vidéo ou enregistrement. La seconde sauvegarde les fichiers eux-mêmes. Il faut les deux. Restaurez la base seule et les souvenirs pointent vers des fichiers disparus. Restaurez l'archive seule et vous avez un dossier de fichiers rattachés à personne. L'export GEDCOM n'est pas une sauvegarde non plus. Il sert à emmener l'arbre vers un autre logiciel de généalogie et laisse de côté les médias et les annotations.
 
-Adaptez `-U parenthese` et le nom de base si vous avez changé `POSTGRES_USER` ou `POSTGRES_DB`. Pour restaurer la base : `docker compose exec -T db pg_restore -U parenthese -d parenthese --clean < parenthese-db-AAAA-MM-JJ.dump`, puis décompressez l'archive des médias dans le volume avec la même commande `docker run`, `tar -xzf` à la place de `-czf`.
+Adaptez `-U parenthese` et le nom de base si vous avez changé `POSTGRES_USER` ou `POSTGRES_DB`. Pour restaurer la base : `docker compose exec -T db pg_restore -U parenthese -d parenthese --clean --if-exists < parenthese-db-AAAA-MM-JJ.dump`, puis décompressez l'archive des médias dans le volume avec la même commande `docker run`, `tar -xzf` à la place de `-czf`.
 
 Le script `deploy/backup.sh` fait la même chose (dump PostgreSQL, archive des médias, sommes de contrôle, rotation, envoi S3 optionnel) pour une installation sans Docker : il lit `backend/.env` et a besoin de `pg_dump` sur la machine. Ses réglages passent par les variables `BACKUP_ROOT`, `BACKUP_RETENTION_DAYS` et `BACKUP_S3_BUCKET`.
 
@@ -111,7 +131,7 @@ docker compose pull && docker compose up -d
 
 `latest` suit la branche main. Pour rester sur une version, renseignez `PARENTHESE_VERSION` dans `.env` (par exemple `1.0`). Depuis un clone, `git pull && docker compose up -d --build` reconstruit depuis les sources.
 
-Les migrations de base de données s'appliquent toutes seules au démarrage de l'API. Faites une sauvegarde avant, par habitude.
+Les migrations de base de données s'appliquent toutes seules au démarrage de l'API, et une migration ne se défait pas. Lancez les deux commandes de sauvegarde ci-dessus avant chaque mise à jour. L'image tout-en-un le fait seule : avant d'appliquer une migration, elle copie la base dans `/data/backups` et garde les cinq dernières copies.
 
 ## Développer
 

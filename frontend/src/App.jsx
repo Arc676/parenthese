@@ -4,11 +4,13 @@ import Galaxy from './components/Galaxy'
 import PersonCard from './components/PersonCard.jsx'
 import { FamilyWelcome, SouvenirPicker } from './components/FamilyOnboarding.jsx'
 import { HELP_URL } from './utils/siteLinks.js'
+import { firstNameLabel } from './utils/personName.js'
 import { hasSeenFamilyWelcome, markFamilyWelcomeSeen } from './utils/familyWelcome'
 import MediaViewer from './components/MediaViewer'
 import MediaManagerPanel from './components/MediaManagerPanel'
 import AdminPanel from './components/AdminPanel'
 import AccessGate from './components/AccessGate'
+import EntryChoice from './components/EntryChoice'
 import AccountDashboard from './components/AccountDashboard'
 import AccountPanel from './components/AccountPanel'
 import TreeCreationWizard from './components/TreeCreationWizard'
@@ -25,6 +27,7 @@ import { ExpandableSearch } from './components/search'
 import { t, dateLocale } from './i18n/index.js'
 import {
   createParentChildLink,
+  updateParentChildLink,
   deleteParentChildLink,
   deletePerson,
   deleteUnion,
@@ -41,13 +44,15 @@ import {
   fetchSharePassword,
   rememberSharePassword,
   resolveTreeBySlug,
+  saveAvatarCrop,
   uploadPersonAvatar,
   updatePerson,
   uploadAnnotationPhoto,
   reorderSiblings,
   uploadPersonMedia,
 } from './api/treeApi'
-import { getImmichErrorMessage, unassignImmichPerson } from './api/immichApi.js'
+import { fetchImmichConfig, getImmichErrorMessage, unassignImmichPerson } from './api/immichApi.js'
+import { fetchAuthOptions, oidcStartUrl } from './api/authApi'
 import { useAuth } from './hooks/useAuth'
 import { useTreeAccess, getTreeTokenStorageKey, getSlugFromPathname, readTreeAccessRole, TREE_ID_FROM_ENV } from './hooks/useTreeAccess'
 import { useMediaManager } from './hooks/useMediaManager'
@@ -226,7 +231,9 @@ function buildContributionChangesFromDraft(draft = {}) {
   const addedPersons = Array.isArray(draft.addedPersons) ? draft.addedPersons : []
   for (const person of addedPersons) {
     if (!person || typeof person !== 'object') continue
-    if (!person.firstName || !person.lastName) continue
+    // Prénom inconnu (chaîne vide) : la personne part quand même, nom de famille obligatoire comme avant
+    // Nom de famille facultatif : seule une personne sans aucun nom est ignorée
+    if (!person.firstName && !person.lastName) continue
 
     // Identifiant provisoire : le serveur le remplace par le vrai id pour créer les liens
     const ref = typeof person.ref === 'string' && person.ref.startsWith('tmp:') ? person.ref : null
@@ -239,6 +246,8 @@ function buildContributionChangesFromDraft(draft = {}) {
         firstName: String(person.firstName).trim(),
         lastName: String(person.lastName).trim(),
         birthName: person.birthName ? String(person.birthName).trim() : null,
+        nickname: person.nickname ? String(person.nickname).trim() : null,
+        sex: person.sex || null,
         birthDate: person.birthDate || null,
         deathDate: person.deathDate || null,
         isDeceased: !person.deathDate && Boolean(person.isDeceased),
@@ -253,9 +262,9 @@ function buildContributionChangesFromDraft(draft = {}) {
       const relatedId = String(rel.personId)
       if (rel.type === 'child') {
         linkedParentIds.add(relatedId)
-        changes.push({ entityType: 'parent_child_link', action: 'create', after: { parentPersonId: relatedId, childPersonId: ref, parentageType: 'biologique' } })
+        changes.push({ entityType: 'parent_child_link', action: 'create', after: { parentPersonId: relatedId, childPersonId: ref, parentageType: rel.adopted ? 'adoption' : 'biologique' } })
       } else if (rel.type === 'parent') {
-        changes.push({ entityType: 'parent_child_link', action: 'create', after: { parentPersonId: ref, childPersonId: relatedId, parentageType: 'biologique' } })
+        changes.push({ entityType: 'parent_child_link', action: 'create', after: { parentPersonId: ref, childPersonId: relatedId, parentageType: rel.adopted ? 'adoption' : 'biologique' } })
       } else if (rel.type === 'spouse') {
         changes.push({ entityType: 'union', action: 'create', after: { partner1PersonId: relatedId, partner2PersonId: ref, unionType: 'mariage' } })
       }
@@ -272,6 +281,16 @@ function buildContributionChangesFromDraft(draft = {}) {
     }
   }
 
+  // Lien avec ses parents basculé (naissance / adoption) sur un lien existant
+  const parentageChanges = draft.parentageChanges && typeof draft.parentageChanges === 'object' ? draft.parentageChanges : {}
+  for (const [childId, parentageType] of Object.entries(parentageChanges)) {
+    for (const filiation of filiations) {
+      if (String(filiation.childId) !== String(childId) || String(filiation.id).startsWith('local-')) continue
+      if ((filiation.parentageType || 'biologique') === parentageType) continue
+      changes.push({ entityType: 'parent_child_link', action: 'update', entityId: String(filiation.id), after: { parentageType } })
+    }
+  }
+
   const modifiedPersons = draft.modifiedPersons && typeof draft.modifiedPersons === 'object'
     ? draft.modifiedPersons
     : {}
@@ -283,9 +302,12 @@ function buildContributionChangesFromDraft(draft = {}) {
     if (Object.prototype.hasOwnProperty.call(source, 'firstName')) after.firstName = source.firstName || ''
     if (Object.prototype.hasOwnProperty.call(source, 'lastName')) after.lastName = source.lastName || ''
     if (Object.prototype.hasOwnProperty.call(source, 'birthName')) after.birthName = (source.birthName || '').trim() || null
+    if (Object.prototype.hasOwnProperty.call(source, 'nickname')) after.nickname = (source.nickname || '').trim() || null
+    if (Object.prototype.hasOwnProperty.call(source, 'sex')) after.sex = source.sex || null
     if (Object.prototype.hasOwnProperty.call(source, 'birthYear')) after.birthDate = yearToIsoDate(source.birthYear)
     if (Object.prototype.hasOwnProperty.call(source, 'deathYear')) after.deathDate = yearToIsoDate(source.deathYear)
     if (Object.prototype.hasOwnProperty.call(source, 'birthPlace')) after.birthPlace = (source.birthPlace || '').trim() || null
+    if (Object.prototype.hasOwnProperty.call(source, 'deathPlace')) after.deathPlace = (source.deathPlace || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(source, 'profession')) after.profession = (source.profession || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(source, 'region')) after.region = (source.region || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(source, 'nationality')) after.nationality = (source.nationality || '').trim() || null
@@ -452,6 +474,19 @@ function buildContribChangesList(draft = {}) {
   return items
 }
 
+
+// Retour du fournisseur OIDC : #oidc=<jeton de passage> ou #oidc_error=<code>. Lu une seule fois au chargement de
+// la page puis effacé de l'adresse (historique, partage d'écran).
+function readOidcReturn() {
+  if (typeof window === 'undefined') return null
+  const params = new URLSearchParams(window.location.hash.slice(1))
+  if (!params.has('oidc') && !params.has('oidc_error')) return null
+  window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+  return { code: params.get('oidc'), error: params.get('oidc_error') }
+}
+const OIDC_RETURN = readOidcReturn()
+let oidcSignIn = null
+
 function App() {
   const auth = useAuth()
   const tree = useTreeAccess()
@@ -489,6 +524,9 @@ function App() {
   })
 
   const [adminPanelVisible, setAdminPanelVisible] = useState(false)
+  // Grandes belles-familles dans des onglets (réglage de ce navigateur, voir Paramètres de l'arbre)
+  const [familyTabs, setFamilyTabsState] = useState(() => { try { return localStorage.getItem('parenthese.familyTabs') !== 'off' } catch { return true } })
+  const setFamilyTabs = useCallback((on) => { setFamilyTabsState(on); try { localStorage.setItem('parenthese.familyTabs', on ? 'on' : 'off') } catch { /* navigateur sans stockage */ } }, [])
   // Premiers visages : fenêtre ouverte après un import GEDCOM, ou depuis les paramètres de l'arbre
   const [photoStart, setPhotoStart] = useState({ visible: false, personsImported: null, refs: [], mediaRefs: [], faces: [], bundledFiles: [] })
   const photoStartDirtyRef = useRef(false)
@@ -507,6 +545,10 @@ function App() {
   })
   const [treeNotFound, setTreeNotFound] = useState(false)
   const [accountEntryMode, setAccountEntryMode] = useState('login')
+  // Options de l'instance. Inscription fermée (ALLOW_REGISTRATION=false, #113) ou mot de passe désactivé
+  // (PASSWORD_LOGIN=false, #115) : plus de « Créer un compte » nulle part. oidc : le bouton du fournisseur.
+  const [authOptions, setAuthOptions] = useState({ registration: true, passwordLogin: true, oidc: null })
+  const registrationOpen = authOptions.registration !== false && authOptions.passwordLogin !== false
   const [treeWizardVisible, setTreeWizardVisible] = useState(false)
   const [treeWizardLoading, setTreeWizardLoading] = useState(false)
   const [treeWelcomeVisible, setTreeWelcomeVisible] = useState(false)
@@ -545,6 +587,10 @@ function App() {
   const [familyWelcomeVisible, setFamilyWelcomeVisible] = useState(false)
   const [souvenirPickerVisible, setSouvenirPickerVisible] = useState(false)
   const [pendingMediaPersonId, setPendingMediaPersonId] = useState(null)
+  // Message bref (toast) : enregistrement automatique d'une fiche, erreurs d'ordre des fratries
+  const [draftNotice, setDraftNotice] = useState('')
+  // Fiche en modification : elle enregistre ses changements avant qu'on la quitte (PersonCard, saveOnLeaveRef)
+  const personSaveOnLeaveRef = useRef(null)
 
   useEffect(() => {
     if (isFamilyVisitor && tree.bootState === 'ready' && !hasSeenFamilyWelcome(tree.treeContext.treeId)) {
@@ -793,25 +839,55 @@ function App() {
     updateDraft: editMode.updateDraft,
   })
 
-  const handlePersonSelect = useCallback((personLike) => {
+  // Quitter la fiche (changer de personne, la fermer, sortir du mode modification, envoyer, ouvrir un
+  // souvenir) : ses changements sont enregistrés d'abord. Faux si ça échoue : la fiche reste ouverte
+  // avec le message d'erreur, la saisie n'est pas jetée. En démo rien n'est persisté : on ne sauvegarde pas.
+  const leaveSelectedPerson = useCallback(async () => {
+    const current = tree.selectedPerson
+    const saveOnLeave = personSaveOnLeaveRef.current
+    if (!current || !saveOnLeave || isDemoMode) return true
+    const outcome = await saveOnLeave()
+    if (outcome === 'saved') setDraftNotice(t('Modifications de {name} enregistrées', { name: firstNameLabel(current) }))
+    return outcome !== 'blocked'
+  }, [tree.selectedPerson, isDemoMode])
+
+  const chooseSelectedPerson = useCallback(async (next) => {
+    if (!(await leaveSelectedPerson())) return false
+    tree.setSelectedPerson(next)
+    return true
+  }, [leaveSelectedPerson, tree.setSelectedPerson])
+
+  const deactivateEditMode = useCallback(async () => {
+    if (!(await leaveSelectedPerson())) return
+    editMode.deactivate()
+  }, [leaveSelectedPerson, editMode.deactivate])
+
+  const handlePersonSelect = useCallback(async (personLike) => {
     const personId = personLike && typeof personLike === 'object' ? personLike.id : personLike
     if (personId === null || personId === undefined) {
-      tree.setSelectedPerson(null)
+      await chooseSelectedPerson(null)
       return
     }
 
     const freshPerson = persons.find((candidate) => String(candidate.id) === String(personId)) || personLike || null
+    if (!(await leaveSelectedPerson())) return
+
+    // Cliquer une personne pendant un ajout ferme le panneau d'ajout (il passe au-dessus de la fiche) ;
+    // sa saisie reste en mémoire et reprend quand on rouvre « Ajouter »
+    setAddPersonPanelVisible(false)
+
     tree.setSelectedPerson(freshPerson)
     trackTreeInteraction('text')
     trackDemoInteraction('person')
-  }, [tree.setSelectedPerson, trackTreeInteraction, trackDemoInteraction]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chooseSelectedPerson, leaveSelectedPerson, tree.setSelectedPerson, trackTreeInteraction, trackDemoInteraction]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleMediaSelectFresh = useCallback((media, personLike) => {
+  const handleMediaSelectFresh = useCallback(async (media, personLike) => {
     const personId = personLike && typeof personLike === 'object' ? personLike.id : personLike
     const freshPerson = personId !== null && personId !== undefined
       ? persons.find((candidate) => String(candidate.id) === String(personId)) || personLike || null
       : personLike || null
 
+    if (!(await leaveSelectedPerson())) return
     tree.handleMediaSelect(media, freshPerson)
     trackTreeInteraction(toInteractionMediaType(media?.type))
     trackDemoInteraction('media')
@@ -873,22 +949,26 @@ function App() {
   const handleEditToggle = useCallback(() => {
     if (editMode.isActive && editMode.hasDraft) {
       setShowConfirmModal(true)
+    } else if (editMode.isActive) {
+      deactivateEditMode()
     } else {
-      if (!editMode.isActive) trackDemoInteraction('edit')
+      trackDemoInteraction('edit')
       editMode.toggle()
     }
-  }, [editMode.isActive, editMode.hasDraft, editMode.toggle, trackDemoInteraction]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [editMode.isActive, editMode.hasDraft, editMode.toggle, deactivateEditMode, trackDemoInteraction]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Actions de la modal de confirmation
   const handleConfirmContinue = useCallback(() => {
     setShowConfirmModal(false)
   }, [])
 
-  const handleConfirmSaveAndQuit = useCallback(() => {
+  const handleConfirmSaveAndQuit = useCallback(async () => {
+    const left = await leaveSelectedPerson()
+    setShowConfirmModal(false)
+    if (!left) return
     editMode.saveDraft()
     editMode.deactivate()
-    setShowConfirmModal(false)
-  }, [editMode.saveDraft, editMode.deactivate]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [leaveSelectedPerson, editMode.saveDraft, editMode.deactivate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleConfirmDiscard = useCallback(() => {
     editMode.clearDraft()
@@ -944,11 +1024,11 @@ function App() {
     setSouvenirPickerVisible(true)
   }, [tree.treeContext.treeId])
 
-  const handleSouvenirPick = useCallback((person) => {
+  const handleSouvenirPick = useCallback(async (person) => {
+    if (!(await chooseSelectedPerson(person))) return
     setSouvenirPickerVisible(false)
-    tree.setSelectedPerson(person)
     setPendingMediaPersonId(person.id)
-  }, [tree.setSelectedPerson]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chooseSelectedPerson]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSouvenirPickerAddPerson = useCallback(() => {
     setSouvenirPickerVisible(false)
@@ -962,6 +1042,8 @@ function App() {
 
   const handleAddPersonSubmit = useCallback(async (formData) => {
     if (!tree.treeContext.treeId && !isDemoMode) return
+    // La fiche ouverte est enregistrée avant que la nouvelle personne ne la remplace
+    if (!(await leaveSelectedPerson())) return
 
     setAddPersonLoading(true)
     setAddPersonError('')
@@ -996,6 +1078,8 @@ function App() {
             firstName: formData.firstName,
             lastName: formData.lastName || '',
             birthName: formData.birthName || null,
+            nickname: formData.nickname || null,
+            sex: formData.sex || null,
             birthDate: formData.birthDate || null,
             deathDate: formData.deathDate || null,
             birthYear,
@@ -1030,7 +1114,7 @@ function App() {
                 childId: rel.personId,
                 parentId: personId,
                 unionId: null,
-                parentageType: 'biologique',
+                parentageType: rel.adopted ? 'adoption' : 'biologique',
                 displayOrder: filiations.length + 1,
               })
             } else if (rel.type === 'child') {
@@ -1039,7 +1123,7 @@ function App() {
                 childId: personId,
                 parentId: rel.personId,
                 unionId: null,
-                parentageType: 'biologique',
+                parentageType: rel.adopted ? 'adoption' : 'biologique',
                 displayOrder: filiations.length + 1,
               })
             }
@@ -1075,10 +1159,12 @@ function App() {
             firstName: formData.firstName,
             lastName: formData.lastName,
             birthName: formData.birthName || null,
+            nickname: formData.nickname || null,
+            sex: formData.sex || null,
             birthDate: formData.birthDate || null,
             deathDate: formData.deathDate || null,
             isDeceased: Boolean(formData.isDeceased),
-            relations: (formData.relations || []).map((rel) => ({ type: rel.type, personId: rel.personId })),
+            relations: (formData.relations || []).map((rel) => ({ type: rel.type, personId: rel.personId, adopted: Boolean(rel.adopted) })),
             siblingParentLinks,
           },
         ]
@@ -1086,7 +1172,7 @@ function App() {
         // La personne n'apparaît dans l'arbre qu'après envoi : on passe tout de suite à l'envoi
         // (prénom, un mot), la famille n'a pas à chercher le bouton
         setAddPersonPanelVisible(false)
-        setDraftNotice(t('{name} est dans vos modifications. Envoyez-les quand vous avez fini.', { name: formData.firstName }))
+        setDraftNotice(t('{name} est dans vos modifications. Envoyez-les quand vous avez fini.', { name: [formData.firstName, formData.lastName].filter(Boolean).join(' ') || t('Nouvelle personne') }))
         setContribSubmitError('')
         setContribChanges(buildContribChangesList(editMode.restoreDraft()))
         setShowContribModal(true)
@@ -1101,6 +1187,8 @@ function App() {
           firstName: formData.firstName,
           lastName: formData.lastName,
           birthName: formData.birthName,
+          nickname: formData.nickname,
+          sex: formData.sex || null,
           birthDate: formData.birthDate,
           deathDate: formData.deathDate,
           isDeceased: Boolean(formData.isDeceased),
@@ -1115,13 +1203,13 @@ function App() {
           linkedParentIds.add(String(rel.personId))
           await createParentChildLink(
             tree.treeContext.treeId,
-            { parentPersonId: rel.personId, childPersonId: newPerson.id, parentageType: 'biologique', displayOrder: 1 },
+            { parentPersonId: rel.personId, childPersonId: newPerson.id, parentageType: rel.adopted ? 'adoption' : 'biologique', displayOrder: 1 },
             auth.userAuth.token
           )
         } else if (rel.type === 'parent') {
           await createParentChildLink(
             tree.treeContext.treeId,
-            { parentPersonId: newPerson.id, childPersonId: rel.personId, parentageType: 'biologique', displayOrder: 1 },
+            { parentPersonId: newPerson.id, childPersonId: rel.personId, parentageType: rel.adopted ? 'adoption' : 'biologique', displayOrder: 1 },
             auth.userAuth.token
           )
         } else if (rel.type === 'spouse') {
@@ -1168,7 +1256,6 @@ function App() {
   const [contribSubmitLoading, setContribSubmitLoading] = useState(false)
   const [contribSubmitError, setContribSubmitError] = useState('')
   const [contribSuccess, setContribSuccess] = useState(false)
-  const [draftNotice, setDraftNotice] = useState('')
 
   // Ordre d'une fratrie (glisser dans l'arbre ou flèches de la fiche) : appliqué tout de suite, enregistré ensuite.
   // L'arbre a déjà glissé à la nouvelle place ; en cas d'échec il revient en arrière et on le dit.
@@ -1208,6 +1295,8 @@ function App() {
 
   // Soumission des modifications
   const handleEditSubmit = useCallback(async () => {
+    // Les changements de la fiche ouverte doivent être dans le brouillon avant l'envoi
+    if (!(await leaveSelectedPerson())) return
     if (isDemoMode) {
       // Démo: édition locale uniquement, jamais de persistance serveur.
       editMode.saveDraft()
@@ -1230,9 +1319,12 @@ function App() {
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'firstName')) payload.firstName = rawChanges.firstName || ''
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'lastName')) payload.lastName = rawChanges.lastName || ''
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'birthName')) payload.birthName = (rawChanges.birthName || '').trim() || null
+          if (Object.prototype.hasOwnProperty.call(rawChanges, 'nickname')) payload.nickname = (rawChanges.nickname || '').trim() || null
+          if (Object.prototype.hasOwnProperty.call(rawChanges, 'sex')) payload.sex = rawChanges.sex || null
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'birthYear')) payload.birthDate = yearToIsoDate(rawChanges.birthYear)
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'deathYear')) payload.deathDate = yearToIsoDate(rawChanges.deathYear)
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'birthPlace')) payload.birthPlace = (rawChanges.birthPlace || '').trim() || null
+          if (Object.prototype.hasOwnProperty.call(rawChanges, 'deathPlace')) payload.deathPlace = (rawChanges.deathPlace || '').trim() || null
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'profession')) payload.profession = (rawChanges.profession || '').trim() || null
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'region')) payload.region = (rawChanges.region || '').trim() || null
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'nationality')) payload.nationality = (rawChanges.nationality || '').trim() || null
@@ -1504,6 +1596,8 @@ function App() {
         if (Object.prototype.hasOwnProperty.call(changes, 'firstName')) localPerson.firstName = changes.firstName || ''
         if (Object.prototype.hasOwnProperty.call(changes, 'lastName')) localPerson.lastName = changes.lastName || ''
         if (Object.prototype.hasOwnProperty.call(changes, 'birthName')) localPerson.birthName = changes.birthName || null
+        if (Object.prototype.hasOwnProperty.call(changes, 'nickname')) localPerson.nickname = changes.nickname || null
+        if (Object.prototype.hasOwnProperty.call(changes, 'sex')) localPerson.sex = changes.sex || null
         if (Object.prototype.hasOwnProperty.call(changes, 'birthYear')) {
           const iso = yearToIsoDate(changes.birthYear)
           localPerson.birthDate = iso
@@ -1515,6 +1609,7 @@ function App() {
           localPerson.deathYear = iso ? Number(iso.slice(0, 4)) : null
         }
         if (Object.prototype.hasOwnProperty.call(changes, 'birthPlace')) localPerson.birthPlace = changes.birthPlace || null
+        if (Object.prototype.hasOwnProperty.call(changes, 'deathPlace')) localPerson.deathPlace = changes.deathPlace || null
         if (Object.prototype.hasOwnProperty.call(changes, 'profession')) localPerson.profession = changes.profession || null
         if (Object.prototype.hasOwnProperty.call(changes, 'region')) localPerson.region = changes.region || null
         if (Object.prototype.hasOwnProperty.call(changes, 'nationality')) localPerson.nationality = changes.nationality || null
@@ -1540,9 +1635,12 @@ function App() {
     if (Object.prototype.hasOwnProperty.call(changes, 'firstName')) payload.firstName = changes.firstName || ''
     if (Object.prototype.hasOwnProperty.call(changes, 'lastName')) payload.lastName = changes.lastName || ''
     if (Object.prototype.hasOwnProperty.call(changes, 'birthName')) payload.birthName = (changes.birthName || '').trim() || null
+    if (Object.prototype.hasOwnProperty.call(changes, 'nickname')) payload.nickname = (changes.nickname || '').trim() || null
+    if (Object.prototype.hasOwnProperty.call(changes, 'sex')) payload.sex = changes.sex || null
     if (Object.prototype.hasOwnProperty.call(changes, 'birthYear')) payload.birthDate = yearToIsoDate(changes.birthYear)
     if (Object.prototype.hasOwnProperty.call(changes, 'deathYear')) payload.deathDate = yearToIsoDate(changes.deathYear)
     if (Object.prototype.hasOwnProperty.call(changes, 'birthPlace')) payload.birthPlace = (changes.birthPlace || '').trim() || null
+    if (Object.prototype.hasOwnProperty.call(changes, 'deathPlace')) payload.deathPlace = (changes.deathPlace || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(changes, 'profession')) payload.profession = (changes.profession || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(changes, 'region')) payload.region = (changes.region || '').trim() || null
     if (Object.prototype.hasOwnProperty.call(changes, 'nationality')) payload.nationality = (changes.nationality || '').trim() || null
@@ -1587,10 +1685,80 @@ function App() {
       trackAppEvent('portrait_added', { via: 'card' })
       await refreshTreeAndKeepSelection(personId, { relayout: true })
       setAvatarActionState({ loading: false, error: '' })
+      // Aperçu de la photo envoyée, pour la fenêtre de recadrage qui s'ouvre tout de suite
+      return { previewUrl: URL.createObjectURL(prepared) }
     } catch (error) {
       setAvatarActionState({ loading: false, error: getAccountErrorMessage(error) })
+      return null
     }
   }, [auth.userAuth.token, tree.treeContext.accessToken, tree.treeContext.treeId, refreshTreeAndKeepSelection])
+
+  // Recadrage du portrait enregistré : true si c'est fait, la fenêtre se ferme alors
+  const handlePersonAvatarCrop = useCallback(async (personId, crop) => {
+    const accessToken = tree.treeContext.accessToken || auth.userAuth.token
+    if (!accessToken || !tree.treeContext.treeId) return false
+
+    setAvatarActionState({ loading: true, error: '' })
+    try {
+      await saveAvatarCrop(tree.treeContext.treeId, personId, crop, accessToken)
+      await refreshTreeAndKeepSelection(personId, { relayout: false, avatarCacheBust: Date.now() })
+      setAvatarActionState({ loading: false, error: '' })
+      return true
+    } catch (error) {
+      setAvatarActionState({
+        loading: false,
+        error: error?.payload?.error === 'avatar_from_immich'
+          ? t('Les photos venues d’Immich ne se recadrent pas pour l’instant.')
+          : getAccountErrorMessage(error),
+      })
+      return false
+    }
+  }, [auth.userAuth.token, tree.treeContext.accessToken, tree.treeContext.treeId, refreshTreeAndKeepSelection])
+
+  // « + photo » dans l'arbre : le sélecteur part dans le clic (Safari iOS refuse un input file ouvert hors geste),
+  // puis la fenêtre de recadrage s'ouvre dans la fiche de la personne
+  const portraitInputRef = useRef(null)
+  const portraitPickerPersonIdRef = useRef(null)
+  const [pendingPortraitCrop, setPendingPortraitCrop] = useState(null)
+  const [photoSourceRequest, setPhotoSourceRequest] = useState(null)
+  const [immichSourceReady, setImmichSourceReady] = useState(false)
+
+  // Administrateur : Immich proposé dans le menu des sources seulement s'il est configuré
+  useEffect(() => {
+    let cancelled = false
+    const treeId = tree.treeContext.treeId
+    const token = tree.treeContext.accessToken || auth.userAuth.token
+    if (!userRole.isAdmin || !tree.canEditCurrentTree || !treeId || !token) {
+      setImmichSourceReady(false)
+      return undefined
+    }
+    fetchImmichConfig(treeId, token)
+      .then(({ config }) => { if (!cancelled) setImmichSourceReady(Boolean(config?.configured)) })
+      .catch(() => { if (!cancelled) setImmichSourceReady(false) })
+    return () => { cancelled = true }
+  }, [userRole.isAdmin, tree.canEditCurrentTree, tree.treeContext.treeId, tree.treeContext.accessToken, auth.userAuth.token])
+
+  const handlePhotoPlaceholderClick = useCallback((personId) => {
+    // En modification avec Immich : le menu des sources s'ouvre dans la fiche (le badge en est l'ancre)
+    if (editMode.isActive && immichSourceReady) {
+      setPhotoSourceRequest({ personId })
+    } else {
+      // Sans menu : le sélecteur de fichiers part tout de suite, dans le clic
+      portraitPickerPersonIdRef.current = personId
+      portraitInputRef.current?.click()
+    }
+    handlePersonSelect(personId)
+  }, [editMode.isActive, immichSourceReady, handlePersonSelect])
+
+  const handlePortraitPicked = useCallback(async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    const personId = portraitPickerPersonIdRef.current
+    portraitPickerPersonIdRef.current = null
+    if (!file || personId === null) return
+    const result = await handlePersonAvatarUpload(personId, file)
+    if (result?.previewUrl) setPendingPortraitCrop({ personId, src: result.previewUrl })
+  }, [handlePersonAvatarUpload])
 
   // Visage venu d'Immich : recharger l'arbre pour montrer le nouveau portrait (ou le portrait restant)
   const handleImmichChange = useCallback(async (personId) => {
@@ -1791,6 +1959,48 @@ function App() {
       console.error('Failed to add relation:', err)
     }
   }, [auth.userAuth.token, tree.canEditCurrentTree, tree.treeContext.accessToken, tree.treeContext.treeId, refreshTreeAndKeepSelection, isDemoMode, makeLocalId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Choix en attente d'un contributeur (brouillon), affiché sur la fiche avant l'envoi
+  const [pendingParentage, setPendingParentage] = useState({})
+  useEffect(() => { if (!editMode.isActive) setPendingParentage({}) }, [editMode.isActive]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Lien avec ses parents : naissance ou adoption, pour tous les liens parent de la personne
+  const handleSetParentage = useCallback(async (childPersonId, parentageType) => {
+    const childLinks = filiations.filter((candidate) => String(candidate.childId) === String(childPersonId))
+    if (childLinks.length === 0) return
+
+    if (isDemoMode) {
+      for (const link of childLinks) link.parentageType = parentageType
+      tree.bumpGraphRevision()
+      setRelationFeedback({ loading: false, success: t('Lien modifié (démo locale)'), error: '' })
+      return
+    }
+
+    if (!tree.canEditCurrentTree) {
+      const draft = editMode.restoreDraft()
+      const parentageChanges = { ...(draft.parentageChanges || {}), [String(childPersonId)]: parentageType }
+      editMode.updateDraft({ parentageChanges })
+      setPendingParentage((prev) => ({ ...prev, [String(childPersonId)]: parentageType }))
+      setRelationFeedback({ loading: false, success: t('Modification ajoutée à la contribution'), error: '' })
+      return
+    }
+
+    const accessToken = tree.treeContext.accessToken || auth.userAuth.token
+    if (!accessToken || !tree.treeContext.treeId) return
+
+    setRelationFeedback({ loading: true, success: '', error: '' })
+    try {
+      for (const link of childLinks) {
+        if (String(link.id).startsWith('local-') || (link.parentageType || 'biologique') === parentageType) continue
+        await updateParentChildLink(tree.treeContext.treeId, link.id, { parentageType }, accessToken)
+      }
+      await refreshTreeAndKeepSelection(childPersonId, { relayout: true })
+      setRelationFeedback({ loading: false, success: t('Lien modifié'), error: '' })
+    } catch (err) {
+      setRelationFeedback({ loading: false, success: '', error: getAccountErrorMessage(err) })
+      console.error('Failed to update parentage:', err)
+    }
+  }, [auth.userAuth.token, tree.canEditCurrentTree, tree.treeContext.accessToken, tree.treeContext.treeId, refreshTreeAndKeepSelection, isDemoMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Suppression d'une relation (mode édition)
   const handleRemoveRelation = useCallback(async (sourcePersonId, targetPersonId, relationType) => {
@@ -1994,6 +2204,31 @@ function App() {
         return
       }
 
+      // Lue en parallèle, attendue avant le premier écran sans session pour ne pas montrer un bouton qui disparaît
+      let registrationAllowed = true
+      const authOptionsReady = fetchAuthOptions()
+        .then((options) => {
+          registrationAllowed = options?.registration !== false && options?.passwordLogin !== false
+          if (active && options) setAuthOptions(options)
+        })
+        .catch(() => {})
+
+      // Retour du fournisseur OIDC (lu une fois au chargement, voir OIDC_RETURN). Le jeton de passage ne sert qu'une
+      // fois : un second passage du démarrage (React en développement) attend le même échange.
+      if (OIDC_RETURN) {
+        oidcSignIn ??= OIDC_RETURN.code ? auth.handleOidcExchange(OIDC_RETURN.code) : Promise.resolve(false)
+        const signedIn = await oidcSignIn
+        if (!active) return
+        if (!signedIn) {
+          if (OIDC_RETURN.error) auth.setAccountError(getAccountErrorMessage({ payload: { error: OIDC_RETURN.error } }))
+          await authOptionsReady
+          if (!active) return
+          setAccountEntryMode('login')
+          tree.setBootState('account')
+          return
+        }
+      }
+
       const slug = getSlugFromPathname()
       let resolvedTreeId = TREE_ID_FROM_ENV
       let resolvedTreeName = ''
@@ -2002,12 +2237,14 @@ function App() {
       const resolvedTreeOwnerEmail = ''
 
       // Root app:
-      // - not connected => demo by default
+      // - not connected => accueil à deux choix (variante B, 18/10)
       // - connected => continue bootstrap to open the user's tree
       if (!slug && !TREE_ID_FROM_ENV && !query.has('account')) {
         const userToken = auth.restoreUserToken()
         if (!userToken) {
-          tree.handleUseDemo()
+          await authOptionsReady
+          if (!active) return
+          tree.setBootState('welcome')
           return
         }
       }
@@ -2134,6 +2371,7 @@ function App() {
         }
       }
 
+      await authOptionsReady
       if (!active) return
 
       if (resolvedTreeId) {
@@ -2150,7 +2388,7 @@ function App() {
       }
 
       // ?account=register (CTA de la landing) : écran compte directement en création
-      if (query.get('account') === 'register') {
+      if (query.get('account') === 'register' && registrationAllowed) {
         setAccountEntryMode('register')
         trackAppEvent('account_screen_viewed', { mode: 'register', from_shared_tree: false, source: getSource() })
       }
@@ -2211,8 +2449,9 @@ function App() {
     tree.setGateError('')
     auth.setAccountError('')
     setAccountPanelVisible(false)
-    setAccountEntryMode(mode === 'register' ? 'register' : 'login')
-    trackAppEvent('account_screen_viewed', { mode: mode === 'register' ? 'register' : 'login', from_shared_tree: Boolean(pendingSharedTreeRef.current?.treeId) })
+    const entryMode = mode === 'register' && registrationOpen ? 'register' : 'login'
+    setAccountEntryMode(entryMode)
+    trackAppEvent('account_screen_viewed', { mode: entryMode, from_shared_tree: Boolean(pendingSharedTreeRef.current?.treeId) })
     media.resetMediaManager()
     setAdminPanelVisible(false)
     contrib.resetContribState()
@@ -2517,9 +2756,24 @@ function App() {
     resetSignedOutState()
   }
 
+  // Accueil « J'ai reçu un lien de famille » : la porte demande le code de l'arbre et son mot de passe
+  const handleFamilyLinkChoice = () => {
+    tree.setTreeContext(buildEmptyTreeContext())
+    tree.setGateError('')
+    tree.setBootState('need-access')
+  }
+
+  // « Ce n'est pas mon compte » : déconnexion, puis la porte du même arbre
+  const handleNotMyAccount = async () => {
+    setTreeNotFound(false)
+    await auth.handleLogout()
+    tree.setGateError('')
+    tree.setBootState('need-access')
+  }
+
   // Suppression du compte : même remise à zéro que la déconnexion une fois la session effacée.
-  const handleDeleteAccount = async (password) => {
-    const errorMessage = await auth.handleDeleteAccount(password)
+  const handleDeleteAccount = async (confirmation) => {
+    const errorMessage = await auth.handleDeleteAccount(confirmation)
     if (errorMessage) {
       return errorMessage
     }
@@ -2739,6 +2993,18 @@ function App() {
     )
   }
 
+  if (tree.bootState === 'welcome') {
+    return (
+      <div className="app">
+        <EntryChoice
+          onFamilyLink={handleFamilyLinkChoice}
+          onLogin={() => handleUseAccount('login')}
+          onRegister={registrationOpen ? () => handleUseAccount('register') : undefined}
+        />
+      </div>
+    )
+  }
+
   if (tree.bootState === 'need-access') {
     return (
       <div className="app">
@@ -2751,9 +3017,13 @@ function App() {
           treeNotFound={treeNotFound}
           loading={tree.gateLoading}
           errorMessage={tree.gateError}
+          connected={Boolean(auth.userAuth.token)}
+          connectedName={accountUser?.firstName || ''}
+          onNotMyAccount={handleNotMyAccount}
           onSubmit={handleGateUnlock}
           onUseDemo={handleUseDemo}
           onUseAccount={handleUseAccount}
+          canRegister={registrationOpen}
         />
       </div>
     )
@@ -2769,6 +3039,11 @@ function App() {
           trees={auth.accountTrees}
           activeTreeId={tree.treeContext.treeId}
           defaultMode={accountEntryMode}
+          canRegister={registrationOpen}
+          passwordLogin={authOptions.passwordLogin !== false}
+          oidcName={authOptions.oidc?.name || ''}
+          onOidcLogin={authOptions.oidc ? () => window.location.assign(oidcStartUrl(getSlugFromPathname() ? window.location.pathname : '/')) : undefined}
+          hasPassword={auth.userAuth.user?.hasPassword !== false}
           pendingTreeName={pendingSharedTreeName}
           onLogin={handleLogin}
           onRegister={handleRegister}
@@ -2796,7 +3071,7 @@ function App() {
         <div className="tree-created-prompt" role="status">
           <strong>{t('Votre arbre est créé.')}</strong>
           {t("Ajoutez un proche pour commencer, comme votre mère, votre père ou un frère. Il suffit d'un prénom.")}
-          <button type="button" onClick={() => setTreeWelcomeVisible(false)} aria-label={t('Fermer')}>
+          <button type="button" className="pz-btn pz-btn--secondary" onClick={() => setTreeWelcomeVisible(false)} aria-label={t('Fermer')}>
             {t('Fermer')}
           </button>
         </div>
@@ -2806,7 +3081,7 @@ function App() {
           <strong>{t("Votre arbre est créé, mais l'import n'a pas abouti.")}</strong>
           {` ${treeImportError} `}
           {t("Vous pouvez réessayer depuis les paramètres de l'arbre.")}
-          <button type="button" onClick={() => setTreeImportError('')} aria-label={t('Fermer')}>
+          <button type="button" className="pz-btn pz-btn--secondary" onClick={() => setTreeImportError('')} aria-label={t('Fermer')}>
             {t('Fermer')}
           </button>
         </div>
@@ -2839,11 +3114,11 @@ function App() {
         hasResults={search.hasResults}
         onSearch={search.handleSearch}
         onClear={search.clearSearch}
-        onResultClick={(person) => {
+        onResultClick={async (person) => {
           const fullPerson = persons.find(p => p.id === person.id)
           if (!fullPerson) return
           trackDemoInteraction('search')
-          tree.setSelectedPerson(fullPerson)
+          if (!(await chooseSelectedPerson(fullPerson))) return
           galaxyZoomApiRef.current?.focusPerson?.(fullPerson.id)
         }}
       />
@@ -2860,7 +3135,7 @@ function App() {
         hasDraft={editMode.hasDraft}
         draftTimestamp={editMode.draftTimestamp}
         role={userRole.isAdmin ? 'admin' : 'contributor'}
-        onDeactivate={editMode.deactivate}
+        onDeactivate={deactivateEditMode}
         onSubmit={handleEditSubmit}
       />
       {/* Confirmation Modal (quitter mode édition avec draft) */}
@@ -2929,12 +3204,13 @@ function App() {
         activeTreeId={tree.treeContext.treeId}
         onEditClick={handleEditToggle}
         onAddPersonClick={handleOpenAddPerson}
-        onAddSouvenirClick={isFamilyVisitor ? handleOpenSouvenirPicker : undefined}
-        helpUrl={isFamilyVisitor ? HELP_URL : ''}
+        onAddSouvenirClick={isFamilyVisitor || userRole.isAdmin ? handleOpenSouvenirPicker : undefined}
+        helpUrl={HELP_URL}
         onShareClick={userRole.isAdmin ? handleOpenContributionPanel : undefined}
         onTreeSelect={handleOpenTreeFromAccount}
         onCreateTree={handleOpenTreeWizard}
         onProfileClick={handleUseAccount}
+        canRegister={registrationOpen}
         onAccountClick={() => setAccountPanelVisible(true)}
         onSettingsClick={() => setAdminPanelVisible(true)}
         onLogout={handleLogout}
@@ -2968,21 +3244,33 @@ function App() {
         zoomApiRef={galaxyZoomApiRef}
         focusPersonId={tree.treeContext.rootPersonId}
         assetRevision={tree.assetRevision}
-        photoHint={tree.canEditCurrentTree}
+        // « + photo » seulement en modification : en lecture, un clic sur un portrait vide ouvre la fiche (issue #124)
+        photoHint={tree.canEditCurrentTree && editMode.isActive}
+        onPhotoPlaceholderClick={tree.canEditCurrentTree && editMode.isActive ? handlePhotoPlaceholderClick : null}
         reorderEnabled={canReorderSiblings}
         onReorderSiblings={handleReorderSiblings}
+        familyTabs={familyTabs}
       />
       <ZoomControl zoomApiRef={galaxyZoomApiRef} />
+      {tree.canEditCurrentTree && (
+        <input ref={portraitInputRef} type="file" accept="image/*" className="pc-hidden-input" onChange={handlePortraitPicked} />
+      )}
       {tree.selectedPerson && (
         <PersonCard
           person={tree.selectedPerson}
-          onClose={() => tree.setSelectedPerson(null)}
+          onClose={() => chooseSelectedPerson(null)}
           onMediaSelect={handleMediaSelectFresh}
+          saveOnLeaveRef={personSaveOnLeaveRef}
           editMode={editMode.isActive}
           canManageMedia={tree.canSubmitContribution || tree.canEditCurrentTree}
           onManageMedia={media.handleOpenMediaManager}
           onAvatarUpload={tree.canEditCurrentTree ? handlePersonAvatarUpload : undefined}
           onAvatarDelete={tree.canEditCurrentTree ? handlePersonAvatarDelete : undefined}
+          onAvatarCrop={tree.canEditCurrentTree ? handlePersonAvatarCrop : undefined}
+          pendingPortraitCrop={pendingPortraitCrop}
+          onPendingPortraitCropDone={() => setPendingPortraitCrop(null)}
+          photoSourceRequest={photoSourceRequest}
+          onPhotoSourceRequestDone={() => setPhotoSourceRequest(null)}
           treeId={tree.treeContext.treeId || null}
           immichToken={tree.treeContext.accessToken || auth.userAuth.token}
           onImmichChange={tree.canEditCurrentTree ? handleImmichChange : undefined}
@@ -2993,6 +3281,8 @@ function App() {
           onDelete={handlePersonDelete}
           onAddRelation={handleAddRelation}
           onRemoveRelation={handleRemoveRelation}
+          onSetParentage={handleSetParentage}
+          pendingParentage={pendingParentage[String(tree.selectedPerson.id)] ?? null}
           relationActionLoading={relationFeedback.loading}
           relationActionSuccess={relationFeedback.success}
           relationActionError={relationFeedback.error}
@@ -3002,11 +3292,23 @@ function App() {
           onMomentSaved={media.refreshMomentMedia}
         />
       )}
+      {/* Crayon de modification masqué en démo : rien n'y est enregistré */}
       {tree.selectedMedia && (
         <MediaViewer
           media={tree.selectedMedia.media}
           person={tree.selectedMedia.person}
           onClose={() => tree.setSelectedMedia(null)}
+          canEdit={Boolean(tree.canEditCurrentTree && editMode.isActive && !isDemoMode)}
+          onLoadLifeEvents={() => media.loadPersonLifeEvents(tree.selectedMedia.person.id)}
+          onSave={async (payload) => {
+            const { person, media: current } = tree.selectedMedia
+            await media.handleUpdatePersonMedia(person.id, current.id, payload)
+            // Le rafraîchissement de l'arbre referme la visionneuse : on la rouvre sur le souvenir modifié
+            tree.setSelectedMedia({
+              person,
+              media: { ...current, label: payload.caption, lifeEventId: payload.lifeEventId },
+            })
+          }}
         />
       )}
       <MediaManagerPanel
@@ -3063,6 +3365,8 @@ function App() {
         onGedcomImported={handleGedcomImported}
         onOpenPhotoStart={() => { setAdminPanelVisible(false); openPhotoStart() }}
         onClose={() => setAdminPanelVisible(false)}
+        familyTabs={familyTabs}
+        onFamilyTabsChange={setFamilyTabs}
       />
       <PhotoStartPanel
         visible={photoStart.visible}

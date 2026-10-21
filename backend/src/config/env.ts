@@ -28,6 +28,16 @@ function parseTrustProxy(value: string): boolean | string {
   return value
 }
 
+// « true » ou « false », sans tenir compte de la casse. z.coerce.boolean lirait « false » comme vrai.
+function parseBooleanFlag(name: string) {
+  return (value: string): boolean => {
+    const normalized = value.trim().toLowerCase()
+    if (normalized === 'true') return true
+    if (normalized === 'false') return false
+    throw new Error(`${name} must be "true" or "false"`)
+  }
+}
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
@@ -54,9 +64,57 @@ const envSchema = z.object({
   // d'un arbre choisissent leur connexion parmi cette liste : sans elle, la reconnaissance
   // des visages reste éteinte et le serveur ne peut pas servir de proxy vers un service interne.
   IMMICH_ALLOWED_API_URLS: z.string().default(''),
+  // Création de compte. À « false », seuls les comptes existants se connectent : une instance ouverte sur
+  // Internet ne laisse pas un inconnu qui trouve l'adresse créer ses arbres. Une instance sans aucun compte
+  // accepte quand même le premier, celui du propriétaire (voir lib/registration.ts).
+  ALLOW_REGISTRATION: z.string().default('true').transform(parseBooleanFlag('ALLOW_REGISTRATION')),
+  // Connexion par un fournisseur d'identité OIDC (#115 ; Authentik, Authelia, Keycloak, Pocket ID…). Éteinte sans
+  // OIDC_ISSUER. Le fournisseur renvoie vers OIDC_REDIRECT_URI, l'adresse publique de /auth/oidc/callback.
+  OIDC_ISSUER: z.string().trim().default(''),
+  OIDC_CLIENT_ID: z.string().trim().default(''),
+  // Vide : client public, protégé par PKCE seul
+  OIDC_CLIENT_SECRET: z.string().default(''),
+  OIDC_REDIRECT_URI: z.string().trim().default(''),
+  // Où l'app s'ouvre après la connexion. Par défaut l'origine de OIDC_REDIRECT_URI (Docker : front et API sur la
+  // même adresse) ; à renseigner quand le front a sa propre adresse (développement).
+  OIDC_APP_URL: z.string().trim().default(''),
+  OIDC_SCOPES: z.string().default('openid email profile'),
+  // Nom du bouton « Se connecter avec … »
+  OIDC_PROVIDER_NAME: z.string().trim().max(40).default('SSO'),
+  // Un compte n'est créé ou relié par son email que si le fournisseur le dit vérifié (email_verified). À false
+  // seulement pour un fournisseur qui ne l'envoie pas et où personne ne choisit lui-même son adresse.
+  OIDC_REQUIRE_VERIFIED_EMAIL: z.string().default('true').transform(parseBooleanFlag('OIDC_REQUIRE_VERIFIED_EMAIL')),
+  // À false, plus de mot de passe Parenthèse : connexion par le fournisseur OIDC seulement
+  PASSWORD_LOGIN: z.string().default('true').transform(parseBooleanFlag('PASSWORD_LOGIN')),
 })
 
 export const env = envSchema.parse(process.env)
+
+function assertHttpUrl(name: string, value: string) {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new Error(`${name} must be a full URL`)
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    throw new Error(`${name} must be an http(s) URL`)
+  }
+}
+
+if (env.OIDC_ISSUER) {
+  assertHttpUrl('OIDC_ISSUER', env.OIDC_ISSUER)
+  if (!env.OIDC_CLIENT_ID) throw new Error('OIDC_CLIENT_ID is required with OIDC_ISSUER')
+  if (!env.OIDC_REDIRECT_URI) throw new Error('OIDC_REDIRECT_URI is required with OIDC_ISSUER (public address of /auth/oidc/callback)')
+  assertHttpUrl('OIDC_REDIRECT_URI', env.OIDC_REDIRECT_URI)
+  if (env.OIDC_APP_URL) assertHttpUrl('OIDC_APP_URL', env.OIDC_APP_URL)
+  if (!env.OIDC_SCOPES.split(/\s+/).includes('openid')) throw new Error('OIDC_SCOPES must include openid')
+}
+
+// Sans mot de passe ni fournisseur, personne ne pourrait se connecter
+if (!env.PASSWORD_LOGIN && !env.OIDC_ISSUER) {
+  throw new Error('PASSWORD_LOGIN=false needs OIDC_ISSUER: otherwise nobody can sign in')
+}
 
 // Corps maximal des routes qui reçoivent un fichier en base64 ou un gros envoi (le reste de l'API : 1 Mo)
 export const UPLOAD_BODY_LIMIT = 12 * 1024 * 1024

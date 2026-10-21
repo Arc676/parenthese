@@ -43,6 +43,8 @@
 
 .apn-section { display: grid; gap: 12px; padding-top: 16px; border-top: 1px solid var(--pz-line-soft); }
 .apn-types .pz-tab { font-size: 13px; padding: 0 6px; }
+/* Sexe : quatre choix, chacun sur une ligne même dans la colonne étroite du panneau */
+.apn-sex .pz-tab { white-space: nowrap; padding: 0 4px; }
 
 .apn-relation { position: relative; }
 .apn-search { position: relative; display: flex; align-items: center; }
@@ -108,6 +110,13 @@
 /* Décédé(e) sans date connue (issue #77) */
 .apn-deceased { display: inline-flex; align-items: center; gap: 7px; margin-top: 6px; font: 400 13px var(--pz-sans); color: var(--pz-ink-2); cursor: pointer; }
 .apn-deceased input { width: 15px; height: 15px; accent-color: var(--pz-a500); }
+/* Case sous une ligne de deux champs (« Je ne connais pas son prénom », « Décédé(e), date inconnue ») : sur une ligne,
+   sous les deux champs sur ordinateur, sous son champ sur téléphone (ordre du DOM) */
+.apn-row > .apn-row-check { grid-column: 1 / -1; grid-row: 2; margin-top: -6px; white-space: nowrap; justify-self: start; }
+@media (max-width: 480px) { .apn-row > .apn-row-check { grid-row: auto; } }
 
 /* Colonnes alignées en haut : la case « décédé(e) » sous le décès ne décale pas la naissance */
 .apn-row { align-items: start; }
+
+/* Titre de section en casse normale (pas de sur-titre en capitales dans le panneau d'ajout) */
+.apn-section-title { font: 500 14px/1.3 var(--pz-sans); color: var(--pz-ink); margin: 0 0 10px; }

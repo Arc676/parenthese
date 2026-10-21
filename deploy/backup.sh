@@ -98,12 +98,9 @@ echo "[3/5] Generate checksums..."
 (
   cd "$BACKUP_ROOT"
   sha256sum "db/$(basename "$DB_BACKUP_FILE")"
-  if [ "$MEDIA_IS_NEW" = "1" ]; then
-    sha256sum "media/$(basename "$MEDIA_BACKUP_FILE")"
-  else
-    # empreinte déjà calculée le jour où l'archive a été faite
-    grep -h " media/$(basename "$MEDIA_BACKUP_FILE")" "$META_DIR"/genealogy-*.sha256 2>/dev/null | head -1 || true
-  fi
+  # Archive du jour ou archive gardée : son empreinte est recalculée, celle du jour où elle a été faite
+  # disparaît avec la rotation des fichiers d'empreintes (14 jours) alors que l'archive reste
+  sha256sum "media/$(basename "$MEDIA_BACKUP_FILE")"
 ) > "$CHECKSUM_FILE"
 
 echo "[4/5] Optional offsite upload..."

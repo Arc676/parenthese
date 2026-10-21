@@ -1,35 +1,18 @@
 // Traductions anglaises, clé = texte français exact passé à t().
 export default {
+  'Famille {name}': 'The {name} family',
+  'Famille': 'Family',
+  'Familles': 'Families',
+  'Affichage': 'Display',
+  'Les grandes familles par alliance dans des onglets': 'Large in-law families in tabs',
+  "Une belle-famille plus large qu'un écran s'ouvre dans son propre onglet au lieu d'être dessinée dans l'arbre. Réglage de ce navigateur.": 'An in-law family wider than a screen opens in its own tab instead of being drawn in the tree. Saved in this browser.',
   // Arbre sur canvas (components/galaxy/renderers.js)
   'Voir les parents': 'See parents',
   'Voir {firstName}': 'See {firstName}',
   'Voir l’enfant': 'See child',
   'Inconnu': 'Unknown',
 
-  // Lien de parenté affiché au survol (components/galaxy/pathfinding.js)
-  'Conjoint(e)': 'Spouse',
-  'Beau-parent': 'Parent-in-law',
-  'Bel-enfant': 'Child-in-law',
-  'Beau-frère/sœur': 'Brother/sister-in-law',
-  'Parent': 'Parent',
-  'Grand-parent': 'Grandparent',
-  'Arrière-grand-parent': 'Great-grandparent',
-  'Aïeul(e) {n}e gén.': 'Ancestor, {n} generations up',
-  'Enfant': 'Child',
-  'Petit-enfant': 'Grandchild',
-  'Arrière-petit-enfant': 'Great-grandchild',
-  'Descendant(e) {n}e gén.': 'Descendant, {n} generations down',
-  'Frère/Sœur': 'Sibling',
-  'Oncle/Tante': 'Uncle/Aunt',
-  'Grand-oncle/tante': 'Great-uncle/aunt',
-  'Neveu/Nièce': 'Nephew/Niece',
-  'Petit-neveu/nièce': 'Grandnephew/niece',
-  'Cousin(e) germain(e)': 'First cousin',
-  'Petit-cousin(e)': 'First cousin once removed',
-  'Cousin(e) {n}e degré': 'Cousin, degree {n}',
-  'Cousin(e) éloigné(e)': 'Distant cousin',
-  '{n} liens': '{n} steps apart',
-  '{label} par alliance': '{label} by marriage',
+  // Le lien de parenté affiché au survol se nomme langue par langue dans utils/kinship/
 
   // Glisser pour ajouter une personne (components/ProximityFeedback.jsx)
   'Conjoint': 'Spouse',

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Paperclip, Images, FileText, Mic, Play, Check } from 'lucide-react'
 import { t } from '../i18n/index.js'
+import { firstNameLabel } from '../utils/personName.js'
 import { createLifeEvent, updateLifeEvent, deleteLifeEvent } from '../api/treeApi.js'
 import { DESCRIBED_TYPES, eventTitle } from '../utils/lifeTimeline.js'
 import { inferMediaTypeFromMimeType } from '../utils/mediaUpload.js'
@@ -188,7 +189,7 @@ export default function MomentSheet({ person, entry = null, treeId, token, media
     }
   }
 
-  const title = milestone ? entry.title : editing ? t('Modifier ce moment') : t('Ajouter à la vie de {name}', { name: person.firstName })
+  const title = milestone ? entry.title : editing ? t('Modifier ce moment') : t('Ajouter à la vie de {name}', { name: firstNameLabel(person) })
 
   return createPortal(
     <div className="pz-overlay ms-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose() }}>
@@ -272,7 +273,7 @@ export default function MomentSheet({ person, entry = null, treeId, token, media
             {pickingImmich && <ImmichAssetPicker treeId={treeId} token={token} onSelect={(file) => addFiles([file])} onClose={() => setPickingImmich(false)} />}
             <input ref={fileRef} type="file" accept={ACCEPTED_FILES} multiple hidden onChange={(e) => { addFiles(e.target.files || []); e.target.value = '' }} />
             {picking && (
-              <div className="ms-pick" role="group" aria-label={t('Souvenirs de {name}', { name: person.firstName })}>
+              <div className="ms-pick" role="group" aria-label={t('Souvenirs de {name}', { name: firstNameLabel(person) })}>
                 {pickable.map((media) => {
                   const on = linkedIds.includes(String(media.id))
                   return (

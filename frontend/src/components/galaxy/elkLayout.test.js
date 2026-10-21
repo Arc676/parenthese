@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeLayout, normalizeFiliationsForLayout } from './elkLayout'
+import { computeLayout, normalizeFiliationsForLayout, separatedPairUnions, coupleBarMeta } from './elkLayout'
 import { PERSON_W } from './constants'
 
 describe('normalizeFiliationsForLayout', () => {
@@ -237,5 +237,144 @@ describe('computeLayout', () => {
       expect(ax < bXs[0] || ax > bXs[1]).toBe(true)
     }
     expect(cX < bXs[0] || cX > bXs[1]).toBe(true)
+  })
+})
+
+describe('separated parents', () => {
+  // Philippe et Marie, parents d'Anaïs, sans couple enregistré (séparés)
+  const persons = [{ id: 'phil' }, { id: 'marie' }, { id: 'anais' }]
+  const filiations = [
+    { id: 'f1', childId: 'anais', parentId: 'phil', unionId: null, parentageType: 'biologique', displayOrder: 1 },
+    { id: 'f2', childId: 'anais', parentId: 'marie', unionId: null, parentageType: 'biologique', displayOrder: 2 },
+  ]
+
+  it('links the two parents with a dashed couple instead of two unknowns', () => {
+    const result = computeLayout({ persons, unions: [], filiations })
+    const ids = result.children.map((node) => node.id)
+    expect(ids.some((id) => id.startsWith('unknown-'))).toBe(false)
+    const pair = coupleBarMeta.find((entry) => entry.elkId.startsWith('u-pair:'))
+    expect(pair).toMatchObject({ virtual: true })
+    expect([pair.p1Key, pair.p2Key].sort()).toEqual(['p-marie', 'p-phil'])
+    expect(result.edges.some((edge) => edge.sources[0] === pair.elkId && edge.targets[0] === 'p-anais')).toBe(true)
+  })
+
+  it('does not add a pair when the parents already have a union', () => {
+    const unions = [{ id: 'u1', partner1Id: 'phil', partner2Id: 'marie', displayOrder: 1 }]
+    expect(separatedPairUnions(filiations, unions)).toEqual([])
+  })
+
+  it('keeps a lone parent with an unknown partner', () => {
+    expect(separatedPairUnions([filiations[0]], [])).toEqual([])
+  })
+})
+
+describe('rangées des ancêtres sans parents', () => {
+  // Henri + Isabelle (sans ascendance) ont Joseph et Nicolas. Nicolas épouse Madeleine (sans ascendance) ;
+  // leur fille Anne épouse Jean, d'une lignée qui remonte sur cinq générations. Anne descend au niveau de Jean,
+  // Nicolas avec elle : ses parents et son frère doivent suivre, au lieu de rester tout en haut.
+  const ids = ['henri', 'isabelle', 'joseph', 'nicolas', 'madeleine', 'anne', 'jean', 'l0', 'l0w', 'l1', 'l1w', 'l2', 'l2w', 'l3', 'l3w', 'l4', 'l4w']
+  const persons = ids.map((id) => ({ id }))
+  const unions = [
+    { id: 'uHI', partner1Id: 'henri', partner2Id: 'isabelle', displayOrder: 1 },
+    { id: 'uNM', partner1Id: 'nicolas', partner2Id: 'madeleine', displayOrder: 2 },
+    { id: 'uAJ', partner1Id: 'anne', partner2Id: 'jean', displayOrder: 3 },
+    ...[0, 1, 2, 3, 4].map((i) => ({ id: `uL${i}`, partner1Id: `l${i}`, partner2Id: `l${i}w`, displayOrder: 4 + i })),
+  ]
+  const link = (id, childId, unionId) => ({ id, childId, unionId, parentId: null, parentageType: 'biologique', displayOrder: 1 })
+  const filiations = [
+    link('f1', 'joseph', 'uHI'), link('f2', 'nicolas', 'uHI'), link('f3', 'anne', 'uNM'),
+    link('f4', 'l1', 'uL0'), link('f5', 'l2', 'uL1'), link('f6', 'l3', 'uL2'), link('f7', 'l4', 'uL3'), link('f8', 'jean', 'uL4'),
+  ]
+
+  it('fait descendre les parents et la fratrie de celui qui a suivi son conjoint', () => {
+    const result = computeLayout({ persons, unions, filiations })
+    const gen = new Map(result.children.filter((n) => n._type === 'person').map((n) => [n.id.slice(2), n._generation]))
+    expect(gen.get('anne')).toBe(gen.get('jean'))
+    expect(gen.get('nicolas')).toBe(gen.get('anne') - 1)
+    expect(gen.get('joseph')).toBe(gen.get('nicolas'))
+    expect(gen.get('henri')).toBe(gen.get('nicolas') - 1)
+  })
+})
+
+describe('rangées = génération de parenté depuis la référence', () => {
+  const link = (id, childId, unionId) => ({ id, childId, unionId, parentId: null, parentageType: 'biologique', displayOrder: 1 })
+  const direct = (id, childId, parentId) => ({ id, childId, unionId: null, parentId, parentageType: 'biologique', displayOrder: 1 })
+  const couple = (id, a, b) => ({ id, partner1Id: a, partner2Id: b, displayOrder: 1 })
+  const gens = (graph, reference) => {
+    const result = computeLayout(graph, reference)
+    return { gen: new Map(result.children.filter((n) => n._type === 'person').map((n) => [n.id.slice(2), n._generation])), result }
+  }
+
+  it('issue #67 : les deux couples de grands-parents partagent une rangée, quelle que soit la profondeur documentée', () => {
+    // Lignée de la mère sur trois générations, lignée du père sur deux (un parent connu par grand-parent)
+    const persons = ['GGGa', 'GGGb', 'GGa', 'GGb', 'GM1', 'GF1', 'M', 'GM2', 'GF2', 'GGx', 'GGy', 'F', 'Kid'].map((id) => ({ id }))
+    const unions = [couple('u1', 'GGGa', 'GGGb'), couple('u2', 'GGa', 'GGb'), couple('u3', 'GM1', 'GF1'), couple('u4', 'GM2', 'GF2'), couple('u5', 'M', 'F')]
+    const filiations = [
+      link('f1', 'GGa', 'u1'), link('f2', 'GM1', 'u2'), link('f3', 'M', 'u3'), link('f4', 'F', 'u4'), link('f5', 'Kid', 'u5'),
+      direct('f6', 'GM2', 'GGy'), direct('f7', 'GF2', 'GGx'),
+    ]
+    const { gen, result } = gens({ persons, unions, filiations }, 'Kid')
+    expect(gen.get('GM2')).toBe(gen.get('GM1'))
+    expect(gen.get('GGx')).toBe(gen.get('GM2') - 1)
+    expect(gen.get('GGy')).toBe(gen.get('GM2') - 1)
+    expect(gen.get('GGa')).toBe(gen.get('GGx'))
+    expect(gen.get('Kid')).toBe(gen.get('M') + 1)
+    expect(gen.get('GGGa')).toBe(0)
+    expect(result.generationConflicts).toBe(0)
+  })
+
+  it('une branche courte avec fratrie descend entière au niveau de la branche longue', () => {
+    // A0 → A1 → A2 → A3 → X. B0 → Y et S (frère de Y). X épouse Y. Y, S et B0 suivent X.
+    const persons = ['A0', 'A0w', 'A1', 'A1w', 'A2', 'A2w', 'A3', 'A3w', 'X', 'B0', 'B0w', 'Y', 'S', 'K'].map((id) => ({ id }))
+    const unions = [couple('uA0', 'A0', 'A0w'), couple('uA1', 'A1', 'A1w'), couple('uA2', 'A2', 'A2w'), couple('uA3', 'A3', 'A3w'), couple('uB0', 'B0', 'B0w'), couple('uXY', 'X', 'Y')]
+    const filiations = [link('f1', 'A1', 'uA0'), link('f2', 'A2', 'uA1'), link('f3', 'A3', 'uA2'), link('f4', 'X', 'uA3'), link('f5', 'Y', 'uB0'), link('f6', 'S', 'uB0'), link('f7', 'K', 'uXY')]
+    const { gen, result } = gens({ persons, unions, filiations }, 'K')
+    expect(gen.get('X')).toBe(4)
+    expect(gen.get('Y')).toBe(4)
+    expect(gen.get('S')).toBe(4)
+    expect(gen.get('B0')).toBe(3)
+    expect(gen.get('B0w')).toBe(3)
+    expect(gen.get('K')).toBe(5)
+    expect(result.generationConflicts).toBe(0)
+  })
+
+  it('oncle et nièce mariés : les conjoints restent sur la même rangée, le conflit est compté', () => {
+    // G + Gw → O (oncle) et P. P + Pw → N (nièce). O épouse N.
+    const persons = ['G', 'Gw', 'O', 'P', 'Pw', 'N'].map((id) => ({ id }))
+    const unions = [couple('uG', 'G', 'Gw'), couple('uP', 'P', 'Pw'), couple('uON', 'O', 'N')]
+    const filiations = [link('f1', 'O', 'uG'), link('f2', 'P', 'uG'), link('f3', 'N', 'uP')]
+    const { gen, result } = gens({ persons, unions, filiations }, 'G')
+    expect(gen.get('O')).toBe(gen.get('N'))
+    expect(gen.get('P')).toBe(gen.get('G') + 1)
+    expect(result.generationConflicts).toBe(1)
+  })
+
+  it('deux familles non reliées sans dates : les plus anciens de chacune en haut', () => {
+    const persons = ['a', 'aw', 'b', 'c', 'cw', 'd'].map((id) => ({ id }))
+    const unions = [couple('ua', 'a', 'aw'), couple('uc', 'c', 'cw')]
+    const filiations = [link('f1', 'b', 'ua'), link('f2', 'd', 'uc')]
+    const { gen } = gens({ persons, unions, filiations }, 'a')
+    expect(gen.get('a')).toBe(0)
+    expect(gen.get('c')).toBe(0)
+    expect(gen.get('d')).toBe(1)
+  })
+
+  it('deux familles non reliées datées : calées par les années de naissance', () => {
+    const p = (id, year) => ({ id, birthDate: `${year}-01-01` })
+    const persons = [p('a', 1900), p('aw', 1902), p('b', 1930), p('bw', 1931), p('e', 1960), p('c', 1932), p('cw', 1935), p('d', 1961)]
+    const unions = [couple('ua', 'a', 'aw'), couple('ub', 'b', 'bw'), couple('uc', 'c', 'cw')]
+    const filiations = [link('f1', 'b', 'ua'), link('f2', 'e', 'ub'), link('f3', 'd', 'uc')]
+    const { gen } = gens({ persons, unions, filiations }, 'a')
+    expect(gen.get('c')).toBe(gen.get('b'))
+    expect(gen.get('d')).toBe(gen.get('e'))
+  })
+
+  it('sans référence valable, part de la personne la plus entourée et ne plante pas', () => {
+    const persons = ['a', 'aw', 'b'].map((id) => ({ id }))
+    const unions = [couple('ua', 'a', 'aw')]
+    const filiations = [link('f1', 'b', 'ua')]
+    const { gen } = gens({ persons, unions, filiations }, 'inconnu')
+    expect(gen.get('a')).toBe(0)
+    expect(gen.get('b')).toBe(1)
   })
 })

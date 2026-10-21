@@ -114,3 +114,18 @@ describe('ordre de la fratrie dans les données', () => {
     expect(graph.filiations.every((f) => f.displayOrder === 1)).toBe(true)
   })
 })
+
+describe('fratrie de parents séparés', () => {
+  it('retrouve les liens directs vers les deux parents du couple « séparé »', () => {
+    const filiations = [
+      { id: 'x1', childId: 'k1', parentId: 'phil', unionId: null },
+      { id: 'x2', childId: 'k1', parentId: 'marie', unionId: null },
+      { id: 'x3', childId: 'k2', parentId: 'phil', unionId: null },
+      { id: 'x4', childId: 'k2', parentId: 'marie', unionId: null },
+    ]
+    expect(buildOrderPayload(filiations, [], 'u-pair:marie:phil', ['p-k2', 'p-k1'])).toEqual([
+      { childId: 'k2', linkIds: ['x3', 'x4'] },
+      { childId: 'k1', linkIds: ['x1', 'x2'] },
+    ])
+  })
+})

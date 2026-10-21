@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -16,7 +17,7 @@ import {
   type ImmichPersonSummary,
 } from '../lib/immich.js'
 import { decryptImmichApiKey, encryptImmichApiKey } from '../lib/immich-secret.js'
-import { InvalidMediaError, isImmichAvatarPath, removeStoredFile, sniffMimeType } from '../lib/media-files.js'
+import { IMAGE_MIME_TYPES, InvalidMediaError, isImmichAvatarPath, removeStoredFile, sniffMimeType } from '../lib/media-files.js'
 import { exceedsStorageQuota, getStorageRoot, prepareUploadedFile, requireAdminMembership } from './media.js'
 
 // Reconnaissance des visages : associer une personne de l'arbre à une personne Immich, dont la
@@ -357,7 +358,7 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
     // Le type se lit dans les octets, pas dans ce qu'Immich déclare : la vignette finit dans une
     // balise <img>. Vide, trop grande ou pas une image : rien à montrer.
     const mimeType = thumbnail?.length ? sniffMimeType(thumbnail, 'photo') : null
-    if (!thumbnail || !mimeType?.startsWith('image/')) {
+    if (!thumbnail || !mimeType || !(IMAGE_MIME_TYPES as readonly string[]).includes(mimeType)) {
       request.log.warn('Vignette Immich vide, trop grande ou qui n’est pas une image')
       return reply.code(404).send({ error: 'thumbnail_not_found' })
     }
@@ -515,6 +516,8 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
           data: {
             avatarPath: relativePath,
             avatarMimeType: prepared.mimeType,
+            // Nouveau portrait, nouveau cadrage à faire
+            avatarCrop: Prisma.DbNull,
             immichPersonId,
             updatedBy: request.actor.userId,
           },
@@ -594,10 +597,12 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
       updatedBy: string
       avatarPath?: null
       avatarMimeType?: null
+      avatarCrop?: typeof Prisma.DbNull
     } = { immichPersonId: null, updatedBy: request.actor.userId }
     if (avatarFromImmich) {
       updateData.avatarPath = null
       updateData.avatarMimeType = null
+      updateData.avatarCrop = Prisma.DbNull
     }
 
     // Base d'abord, fichier ensuite : le portrait disparaît seulement une fois la base à jour.

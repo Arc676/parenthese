@@ -290,7 +290,8 @@ describe('API security and authz', () => {
 
     expect(response.statusCode).toBe(429)
     await app.close()
-  })
+    // Onze connexions, chacune avec une vérification bcrypt : plus de 5 s sur les machines lentes de la CI
+  }, 20_000)
 
   it('rate-limits register endpoint', async () => {
     const app = createApp()

@@ -1,5 +1,6 @@
 import { t } from '../../i18n/index.js'
 import { getPersonById, getPersonMedias } from '../../data/mockData'
+import { cropShape, cropViewport, isLandscapeRect, resolveFrameKind } from '../../utils/portraitCrop.js'
 // Tracés Lucide dessinés sur le canvas : données publiques de @lucide/icons (Map renommé, il masquerait
 // le Map global utilisé plus bas)
 import { Map as mapIcon, MapPin as mapPinIcon, Route as routeIcon } from '@lucide/icons'
@@ -10,6 +11,11 @@ import {
   LOD_SHADOW_MIN_SCALE, LOD_DETAIL_MIN_SCALE, LOD_LABEL_FADE_IN, LOD_LABEL_FADE_OUT, CULL_MARGIN,
 } from './constants'
 import { getEntranceProgress, drawPartialBezier } from './utils'
+import { fitNickname } from '../../utils/nickname.js'
+import { firstNameLabel, isFirstNameUnknown } from '../../utils/personName.js'
+
+// Largeur maximale du surnom sur le nœud (px canevas) : au-delà, coupé avec …
+const NICKNAME_MAX_W = 150
 
 // ============================================================
 // Culling : view = { x0, y0, x1, y1, scale } en coordonnées monde
@@ -91,47 +97,51 @@ function computeCouplePoints(p1Pos, p2Pos, unionPos, p1R, p2R, nodeRandomData, s
 // Fil : terracotta clair, union en rond terracotta (le rond du logo).
 // Filiation en accolade souple : l'union descend vers une ligne
 // commune à la fratrie, chaque enfant s'en détache par une courbe.
-// Les virages sont des quadratiques larges, pas des coins.
+// Coins arrondis de rayon fixe (accolade franche, forme A).
 // ============================================================
 export const FIL = { color: '#E3A590', width: 1.1, dot: '#D2694A', dotR: 2.6 }
 // Ligne de la fratrie : sous les prénoms et années des parents, au-dessus des enfants
 const BUS_DY = 100
-// Rayon horizontal des virages (plafonné à la moitié de l'écart union → enfant)
-const BUS_TURN = 56
-// En dessous de cet écart union → enfant, pas de virage
-const BUS_STRAIGHT_DX = 30
+// Accolade : coins arrondis de rayon fixe (forme A, choisie par Patch). En dessous de deux rayons d'écart,
+// deux coins ne tiennent pas sans faire une marche : l'enfant est relié par un trait droit depuis l'union.
+const SIB_R = 24
+const SIB_STRAIGHT_DX = SIB_R * 2
 
-function busY(sourceId, sy) {
-  let h = 0
-  for (let i = 0; i < sourceId.length; i++) h = (h * 31 + sourceId.charCodeAt(i)) | 0
-  // Léger décalage par union : deux fratries voisines ne fusionnent pas leurs lignes
-  return sy + BUS_DY + (Math.abs(h) % 3) * 4
+// Les lignes de fratrie s'emboîtent : une famille collée au conjoint d'un enfant dessine sa ligne sous celle
+// de la famille qui l'entoure. Le placement pose le niveau (_railLift, 0 = la plus proche des enfants).
+const RAIL_STEP = 6
+function busY(lift, sy) {
+  return sy + BUS_DY - RAIL_STEP * (lift || 0)
 }
 
-function traceBus(ctx, sx, sy, by, ex, ey) {
-  const dx = ex - sx
+// Une union, toute sa fratrie : un seul tracé. Tronc depuis l'union jusqu'à la barre, coins arrondis
+// de même rayon à chaque jonction, puis descente vers chaque enfant. Chaque enfant a sa propre trajectoire
+// (sur la même barre), donc le surlignage du chemin suit exactement la même géométrie.
+export function traceSibship(ctx, sourceId, sourcePos, items, lift = 0) {
+  const sx = sourcePos.cx, sy = sourcePos.cy
+  const by = busY(lift, sy)
+  const rr = Math.min(SIB_R, by - sy - 2)
   ctx.beginPath()
-  ctx.moveTo(sx, sy)
-  // Enfant presque sous l'union (enfant unique, décalage aléatoire de quelques px) : trait direct, pas de S
-  if (Math.abs(dx) < BUS_STRAIGHT_DX) { ctx.lineTo(ex, ey); ctx.stroke(); return }
-  const dir = Math.sign(dx)
-  const turn = Math.min(BUS_TURN, Math.abs(dx) / 2)
-  // Descente de l'union, virage large vers la ligne de la fratrie
-  const drop = Math.min(by - sy, 64)
-  ctx.lineTo(sx, by - drop)
-  ctx.quadraticCurveTo(sx, by, sx + dir * turn, by)
-  // Ligne de la fratrie, puis courbe jusqu'au portrait de l'enfant
-  ctx.lineTo(ex - dir * turn, by)
-  ctx.quadraticCurveTo(ex, by, ex, ey)
+  for (const { cx: ex, cy: ey } of items) {
+    const dx = ex - sx
+    ctx.moveTo(sx, sy)
+    if (Math.abs(dx) < SIB_STRAIGHT_DX) {
+      // Le tronc descend jusqu'à la barre, puis un S doux, vertical au départ et à l'arrivée, rejoint l'enfant :
+      // il se sépare là où se séparent les autres enfants, pas sous l'union
+      const h = ey - by
+      ctx.lineTo(sx, by)
+      ctx.bezierCurveTo(sx, by + h * 0.55, ex, ey - h * 0.45, ex, ey)
+      continue
+    }
+    const dir = Math.sign(dx)
+    const k = Math.min(rr, Math.abs(dx) / 2)
+    ctx.lineTo(sx, by - k)
+    ctx.arcTo(sx, by, sx + dir * k, by, k)
+    ctx.lineTo(ex - dir * k, by)
+    ctx.arcTo(ex, by, ex, ey, k)
+    ctx.lineTo(ex, ey)
+  }
   ctx.stroke()
-}
-
-// Trace une filiation union → enfant. progress < 1 : entrée en fondu
-function traceFiliation(ctx, sourceId, sourcePos, targetPos, childR, progress) {
-  const a = ctx.globalAlpha
-  ctx.globalAlpha = a * progress
-  traceBus(ctx, sourcePos.cx, sourcePos.cy, busY(sourceId, sourcePos.cy), targetPos.cx, targetPos.cy - childR)
-  ctx.globalAlpha = a
 }
 
 // ============================================================
@@ -191,13 +201,18 @@ export function drawCoupleLinks(ctx, coupleBarMeta, posMap, nodeMap, nodeRandomD
 // useGalaxyInteractions.
 // ============================================================
 export const renvoiHitAreas = []
+// Badges « Famille X » sous les conjoints dont la famille est un onglet : { x0, y0, x1, y1, anchorId }
+export const familyHitAreas = []
+// Zones « + photo » : portraits vides, chez le propriétaire en modification (cercle du nœud, rempli au dessin)
+export const photoPlaceholderHitAreas = []
 const renvoiPills = []
+const familyPills = [] // badges « Famille X » : { text, cx, cy, anchorId, tabKey, alpha }
 const RENVOI_FONT = '500 11px "DM Sans", system-ui, sans-serif'
 // Pastilles collées aux personnes : juste sous le couple, juste au-dessus du portrait de l'enfant
 const RENVOI_PARENT_DY = 38
 const RENVOI_CHILD_GAP = 13
 
-function drawRenvoiPill(ctx, { text, cx, cy, target, alpha }) {
+function drawPillShape(ctx, text, cx, cy, alpha) {
   ctx.save()
   ctx.font = RENVOI_FONT
   const w = measureTextCached(ctx, text, 'renvoi').width + 20
@@ -216,7 +231,17 @@ function drawRenvoiPill(ctx, { text, cx, cy, target, alpha }) {
   ctx.textBaseline = 'middle'
   ctx.fillText(text, cx, cy + 0.5)
   ctx.restore()
+  return { w, h }
+}
+
+function drawRenvoiPill(ctx, { text, cx, cy, target, alpha }) {
+  const { w, h } = drawPillShape(ctx, text, cx, cy, alpha)
   if (alpha > 0.5) renvoiHitAreas.push({ x0: cx - w / 2, y0: cy - h / 2, x1: cx + w / 2, y1: cy + h / 2, ...target })
+}
+
+function drawFamilyPill(ctx, { text, cx, cy, anchorId, tabKey, alpha }) {
+  const { w, h } = drawPillShape(ctx, text, cx, cy, alpha)
+  if (alpha > 0.5) familyHitAreas.push({ x0: cx - w / 2, y0: cy - h / 2, x1: cx + w / 2, y1: cy + h / 2, anchorId, tabKey })
 }
 
 function drawRenvoi(ctx, edge, sourcePos, targetPos, targetNode, childR, view) {
@@ -240,6 +265,7 @@ function drawRenvoi(ctx, edge, sourcePos, targetPos, targetNode, childR, view) {
 
 // Après drawNodes : les pastilles passent au-dessus des portraits et des souvenirs
 export function drawRenvoiPills(ctx) {
+  for (const p of familyPills) drawFamilyPill(ctx, p)
   renvoiPills.forEach(p => drawRenvoiPill(ctx, p))
   renvoiPills.length = 0
 }
@@ -250,9 +276,13 @@ export function drawRenvoiPills(ctx) {
 export function drawFiliations(ctx, edges, posMap, nodeMap, nodeRandomData, entrance, entranceActive, elapsed, view = null) {
   renvoiHitAreas.length = 0
   renvoiPills.length = 0
+  familyPills.length = 0
+  familyHitAreas.length = 0
   if (!edges) return
+  const sibships = new Map()
 
   edges.forEach(edge => {
+    if (edge._hidden) return
     const sourceId = edge.sources[0]
     const targetId = edge.targets[0]
     const sourcePos = posMap.get(sourceId)
@@ -271,11 +301,24 @@ export function drawFiliations(ctx, edges, posMap, nodeMap, nodeRandomData, entr
 
     const targetNode = nodeMap.get(targetId)
     const pType = edge._parentageType || 'biologique'
+    const childR = nodeRadius(targetNode)
+    if (edge._renvoi) {
+      ctx.globalAlpha = Math.min(1, edgeProgress * 1.5)
+      drawRenvoi(ctx, edge, sourcePos, targetPos, targetNode, childR, view)
+      ctx.globalAlpha = 1
+      return
+    }
+    // Les enfants d'une même union (même type de filiation) forment une seule fratrie, tracée d'un coup
+    const key = `${sourceId}|${pType}`
+    if (!sibships.has(key)) sibships.set(key, { sourceId, sourcePos, pType, items: [], progress: 0 })
+    const sib = sibships.get(key)
+    sib.items.push({ cx: targetPos.cx, cy: targetPos.cy - childR })
+    sib.progress += edgeProgress
+  })
 
-    if (pType === 'adoption') {
-      ctx.setLineDash([8, 5])
-      ctx.strokeStyle = FIL.color
-    } else if (pType === 'inconnu') {
+  for (const { sourceId, sourcePos, pType, items, progress } of sibships.values()) {
+    // Adoption : trait plein comme une filiation de naissance (le mode d'adoption se dit dans la fiche)
+    if (pType === 'inconnu') {
       ctx.setLineDash([3, 3])
       ctx.strokeStyle = COLORS.linkUnknown
     } else {
@@ -284,19 +327,12 @@ export function drawFiliations(ctx, edges, posMap, nodeMap, nodeRandomData, entr
     }
     ctx.lineWidth = FIL.width
     ctx.lineCap = 'round'
-    ctx.globalAlpha = Math.min(1, edgeProgress * 1.5)
-
-    const childR = nodeRadius(targetNode)
-    if (edge._renvoi) {
-      drawRenvoi(ctx, edge, sourcePos, targetPos, targetNode, childR, view)
-      ctx.globalAlpha = 1
-      ctx.setLineDash([])
-      return
-    }
-    traceFiliation(ctx, sourceId, sourcePos, targetPos, childR, edgeProgress)
+    const p = progress / items.length
+    ctx.globalAlpha = Math.min(1, p * 1.5) * p
+    traceSibship(ctx, sourceId, sourcePos, items, nodeMap.get(sourceId)?._railLift)
     ctx.globalAlpha = 1
     ctx.setLineDash([])
-  })
+  }
 }
 
 // ============================================================
@@ -369,7 +405,9 @@ export function drawPathHighlight(ctx, {
       ctx.lineCap = 'round'
       ctx.globalAlpha = 1
 
-      traceFiliation(ctx, edge.sources[0], sourcePos, targetPos, childR, hp)
+      ctx.globalAlpha = hp
+      traceSibship(ctx, edge.sources[0], sourcePos, [{ cx: targetPos.cx, cy: targetPos.cy - childR }], nodeMap.get(edge.sources[0])?._railLift)
+      ctx.globalAlpha = 1
     })
   }
 
@@ -431,6 +469,10 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
   const { cx, cy } = pos
   const person = getPersonById(node._data.id) || node._data
   const rd = nodeRandomData.get(node.id)
+  // Zone « + photo » : seulement là où le cadre invite à poser une photo (même condition que le dessin)
+  if (photoHint && !person.photo && nodeProgress >= 0.5) {
+    photoPlaceholderHitAreas.push({ personId: node._data.id, cx, cy, r: nodeRadius(node) })
+  }
   const img = person.photo ? imageCache.get(person.photo) : null
   const frameType = resolveFrameType(person, img)
   const frameRot = rd?.frameRotation || 0
@@ -578,13 +620,15 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
   // Libellés du petit portrait : un peu réduits, pas autant que le portrait pour rester lisibles
   if (node._compact) ctx.scale(0.85, 0.85)
 
-  ctx.font = '400 13px "Newsreader", Georgia, serif'
+  // Prénom inconnu : libellé en italique (pas de prénom à afficher sinon)
+  const nameUnknown = isFirstNameUnknown(person)
+  const nameLabel = nameUnknown ? firstNameLabel(person) : person.firstName
+  ctx.font = `${nameUnknown ? 'italic ' : ''}400 13px "Newsreader", Georgia, serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  const nameLabel = person.firstName || ''
   if (nameLabel) {
     if (withDetail) {
-      const nameMetrics = measureTextCached(ctx, nameLabel, 'name')
+      const nameMetrics = measureTextCached(ctx, nameLabel, nameUnknown ? 'name-unknown' : 'name')
       const nameBlockH = Math.max(
         18,
         (nameMetrics.actualBoundingBoxAscent || 7) + (nameMetrics.actualBoundingBoxDescent || 4) + 8,
@@ -611,6 +655,14 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
     ctx.fillText(nameLabel, 0, 0)
   }
 
+  // Surnom sous le nom, en italique : les dates descendent pour lui faire place
+  const hasNickname = withDetail && Boolean(person.nickname)
+  if (hasNickname) {
+    ctx.font = 'italic 300 13px "Newsreader", Georgia, serif'
+    ctx.fillStyle = COLORS.textLight
+    ctx.fillText(fitNickname(ctx, person.nickname, NICKNAME_MAX_W), 0, 15)
+  }
+
   if (withDetail) {
     ctx.font = '400 11px "DM Sans", system-ui, sans-serif'
     ctx.fillStyle = COLORS.textLight
@@ -618,10 +670,20 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
     const years = person.deathYear
       ? `${birthYearLabel}–${person.deathYear}`
       : person.isAlive === false ? `${birthYearLabel}–?` : `${birthYearLabel}`
-    ctx.fillText(years, 0, 15)
+    ctx.fillText(years, 0, hasNickname ? 31 : 15)
   }
 
   ctx.restore()
+
+  // Sa famille est un onglet : une pastille le dit, un clic l'ouvre. Au-dessus du portrait, à la place de ses
+  // parents (l'orbite des souvenirs évite le haut). Même place pour le retour vers la famille d'où l'on vient :
+  // la charnière peut avoir des enfants dessous, jamais rien au-dessus que le fil de ses parents.
+  if (withDetail && node._familyTab) {
+    const tab = node._familyTab
+    const text = `${tab.label ? t('Famille {name}', { name: tab.label }) : t('Famille')} · ${tab.count} ›`
+    const py = cy - PERSON_R * personScale - RENVOI_CHILD_GAP
+    familyPills.push({ text, cx, cy: py, anchorId: tab.anchorId, tabKey: tab.tabKey, alpha: nodeProgress * labelAlpha })
+  }
 }
 
 // ============================================================
@@ -862,26 +924,12 @@ function drawMediaContent(ctx, media, ms, imageCache) {
 // ============================================================
 // Dessiner le cadre photo (polaroid, rect, round)
 // ============================================================
+// Forme choisie au recadrage d'abord ; sinon une photo très large ou très haute impose la sienne, et une photo
+// carrée ou presque garde la forme tirée au hasard pour la personne (pickFrameType), pour que l'arbre ne soit
+// pas uniforme. Même règle que la fenêtre de recadrage (portraitCrop.js).
 function resolveFrameType(person, img) {
-  const fallback = person.frameType || 'round'
-
-  if (!img || !img.naturalWidth || !img.naturalHeight) {
-    return fallback
-  }
-
-  const ratio = img.naturalWidth / img.naturalHeight
-
-  if (ratio >= 1.28) {
-    return 'rect'
-  }
-
-  if (ratio <= 0.78) {
-    return 'polaroid'
-  }
-
-  // Photo carrée ou presque : chaque personne garde sa forme tirée au hasard
-  // (person.frameType, voir pickFrameType), pour que l'arbre ne soit pas uniforme
-  return fallback
+  const ratio = img?.naturalWidth && img?.naturalHeight ? img.naturalWidth / img.naturalHeight : 1
+  return resolveFrameKind(person.frameType || 'round', ratio, cropShape(person.avatarCrop))
 }
 
 function drawFrame(ctx, frameType, person, img, hint = 0) {
@@ -923,8 +971,8 @@ function drawFrame(ctx, frameType, person, img, hint = 0) {
     const ratio = img?.naturalWidth && img?.naturalHeight
       ? img.naturalWidth / img.naturalHeight
       : 1
-    // Photo carrée : cadre vertical, qui garde le visage entier
-    const isLandscape = ratio > 1.05
+    // Couché ou debout selon la forme choisie, sinon selon la photo (carrée : debout, le visage reste entier)
+    const isLandscape = isLandscapeRect(ratio, cropShape(person.avatarCrop))
     const rw = isLandscape ? PERSON_R + 12 : PERSON_R + 2
     const rh = isLandscape ? PERSON_R - 8 : PERSON_R + 6
     const pad = 3
@@ -964,7 +1012,7 @@ function drawFrame(ctx, frameType, person, img, hint = 0) {
 // ============================================================
 function drawPersonImage(ctx, img, person, x, y, w, h, hint = 0) {
   if (img) {
-    drawImageCover(ctx, img, x, y, w, h)
+    drawImageCover(ctx, img, x, y, w, h, person.avatarCrop)
     if (!person.isAlive) {
       ctx.fillStyle = 'rgba(235, 230, 223, 0.25)'
       ctx.fillRect(x, y, w, h)
@@ -974,7 +1022,7 @@ function drawPersonImage(ctx, img, person, x, y, w, h, hint = 0) {
     ctx.fillRect(x, y, w, h)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    // Au survol, chez le propriétaire, les initiales cèdent la place à « + photo »
+    // Au survol, chez le propriétaire en modification, les initiales cèdent la place à « + photo »
     const baseAlpha = ctx.globalAlpha
     if (hint > 0.01) {
       ctx.fillStyle = `rgba(248, 228, 219, ${hint})`
@@ -996,7 +1044,8 @@ function drawPersonImage(ctx, img, person, x, y, w, h, hint = 0) {
   }
 }
 
-function drawImageCover(ctx, img, x, y, w, h) {
+// Recadre la photo dans la zone (cover par défaut, cadrage du portrait sinon)
+function drawImageCover(ctx, img, x, y, w, h, crop = null) {
   const sourceW = img.naturalWidth || img.width
   const sourceH = img.naturalHeight || img.height
 
@@ -1004,22 +1053,7 @@ function drawImageCover(ctx, img, x, y, w, h) {
     return
   }
 
-  const sourceRatio = sourceW / sourceH
-  const targetRatio = w / h
-
-  let sx = 0
-  let sy = 0
-  let sw = sourceW
-  let sh = sourceH
-
-  if (sourceRatio > targetRatio) {
-    sw = sourceH * targetRatio
-    sx = (sourceW - sw) / 2
-  } else if (sourceRatio < targetRatio) {
-    sh = sourceW / targetRatio
-    sy = (sourceH - sh) / 2
-  }
-
+  const { sx, sy, sw, sh } = cropViewport(sourceW, sourceH, w / h, crop)
   ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h)
 }
 
@@ -1028,6 +1062,7 @@ function drawImageCover(ctx, img, x, y, w, h) {
 // ============================================================
 export function drawNodes(ctx, layoutData, posMap, entrance, entranceActive, elapsed, renderState) {
   const view = renderState.view || null
+  photoPlaceholderHitAreas.length = 0
   layoutData.children.forEach(node => {
     const pos = posMap.get(node.id)
     if (!pos) return

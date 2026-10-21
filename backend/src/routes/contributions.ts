@@ -13,6 +13,8 @@ import type { Actor, MembershipRole } from '../types/auth.js'
 import { findParentChildValidationError, findUnionValidationError } from '../utils/relationship-guards.js'
 import { nextSiblingOrder } from '../lib/sibling-order.js'
 import { personPrecisionResets, unionPrecisionResets } from '../lib/date-precision.js'
+import { hasAnyName } from '../lib/person-names.js'
+import { sexOrNull, sexSchema } from '../lib/person-sex.js'
 
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/
 
@@ -68,33 +70,37 @@ const reviewSessionSchema = z.object({
 })
 
 const personCreateSchema = z.object({
-  firstName: z.string().min(1).max(120),
-  lastName: z.string().min(1).max(120),
+  firstName: z.string().trim().max(120),
+  lastName: z.string().trim().max(120),
   birthName: z.string().max(120).optional().nullable(),
+  nickname: z.string().max(120).optional().nullable(),
   birthDate: z.string().regex(isoDateRegex).optional().nullable(),
   deathDate: z.string().regex(isoDateRegex).optional().nullable(),
   isDeceased: z.boolean().optional(),
   birthPlace: z.string().max(200).optional().nullable(),
+  deathPlace: z.string().max(200).optional().nullable(),
   profession: z.string().max(200).optional().nullable(),
   region: z.string().max(120).optional().nullable(),
   nationality: z.string().max(120).optional().nullable(),
-  sex: z.string().max(20).optional().nullable(),
+  sex: sexSchema,
   notes: z.string().max(2000).optional().nullable(),
-})
+}).refine((value) => hasAnyName(value.firstName, value.lastName), { message: 'name_required', path: ['lastName'] })
 
 const personUpdateSchema = z
   .object({
-    firstName: z.string().min(1).max(120).optional(),
-    lastName: z.string().min(1).max(120).optional(),
+    firstName: z.string().trim().max(120).optional(),
+    lastName: z.string().trim().max(120).optional(),
     birthName: z.string().max(120).optional().nullable(),
+    nickname: z.string().max(120).optional().nullable(),
     birthDate: z.string().regex(isoDateRegex).optional().nullable(),
     deathDate: z.string().regex(isoDateRegex).optional().nullable(),
     isDeceased: z.boolean().optional(),
     birthPlace: z.string().max(200).optional().nullable(),
+  deathPlace: z.string().max(200).optional().nullable(),
     profession: z.string().max(200).optional().nullable(),
     region: z.string().max(120).optional().nullable(),
     nationality: z.string().max(120).optional().nullable(),
-    sex: z.string().max(20).optional().nullable(),
+    sex: sexSchema,
     notes: z.string().max(2000).optional().nullable(),
   })
   .refine((value) => Object.keys(value).length > 0, {
@@ -378,10 +384,12 @@ async function applyContributionChange(
           firstName: parsed.data.firstName.trim(),
           lastName: parsed.data.lastName.trim(),
           birthName: toTrimmedStringOrNull(parsed.data.birthName),
+          nickname: toTrimmedStringOrNull(parsed.data.nickname),
           birthDate: toDateOrNull(parsed.data.birthDate),
           deathDate: toDateOrNull(parsed.data.deathDate),
           isDeceased: !parsed.data.deathDate && Boolean(parsed.data.isDeceased),
           birthPlace: toTrimmedStringOrNull(parsed.data.birthPlace),
+          deathPlace: toTrimmedStringOrNull(parsed.data.deathPlace),
           profession: toTrimmedStringOrNull(parsed.data.profession),
           region: toTrimmedStringOrNull(parsed.data.region),
           nationality: toTrimmedStringOrNull(parsed.data.nationality),
@@ -424,6 +432,16 @@ async function applyContributionChange(
         })
         : null
 
+      if (parsed.data.firstName !== undefined || parsed.data.lastName !== undefined) {
+        const before = await tx.person.findFirst({
+          where: { id: change.entityId, treeId, deletedAt: null },
+          select: { firstName: true, lastName: true },
+        })
+        if (before && !hasAnyName(parsed.data.firstName ?? before.firstName, parsed.data.lastName ?? before.lastName)) {
+          throw new ContributionRouteError(400, 'invalid_change_after')
+        }
+      }
+
       const result = await tx.person.updateMany({
         where: {
           id: change.entityId,
@@ -435,10 +453,12 @@ async function applyContributionChange(
           firstName: parsed.data.firstName !== undefined ? parsed.data.firstName.trim() : undefined,
           lastName: parsed.data.lastName !== undefined ? parsed.data.lastName.trim() : undefined,
           birthName: parsed.data.birthName !== undefined ? toTrimmedStringOrNull(parsed.data.birthName) : undefined,
+          nickname: parsed.data.nickname !== undefined ? toTrimmedStringOrNull(parsed.data.nickname) : undefined,
           birthDate: nextDates.birthDate,
           deathDate: nextDates.deathDate,
           isDeceased: nextDates.deathDate ? false : parsed.data.isDeceased,
           birthPlace: parsed.data.birthPlace !== undefined ? toTrimmedStringOrNull(parsed.data.birthPlace) : undefined,
+          deathPlace: parsed.data.deathPlace !== undefined ? toTrimmedStringOrNull(parsed.data.deathPlace) : undefined,
           profession: parsed.data.profession !== undefined ? toTrimmedStringOrNull(parsed.data.profession) : undefined,
           region: parsed.data.region !== undefined ? toTrimmedStringOrNull(parsed.data.region) : undefined,
           nationality: parsed.data.nationality !== undefined ? toTrimmedStringOrNull(parsed.data.nationality) : undefined,
@@ -832,10 +852,12 @@ async function snapshotEntity(
         firstName: true,
         lastName: true,
         birthName: true,
+        nickname: true,
         birthDate: true,
         deathDate: true,
         isDeceased: true,
         birthPlace: true,
+        deathPlace: true,
         profession: true,
         region: true,
         nationality: true,
@@ -848,6 +870,7 @@ async function snapshotEntity(
       ...current,
       birthDate: current.birthDate?.toISOString().slice(0, 10) ?? null,
       deathDate: current.deathDate?.toISOString().slice(0, 10) ?? null,
+      sex: sexOrNull(current.sex),
     }
   }
 

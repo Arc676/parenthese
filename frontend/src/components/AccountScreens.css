@@ -41,6 +41,16 @@
 .pz-gate-owner-text { display: grid; gap: 2px; min-width: 0; }
 .pz-gate-owner-text strong { color: var(--pz-ink); font-weight: 500; }
 
+/* Porte, personne déjà connectée : dit quel compte est ouvert et ce qu'il faut faire une fois */
+.access-gate-session { display: grid; gap: 4px; padding: 12px 14px; border-radius: var(--pz-r-m); background: var(--pz-a50); border: 1px solid var(--pz-a100); color: var(--pz-ink); font: 400 14px/1.45 var(--pz-sans); }
+.access-gate-session-step { color: var(--pz-ink-2); }
+
+/* Accueil sans session (variante B) */
+.pz-btn.pz-btn--line { background: transparent; border: 1px solid var(--pz-ink); color: var(--pz-ink); }
+.entry-choice-title { text-align: center; }
+.entry-choice-card { padding: 18px; display: grid; gap: 10px; }
+.entry-choice-name { font: 400 20px/1.2 var(--pz-serif); color: var(--pz-ink); margin: 0; }
+
 /* Fenêtre « Mon compte » (personne liée) */
 .ap-linked { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: var(--pz-r-m); background: var(--pz-a50); border: 1px solid var(--pz-a100); }
 .ap-avatar { width: 44px; height: 44px; flex: none; display: grid; place-items: center; overflow: hidden; border-radius: 50%; background: var(--pz-a100); color: var(--pz-a700); font: 400 20px/1 var(--pz-serif); }

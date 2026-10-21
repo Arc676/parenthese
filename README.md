@@ -4,7 +4,7 @@
 
 A family tree you explore like a map, with the photos, videos and voices of each person. Share it with one link and a password: relatives look around without an account and add what they know.
 
-Website: [parenthese.io/en](https://parenthese.io/en/) · Demo, no account needed: [app.parenthese.io](https://app.parenthese.io/?lang=en) · [Version française](README.fr.md)
+Website: [parenthese.io/en](https://parenthese.io/en/) · Demo, no account needed: [app.parenthese.io](https://app.parenthese.io/?demo&lang=en) · [Version française](README.fr.md)
 
 ![The demo tree, with Jean Dupont's profile open and his photos](docs/demo-tree.png)
 
@@ -63,6 +63,26 @@ Three containers run: `db` (PostgreSQL 16), `api` (the Node API) and `web` (ngin
 
 To open the instance to your family over the Internet, put an HTTPS reverse proxy in front of the `web` port (Caddy, Traefik, nginx) and set the public address in `CORS_ORIGIN`, for example `https://tree.your-domain.com`.
 
+So that people who come across the address can't sign up and start their own trees, set `ALLOW_REGISTRATION=false` in `.env`, then run `docker compose up -d`. Existing accounts keep signing in and creating trees, relatives still open shared trees with the link and password, and the app no longer offers to create an account. An instance with no account at all still accepts the first one, so the variable can be set before the very first start: create your own account right away, before you give out the address.
+
+#### Sign in with your identity provider (OIDC)
+
+*Experimental in 1.2.0: tested against a certified OpenID provider, feedback from real setups is welcome in the issues.*
+
+Parenthèse can hand sign-in to an OpenID Connect provider you already run (Authentik, Authelia, Keycloak, Pocket ID, Zitadel…), so your family reuses one account and its two-factor settings. Create an OIDC application (confidential client, authorization code flow) whose redirect URI is the public address of Parenthèse followed by `/auth/oidc/callback`, then set in `.env`:
+
+```bash
+OIDC_ISSUER=https://auth.your-domain.com/application/o/parenthese/   # exactly as the provider announces it
+OIDC_CLIENT_ID=parenthese
+OIDC_CLIENT_SECRET=...                                               # empty for a public client (PKCE only)
+OIDC_REDIRECT_URI=https://tree.your-domain.com/auth/oidc/callback
+OIDC_PROVIDER_NAME=Authentik                                         # shown on the button
+```
+
+The sign-in screen then shows "Sign in with Authentik". On a first sign-in, Parenthèse links the provider account to the Parenthèse account with the same email, or creates one when `ALLOW_REGISTRATION` allows it. With registration closed, the provider only signs in people who already have an account (the first account of an empty instance is still accepted). Emails are only trusted when the provider marks them verified (`email_verified`); `OIDC_REQUIRE_VERIFIED_EMAIL=false` lifts that check, for a provider that doesn't send the claim and where nobody picks their own address. Once linked, an account stays tied to the provider's user id, not to the email.
+
+`PASSWORD_LOGIN=false` removes Parenthèse passwords altogether: sign-in goes through the provider only (the API refuses to start without `OIDC_ISSUER`). Accounts created through the provider have no password; to delete one, its owner types their email instead. `OIDC_SCOPES` (default `openid email profile`) and `OIDC_APP_URL` (where the app opens after sign-in, by default the origin of `OIDC_REDIRECT_URI`) rarely need changing.
+
 A self-hosted instance sends no analytics. Usage tracking on parenthese.io only turns on when a PostHog key is provided at build time, which this setup does not do.
 
 The help and privacy links in the app point to parenthese.io. To use your own pages, set `VITE_HELP_URL` and `VITE_PRIVACY_URL` when you build the front end yourself (see `frontend/.env.example`).
@@ -75,7 +95,7 @@ docker compose ps              # container status
 docker compose down            # stop, data is kept
 ```
 
-To check that an installation works end to end, run `bash tools/docker-smoke.sh http://localhost` (add the port if `WEB_PORT` is not 80). The script needs `curl` and `jq`. It goes through the web port like a browser: home page, API health, account creation, sign-in, creating then deleting a test tree. The test account (`smoke-...@example.com`) stays in the database.
+To check that an installation works end to end, run `bash tools/docker-smoke.sh http://localhost` (add the port if `WEB_PORT` is not 80). The script needs `curl` and `jq`. It goes through the web port like a browser: home page, API health, account creation, sign-in, creating then deleting a test tree. The test account (`smoke-...@example.com`) stays in the database. With `ALLOW_REGISTRATION=false` the script stops at account creation, which is the expected refusal.
 
 ### Single container (Unraid, NAS)
 
@@ -85,7 +105,7 @@ For systems that install one container per app, `ghcr.io/iliesallali/parenthese-
 docker run -d --name parenthese --restart unless-stopped -p 8080:80 -v /path/to/appdata/parenthese:/data ghcr.io/iliesallali/parenthese-aio
 ```
 
-There is nothing to fill in. On first start the container creates the database, its password and the session key in `/data`, and reuses them afterwards. Photos and videos go to `/data/media`. Back up the whole `/data` folder with the container stopped, or dump the database while it runs with `docker exec parenthese runuser -u postgres -- pg_dump parenthese > parenthese.sql`. The database is PostgreSQL 15 here, the compose setup uses 16.
+There is nothing to fill in. On first start the container creates the database, its password and the session key in `/data`, and reuses them afterwards. Photos and videos go to `/data/media`. To close account creation, add `-e ALLOW_REGISTRATION=false` (on Unraid, set "Allow registration" to `false`). Back up the whole `/data` folder with the container stopped, or dump the database while it runs with `docker exec parenthese runuser -u postgres -- pg_dump parenthese > parenthese.sql`. The database is PostgreSQL 15 here, the compose setup uses 16.
 
 ### Where the data lives
 
@@ -105,7 +125,7 @@ docker run --rm -v parenthese_media:/data -v "$PWD":/backup alpine tar -czf /bac
 
 The first command saves the database. It holds the people, their links, the accounts and the contributions, plus the record of which photo, video or recording belongs to whom. The second saves the files themselves. You need both. Restore only the database and the memories point to files that are gone. Restore only the archive and you get a folder of files with no names attached. The GEDCOM export is not a backup either. It moves the tree to another genealogy program and leaves the media and the annotations behind.
 
-Adjust `-U parenthese` and the database name if you changed `POSTGRES_USER` or `POSTGRES_DB`. To restore the database, run `docker compose exec -T db pg_restore -U parenthese -d parenthese --clean < parenthese-db-YYYY-MM-DD.dump`, then extract the media archive into the volume with the same `docker run` command, using `tar -xzf` instead of `-czf`.
+Adjust `-U parenthese` and the database name if you changed `POSTGRES_USER` or `POSTGRES_DB`. To restore the database, run `docker compose exec -T db pg_restore -U parenthese -d parenthese --clean --if-exists < parenthese-db-YYYY-MM-DD.dump`, then extract the media archive into the volume with the same `docker run` command, using `tar -xzf` instead of `-czf`.
 
 The `deploy/backup.sh` script does the same (PostgreSQL dump, media archive, checksums, rotation, optional S3 upload) for an installation without Docker. It reads `backend/.env` and needs `pg_dump` on the machine. It is configured through the `BACKUP_ROOT`, `BACKUP_RETENTION_DAYS` and `BACKUP_S3_BUCKET` variables.
 
@@ -117,7 +137,7 @@ docker compose pull && docker compose up -d
 
 `latest` follows the main branch. To stay on a version, set `PARENTHESE_VERSION` in `.env` (for example `1.0`). From a clone, `git pull && docker compose up -d --build` builds from the source instead.
 
-Database migrations apply on their own when the API starts. Make a backup first, as a habit.
+Database migrations apply on their own when the API starts, and a migration cannot be undone. Run the two backup commands above before each update. The all-in-one image does it by itself: before applying a migration, it copies the database to `/data/backups` and keeps the last five copies.
 
 ## Development
 

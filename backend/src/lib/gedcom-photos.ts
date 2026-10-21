@@ -148,10 +148,51 @@ export function plainNoteText(raw: string): string {
   return text.replace(/[ \t]+/g, ' ').replace(/\s*\n\s*/g, '\n').trim()
 }
 
+// Une note ou une source partagée est citée par des milliers de fiches : son texte se calcule une fois
+// par import (les nœuds sont neufs à chaque import, la WeakMap se vide avec eux)
+const noteTextCache = new WeakMap<GedcomPhotoNode, string>()
+const recordTitleCache = new WeakMap<GedcomPhotoNode, string>()
+const hasMediaCache = new WeakMap<GedcomPhotoNode, boolean>()
+const MAX_RECORD_DEPTH = 200
+const MAX_WALKED_NODES_PER_PERSON = 5000
+
 export function noteText(node: GedcomPhotoNode | undefined, records: GedcomRecords): string {
   if (!node) return ''
   const pointer = pointerOf(node.value)
-  return plainNoteText(joinedText(pointer ? records.note.get(pointer) : node))
+  const target = pointer ? records.note.get(pointer) : node
+  if (!target) return ''
+  let text = noteTextCache.get(target)
+  if (text === undefined) {
+    text = plainNoteText(joinedText(target))
+    noteTextCache.set(target, text)
+  }
+  return text
+}
+
+function recordTitle(record: GedcomPhotoNode): string {
+  let title = recordTitleCache.get(record)
+  if (title === undefined) {
+    title = joinedText(child(record, 'TITL')) || joinedText(child(record, 'ABBR'))
+    recordTitleCache.set(record, title)
+  }
+  return title
+}
+
+// Un nœud mène-t-il à un fichier (OBJE), directement ou par une source ou une union citée ?
+// Un renvoi en boucle compte pour non pendant le calcul.
+function hasMedia(node: GedcomPhotoNode, records: GedcomRecords, depth = 0): boolean {
+  const known = hasMediaCache.get(node)
+  if (known !== undefined) return known
+  if (depth > MAX_RECORD_DEPTH) return false
+  hasMediaCache.set(node, false)
+  let found = false
+  for (const c of node.children) {
+    const pointer = pointerOf(c.value)
+    const linked = !pointer ? undefined : c.tag === 'SOUR' ? records.sour.get(pointer) : c.tag === 'FAMS' ? records.fam.get(pointer) : undefined
+    if (c.tag === 'OBJE' || hasMedia(c, records, depth + 1) || (linked && hasMedia(linked, records, depth + 1))) { found = true; break }
+  }
+  hasMediaCache.set(node, found)
+  return found
 }
 
 function clipText(value: string, max: number): string | null {
@@ -170,7 +211,7 @@ function baseNameWithoutExtension(path: string): string {
 export function sourceLabel(citation: GedcomPhotoNode, records: GedcomRecords): string | null {
   const pointer = pointerOf(citation.value)
   const record = pointer ? records.sour.get(pointer) : null
-  const title = joinedText(child(record ?? undefined, 'TITL')) || joinedText(child(record ?? undefined, 'ABBR')) || (pointer ? '' : citation.value)
+  const title = (record ? recordTitle(record) : '') || (pointer ? '' : citation.value)
   const page = joinedText(child(citation, 'PAGE'))
   return clipText([title, page].filter(Boolean).join(', '), MAX_SOURCE_LENGTH)
 }
@@ -203,32 +244,37 @@ export function mediaRefsForPerson(indi: GedcomPhotoNode, records: GedcomRecords
     }
   }
 
-  const walk = (node: GedcomPhotoNode, source: string | null) => {
+  let budget = MAX_WALKED_NODES_PER_PERSON
+  const walk = (node: GedcomPhotoNode, source: string | null, depth: number) => {
+    if (depth > MAX_RECORD_DEPTH) return
     for (const c of node.children) {
+      if (--budget < 0 || refs.length >= MAX_MEDIA_PER_PERSON) return
       if (c.tag === 'OBJE') {
         addObje(c, source)
       } else if (c.tag === 'SOUR') {
-        const label = sourceLabel(c, records) ?? source
-        walk(c, label)
         const pointer = pointerOf(c.value)
         const record = pointer ? records.sour.get(pointer) : null
-        if (record && !visitedRecords.has(record)) {
-          visitedRecords.add(record)
-          walk(record, label)
+        const recordToWalk = record && !visitedRecords.has(record) && hasMedia(record, records) ? record : null
+        if (!hasMedia(c, records) && !recordToWalk) continue
+        const label = sourceLabel(c, records) ?? source
+        walk(c, label, depth + 1)
+        if (recordToWalk) {
+          visitedRecords.add(recordToWalk)
+          walk(recordToWalk, label, depth + 1)
         }
       } else if (c.tag === 'FAMS') {
         const pointer = pointerOf(c.value)
         const fam = pointer ? records.fam.get(pointer) : null
-        if (fam && !visitedRecords.has(fam)) {
+        if (fam && !visitedRecords.has(fam) && hasMedia(fam, records)) {
           visitedRecords.add(fam)
-          walk({ ...fam, children: fam.children.filter((f) => !['HUSB', 'WIFE', 'CHIL'].includes(f.tag)) }, source)
+          walk({ ...fam, children: fam.children.filter((f) => !['HUSB', 'WIFE', 'CHIL'].includes(f.tag)) }, source, depth + 1)
         }
-      } else if (!pointerOf(c.value) && c.children.length > 0) {
-        walk(c, source)
+      } else if (!pointerOf(c.value) && c.children.length > 0 && hasMedia(c, records)) {
+        walk(c, source, depth + 1)
       }
     }
   }
 
-  walk(indi, null)
+  walk(indi, null, 0)
   return refs
 }

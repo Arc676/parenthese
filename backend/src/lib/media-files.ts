@@ -59,6 +59,9 @@ const EXTENSION_BY_MIME: Record<string, string> = {
   'application/gpx+xml': '.gpx',
 }
 
+// Marques ISO BMFF des images HEIF/HEIC (ISO/IEC 23008-12)
+const HEIC_BRANDS = new Set(['heic', 'heix', 'mif1', 'msf1', 'heim', 'heis'])
+
 function startsWith(buf: Buffer, bytes: number[], offset = 0): boolean {
   if (buf.length < offset + bytes.length) return false
   return bytes.every((byte, index) => buf[offset + index] === byte)
@@ -89,6 +92,10 @@ export function sniffMimeType(buf: Buffer, declaredType: BinaryMediaType, fileNa
   if (ascii(buf, 4, 8) === 'ftyp') {
     const brand = ascii(buf, 8, 12)
     if (brand === 'qt  ') return 'video/quicktime'
+    // HEIF (photos iPhone et Android) : pas une vidéo, et refusée à l'envoi faute de conversion (sharp ne décode
+    // pas le HEVC). « hevc » peut aussi désigner une vidéo HEVC en MP4 : photo seulement si l'envoi se déclare photo.
+    if (HEIC_BRANDS.has(brand) || (brand === 'hevc' && declaredType === 'photo')) return 'image/heic'
+    if (brand === 'avif' || brand === 'avis') return 'image/avif'
     if (declaredType === 'audio' || brand === 'M4A ' || brand === 'M4B ') return 'audio/mp4'
     return 'video/mp4'
   }

@@ -1,7 +1,9 @@
 import type { Annotation, MediaItem, ParentChildLink, Person, Union } from '@prisma/client'
 
 import { sanitizeAnnotationContentForRead } from '../lib/annotation-content.js'
+import { readAvatarCrop, type AvatarCrop } from '../lib/avatar-crop.js'
 import { isImmichAvatarPath } from '../lib/media-files.js'
+import { sexOrNull } from '../lib/person-sex.js'
 
 export type GraphPayload = {
   persons: Array<{
@@ -9,10 +11,12 @@ export type GraphPayload = {
     firstName: string
     lastName: string
     birthName: string | null
+    nickname: string | null
     birthDate: string | null
     deathDate: string | null
     isDeceased: boolean
     birthPlace: string | null
+    deathPlace: string | null
     profession: string | null
     region: string | null
     nationality: string | null
@@ -20,6 +24,7 @@ export type GraphPayload = {
     sex: string | null
     notes: string | null
     avatarFromImmich: boolean
+    avatarCrop: AvatarCrop | null
   }>
   unions: Array<{
     id: string
@@ -84,17 +89,20 @@ export function buildGraphPayload(
         firstName: person.firstName,
         lastName: person.lastName,
         birthName: person.birthName,
+        nickname: person.nickname,
         birthDate: formatDate(person.birthDate),
         deathDate: formatDate(person.deathDate),
         isDeceased: Boolean(person.isDeceased) && !person.deathDate,
         birthPlace: person.birthPlace,
+        deathPlace: person.deathPlace,
         profession: person.profession,
         region: person.region,
         nationality: person.nationality,
         avatarUrlPath: person.avatarPath ? `/trees/${treeId}/persons/${person.id}/avatar` : null,
-        sex: person.sex,
+        sex: sexOrNull(person.sex),
         notes: person.notes,
         avatarFromImmich: isImmichAvatarPath(person.avatarPath),
+        avatarCrop: person.avatarPath ? readAvatarCrop(person.avatarCrop) : null,
       })),
     unions: unions.map((union) => ({
         id: union.id,

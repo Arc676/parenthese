@@ -36,6 +36,9 @@ export default {
   'Lien familial ajouté (démo locale)': 'Family link added (local demo)',
   'Lien ajouté à la contribution': 'Link added to your contribution',
   'Lien familial ajouté': 'Family link added',
+  'Lien modifié (démo locale)': 'Link changed (local demo)',
+  'Lien modifié': 'Link changed',
+  'Modification ajoutée à la contribution': 'Change added to the contribution',
   'Relation introuvable pour suppression': 'Could not find this relationship to delete',
   'Lien familial supprimé (démo locale)': 'Family link deleted (local demo)',
   'Suppression de lien ajoutée à la contribution': 'Link deletion added to your contribution',
@@ -63,7 +66,7 @@ export default {
   "Ouverture de l'arbre": 'Opening the tree',
   'Arbre prêt': 'Tree ready',
 
-  // utils/mediaUpload.js, utils/graphAdapter.js
+  // utils/mediaUpload.js
   'Saisissez le texte de la citation.': 'Enter the text of the quote.',
   'Sélectionnez un fichier.': 'Select a file.',
   'Fichier invalide.': 'Invalid file.',
@@ -97,4 +100,7 @@ export default {
   'Ressource introuvable.': 'Not found.',
   'Conflit détecté (email ou slug déjà utilisé).': 'Conflict detected (email or slug already in use).',
   "Erreur backend. Vérifiez que l'API et la base sont lancées.": 'Server error. Check that the API and database are running.',
+  'Le serveur ne répond pas. Vérifiez la connexion et réessayez.': 'The server is not responding. Check your connection and try again.',
+  // App.jsx : enregistrement automatique en quittant une fiche
+  'Modifications de {name} enregistrées': 'Changes to {name} saved',
 }

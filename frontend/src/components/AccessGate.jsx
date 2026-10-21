@@ -23,8 +23,12 @@ const AccessGate = ({
   treeNotFound = false,
   loading,
   errorMessage,
+  connected = false,
+  connectedName = '',
   onSubmit,
   onUseAccount,
+  canRegister = true,
+  onNotMyAccount,
 }) => {
   const [treeId, setTreeId] = useState(initialTreeId || '')
   const [password, setPassword] = useState('')
@@ -55,7 +59,6 @@ const AccessGate = ({
 
         <form className="pz-card pz-screen-card" onSubmit={handleSubmit}>
           <div className="pz-auth-head">
-            <p className="pz-eyebrow">{t('Arbre partagé')}</p>
             {treeNotFound ? (
               <h1 className="pz-title">{richText(t('Cet arbre est *introuvable*'))}</h1>
             ) : (
@@ -67,7 +70,7 @@ const AccessGate = ({
               {treeNotFound
                 ? t("Le lien est peut-être incomplet, ou l'arbre a été supprimé. Demandez un nouveau lien à la personne qui vous l'a envoyé.")
                 : treeName
-                  ? t('Entrez le mot de passe reçu avec le lien. Pas besoin de compte pour regarder.')
+                  ? t('Tapez le mot de passe reçu avec le lien. Pas besoin de compte pour regarder.')
                   : t('Entrez le code et le mot de passe reçus avec votre lien de partage.')}
             </p>
           </div>
@@ -86,6 +89,21 @@ const AccessGate = ({
 
           {!treeNotFound && (
             <div className="pz-auth-form">
+              {connected && (
+                <div className="access-gate-session" role="status">
+                  {connectedName ? (
+                    /^[aeiouyàâäéèêëîïôöùûüh]/i.test(connectedName)
+                      ? t("Vous êtes sur le compte d'{name}", { name: connectedName })
+                      : t('Vous êtes sur le compte de {name}', { name: connectedName })
+                  ) : (
+                    t('Vous êtes sur votre compte.')
+                  )}
+                  <span className="access-gate-session-step">
+                    {t("Tapez une fois le mot de passe reçu avec le lien. Ensuite, l'arbre s'ouvrira directement.")}
+                  </span>
+                </div>
+              )}
+
               {!initialTreeId && (
                 <div className="pz-field">
                   <label htmlFor="treeId">{t("Code de l'arbre")}</label>
@@ -103,21 +121,7 @@ const AccessGate = ({
               )}
 
               <div className="pz-field">
-                <label htmlFor="visitorFirstName">{t('Votre prénom')}</label>
-                <input
-                  id="visitorFirstName"
-                  type="text"
-                  value={firstName}
-                  onChange={(event) => setFirstName(event.target.value)}
-                  disabled={loading}
-                  autoComplete="given-name"
-                  maxLength={60}
-                />
-                <p className="pz-hint">{t("Facultatif. Il sert à savoir qui est venu voir l'arbre.")}</p>
-              </div>
-
-              <div className="pz-field">
-                <label htmlFor="sharePassword">{t('Mot de passe de partage')}</label>
+                <label htmlFor="sharePassword">{t('Mot de passe reçu avec le lien')}</label>
                 <input
                   id="sharePassword"
                   type="password"
@@ -128,6 +132,23 @@ const AccessGate = ({
                   required
                 />
               </div>
+
+              {/* Compte connecté : son prénom sert déjà, on ne le redemande pas */}
+              {!connected && (
+                <div className="pz-field">
+                  <label htmlFor="visitorFirstName">{t('Votre prénom (facultatif)')}</label>
+                  <input
+                    id="visitorFirstName"
+                    type="text"
+                    value={firstName}
+                    onChange={(event) => setFirstName(event.target.value)}
+                    disabled={loading}
+                    autoComplete="given-name"
+                    maxLength={60}
+                  />
+                  <p className="pz-hint">{t("Il sert à savoir qui est venu voir l'arbre.")}</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -135,25 +156,42 @@ const AccessGate = ({
 
           {!treeNotFound && (
             <button type="submit" className="pz-btn pz-btn--primary pz-btn--block" disabled={loading}>
-              <PzBusy busy={loading} busyLabel={t("Ouverture de l'arbre")}>{t("Ouvrir l'arbre")}</PzBusy>
+              <PzBusy busy={loading} busyLabel={t("Ouverture de l'arbre")}>{t("Voir l'arbre")}</PzBusy>
             </button>
           )}
 
-          {treeNotFound && onUseAccount && (
+          {/* Inscription fermée : un compte existant crée encore ses arbres, un visiteur ne peut que se connecter */}
+          {treeNotFound && onUseAccount && (canRegister || connected) && (
             <button type="button" className="pz-btn pz-btn--primary pz-btn--block" onClick={() => onUseAccount('register')} disabled={loading}>
-              {t('Créer mon arbre')}
+              {t('Créer mon propre arbre')}
+            </button>
+          )}
+
+          {treeNotFound && onUseAccount && !canRegister && !connected && (
+            <button type="button" className="pz-btn pz-btn--primary pz-btn--block" onClick={() => onUseAccount('login')} disabled={loading}>
+              {t('Se connecter')}
             </button>
           )}
         </form>
 
-        {onUseAccount && !treeNotFound && (
+        {connected && onNotMyAccount && !treeNotFound && (
+          <div className="pz-account-foot">
+            <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={onNotMyAccount} disabled={loading}>
+              {t("Ce n'est pas mon compte")}
+            </button>
+          </div>
+        )}
+
+        {!connected && onUseAccount && !treeNotFound && (
           <div className="pz-account-foot">
             <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => onUseAccount('login')} disabled={loading}>
-              {t('Se connecter avec un compte')}
+              {t("J'ai déjà un compte")}
             </button>
-            <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => onUseAccount('register')} disabled={loading}>
-              {t('Créer un compte')}
-            </button>
+            {canRegister && (
+              <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => onUseAccount('register')} disabled={loading}>
+                {t("Je n'ai pas de compte")}
+              </button>
+            )}
           </div>
         )}
 

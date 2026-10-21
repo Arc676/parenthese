@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState } from 'react'
-import { X } from 'lucide-react'
+import { Pencil, X } from 'lucide-react'
 import {
   buildOpenStreetMapEmbedUrl,
   buildOpenStreetMapUrl,
@@ -9,11 +9,27 @@ import {
 } from '../utils/geoMedia'
 import './MediaViewer.css'
 import { t } from '../i18n/index.js'
+import { firstNameLabel } from '../utils/personName.js'
+import { eventTitle } from '../utils/lifeTimeline.js'
+import { getAccountErrorMessage } from '../utils/errorMessages.js'
 
 const HTTP_URL_RE = /^https?:\/\/\S+$/i
+const MAX_TITLE_LENGTH = 280
+const MAX_CITATION_LENGTH = 2000
 
-const MediaViewer = ({ media, person, onClose }) => {
+// Moment de vie qui porte ce souvenir (mediaIds des événements de la route /life)
+const findLinkedEventId = (events, mediaId) => {
+  const id = String(mediaId)
+  return events.find((event) => (event.mediaIds || []).map(String).includes(id))?.id ?? null
+}
+
+const MediaViewer = ({ media, person, onClose, canEdit = false, onLoadLifeEvents, onSave }) => {
   const [mapState, setMapState] = useState({ loading: false, error: '', data: null })
+  const [editing, setEditing] = useState(false)
+  const [lifeEvents, setLifeEvents] = useState([])
+  const [draft, setDraft] = useState({ title: '', citationText: '', lifeEventId: null })
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const svgUid = useId().replace(/:/g, '')
   const mapGridId = `media-map-grid-${svgUid}`
   const mapGlowId = `media-map-glow-${svgUid}`
@@ -21,6 +37,109 @@ const MediaViewer = ({ media, person, onClose }) => {
   const handleOverlayClick = (event) => {
     if (event.target === event.currentTarget) onClose()
   }
+
+  const isCitation = media?.type === 'citation'
+
+  const startEditing = async () => {
+    setSaveError('')
+    const linkedInitially = 'lifeEventId' in (media || {}) ? media.lifeEventId ?? null : null
+    setDraft({ title: media?.label || '', citationText: media?.label || '', lifeEventId: linkedInitially })
+    setEditing(true)
+    if (!onLoadLifeEvents) return
+    try {
+      const data = await onLoadLifeEvents()
+      const events = Array.isArray(data?.events) ? data.events : []
+      setLifeEvents(events)
+      if (!('lifeEventId' in (media || {}))) {
+        setDraft((current) => ({ ...current, lifeEventId: findLinkedEventId(events, media.id) }))
+      }
+    } catch {
+      setSaveError(t('Impossible de charger les moments de vie.'))
+    }
+  }
+
+  const cancelEditing = () => {
+    setEditing(false)
+    setSaveError('')
+  }
+
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+    const caption = (isCitation ? draft.citationText : draft.title).trim()
+    if (!caption) {
+      setSaveError(isCitation ? t('Saisissez le texte de la citation.') : t('Donnez un titre au souvenir.'))
+      return
+    }
+    if (caption.length > (isCitation ? MAX_CITATION_LENGTH : MAX_TITLE_LENGTH)) {
+      setSaveError(isCitation ? t('Le texte de la citation est trop long.') : t('Le titre est trop long.'))
+      return
+    }
+    setSaving(true)
+    setSaveError('')
+    try {
+      await onSave({ caption, lifeEventId: draft.lifeEventId ?? null })
+      setEditing(false)
+    } catch (error) {
+      setSaveError(getAccountErrorMessage(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const renderEditForm = () => (
+    <form className="mv-edit-form" onSubmit={handleSubmit}>
+      {isCitation ? (
+        <label className="mv-edit-field">
+          <span className="mv-edit-label">{t('Texte de la citation')}</span>
+          <textarea
+            className="mv-edit-quote"
+            rows={3}
+            maxLength={MAX_CITATION_LENGTH}
+            value={draft.citationText}
+            onChange={(event) => setDraft((current) => ({ ...current, citationText: event.target.value }))}
+          />
+        </label>
+      ) : (
+        <label className="mv-edit-field">
+          <span className="mv-edit-label">{t('Titre')}</span>
+          <input
+            className="mv-edit-title"
+            type="text"
+            maxLength={MAX_TITLE_LENGTH}
+            value={draft.title}
+            onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
+          />
+        </label>
+      )}
+      <label className="mv-edit-field">
+        <span className="mv-edit-label">{t('Moment de sa vie')}</span>
+        <select
+          className="mv-edit-select"
+          value={draft.lifeEventId ?? ''}
+          onChange={(event) => setDraft((current) => ({ ...current, lifeEventId: event.target.value || null }))}
+        >
+          <option value="">{t('Aucun')}</option>
+          {lifeEvents.map((lifeEvent) => {
+            const year = lifeEvent.date ? String(lifeEvent.date).slice(0, 4) : ''
+            return (
+              <option key={lifeEvent.id} value={lifeEvent.id}>
+                {year ? `${eventTitle(lifeEvent)} (${year})` : eventTitle(lifeEvent)}
+              </option>
+            )
+          })}
+        </select>
+      </label>
+      {saveError && <p className="mv-edit-error" role="alert">{saveError}</p>}
+      <div className="mv-edit-actions">
+        <button type="button" className="pz-btn pz-btn--ghost" onClick={cancelEditing} disabled={saving}>
+          {t('Annuler')}
+        </button>
+        <button type="submit" className="pz-btn pz-btn--primary" disabled={saving}>
+          {t('Enregistrer')}
+        </button>
+      </div>
+    </form>
+  )
 
   const birthYearLabel = person?.birthYear ?? '-'
   const personYears = person
@@ -386,8 +505,22 @@ const MediaViewer = ({ media, person, onClose }) => {
         </div>
 
         <div className="mv-caption">
-          {mediaType !== 'citation' && media?.label && (
-            <h2 className="mv-title">{media.label}</h2>
+          {editing ? renderEditForm() : (
+            <div className="mv-title-row">
+              {mediaType !== 'citation' && media?.label && (
+                <h2 className="mv-title">{media.label}</h2>
+              )}
+              {canEdit && onSave && (
+                <button
+                  type="button"
+                  className="mv-edit-btn"
+                  onClick={startEditing}
+                  aria-label={t('Modifier le souvenir')}
+                >
+                  <Pencil size={13} strokeWidth={2} aria-hidden="true" />
+                </button>
+              )}
+            </div>
           )}
           <div className="mv-meta">
             <span className="mv-person">
@@ -396,12 +529,12 @@ const MediaViewer = ({ media, person, onClose }) => {
               ) : (
                 <span className="mv-person-avatar mv-person-initial">{person?.firstName?.[0] || '?'}</span>
               )}
-              <span className="mv-person-name">{person?.firstName} <em>{person?.lastName}</em></span>
+              <span className="mv-person-name">{person ? firstNameLabel(person) : ''} <em>{person?.lastName}</em></span>
               {personYears && <span className="mv-person-years">{personYears}</span>}
             </span>
             <span className="pz-tag">{typeLabels[mediaType] || mediaType}</span>
           </div>
-          {mediaSource && (
+          {mediaSource && !editing && (
             <p className="mv-source">
               {t('Source')}{' '}
               {isMediaSourceUrl ? (

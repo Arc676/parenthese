@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import {
   deleteAccount,
+  exchangeOidcCode,
+  fetchAccountProfile,
   fetchLastOpenedTree,
   loginUser,
   logoutUser,
@@ -49,8 +51,21 @@ export function useAuth() {
 
   const authenticated = Boolean(userAuth.token)
 
+  // Prénom du compte : lu sur le serveur, gardé dans le profil local pour le bandeau de la porte
+  const refreshAccountProfile = async (token) => {
+    try {
+      const response = await fetchAccountProfile(token)
+      if (!response?.user) return
+      const merged = { ...(loadUserProfile() || {}), ...response.user }
+      saveUserProfile(merged)
+      setUserAuth((current) => (current.token === token ? { ...current, user: merged } : current))
+    } catch {
+      // Profil non lu : le bandeau reste neutre, la session n'est pas touchée
+    }
+  }
+
   const loadAccountTrees = async (token) => {
-    const response = await listTrees(token)
+    const [response] = await Promise.all([listTrees(token), refreshAccountProfile(token)])
     const trees = Array.isArray(response?.trees) ? response.trees : []
     const lastTree = response?.lastOpenedTree || null
     setAccountTrees(trees)
@@ -58,12 +73,17 @@ export function useAuth() {
     return { trees, lastOpenedTree: lastTree }
   }
 
-  const handleLogin = async (email, password) => {
+  const handleLogin = (email, password) => signIn(() => loginUser(email, password))
+
+  // Retour d'une connexion OIDC : le jeton de passage devient une session, comme une connexion par mot de passe
+  const handleOidcExchange = (code) => signIn(() => exchangeOidcCode(code))
+
+  const signIn = async (request) => {
     setAccountLoading(true)
     setAccountError('')
 
     try {
-      const result = await loginUser(email, password)
+      const result = await request()
       const storedProfile = loadUserProfile()
       const mergedUser = {
         ...(storedProfile && storedProfile.email === result.user?.email ? storedProfile : {}),
@@ -148,16 +168,16 @@ export function useAuth() {
   }
 
   // Renvoie null en cas de succès (session locale effacée), sinon un message d'erreur affichable.
-  const handleDeleteAccount = async (password) => {
+  const handleDeleteAccount = async (confirmation) => {
     const token = userAuth.token
     if (!token) {
       return errorMessages.getAccountDeletionErrorMessage({ status: 401 })
     }
 
     try {
-      await deleteAccount(token, password)
+      await deleteAccount(token, confirmation)
     } catch (error) {
-      return errorMessages.getAccountDeletionErrorMessage(error)
+      return errorMessages.getAccountDeletionErrorMessage(error, confirmation)
     }
 
     clearStoredUserToken()
@@ -189,6 +209,7 @@ export function useAuth() {
     loadAccountTrees,
     handleLogin,
     handleRegister,
+    handleOidcExchange,
     handleLogout,
     handleDeleteAccount,
     restoreUserToken,

@@ -4,10 +4,11 @@ import { z } from 'zod'
 import { UPLOAD_BODY_LIMIT } from '../config/env.js'
 import { parseGedcomDate } from '../lib/gedcom-dates.js'
 import { adoptedFamilies, FAMILY_EVENT_TYPES, familyExtras, PERSON_EVENT_TYPES, personExtras } from '../lib/gedcom-events.js'
-import { indexGedcomRecords, mediaRefsForPerson, photoPathForPerson, plainNoteText } from '../lib/gedcom-photos.js'
+import { indexGedcomRecords, mediaRefsForPerson, noteText, photoPathForPerson } from '../lib/gedcom-photos.js'
 import type { GedcomRecords } from '../lib/gedcom-photos.js'
 import type { MembershipRole } from '../types/auth.js'
 import { nextSiblingOrder } from '../lib/sibling-order.js'
+import { sexOrNull, type PersonSex } from '../lib/person-sex.js'
 
 const treeIdParamSchema = z.object({
   id: z.string().min(1),
@@ -20,6 +21,9 @@ const importBodySchema = z.object({
 // Un fichier GEDCOM vient de l'extérieur : longueur des lignes, nombre de fiches et taille des champs
 // plafonnés comme partout ailleurs (sinon un seul fichier bloque l'API ou remplit la base)
 const MAX_LINE_LENGTH = 4096
+const MAX_GEDCOM_LEVEL = 99
+// Remontées d'ascendance permises sur tout l'import : au-delà, les liens ne sont plus contrôlés (fichier hors norme)
+const MAX_ANCESTRY_STEPS = 5_000_000
 const MAX_IMPORTED_PERSONS = 20000
 const MAX_IMPORTED_FAMILIES = 20000
 // Le parseur construit un objet par ligne : 10 Mo de lignes courtes montaient à 370 Mo de mémoire, et le
@@ -94,6 +98,8 @@ export function parseGedcom(text: string): GedcomNode[] {
     if (!match) continue
 
     const level = parseInt(match[1], 10)
+    // La norme s'arrête à 99 niveaux : au-delà, la lecture récursive de l'import déborderait la pile
+    if (level > MAX_GEDCOM_LEVEL) continue
     const xref = match[2] ? match[2].slice(1, -1) : undefined
     const tag = match[3]
     const rawValue = match[4] ?? ''
@@ -137,19 +143,7 @@ function gedcomDateToIso(value: string): string | null {
 // Notes d'une personne : écrites sous elle ou partagées (« 1 NOTE @N1@ »), lignes recollées (CONT, CONC),
 // RTF de Heredis Mac nettoyé. Plusieurs notes sont séparées par une ligne vide.
 export function personNotes(indi: GedcomNode, records: GedcomRecords): string | null {
-  const texts: string[] = []
-  for (const note of findAllChildren(indi, 'NOTE')) {
-    const pointer = note.value.match(/^@([^@]+)@$/)?.[1]
-    const source = pointer ? records.note.get(pointer) : note
-    if (!source) continue
-    let text = (pointer ? source.rawValue ?? source.value : note.rawValue ?? note.value)
-    for (const part of source.children) {
-      if (part.tag === 'CONT') text += `\n${part.rawValue ?? part.value}`
-      else if (part.tag === 'CONC') text += part.rawValue ?? part.value
-    }
-    const clean = plainNoteText(text)
-    if (clean) texts.push(clean)
-  }
+  const texts = findAllChildren(indi, 'NOTE').map((note) => noteText(note, records)).filter(Boolean)
   return texts.length ? texts.join('\n\n') : null
 }
 
@@ -258,8 +252,14 @@ function pushLifeEvent(lines: string[], event: ExportedEvent, tags: Record<strin
 
 // ─── Name Parsing ────────────────────────────────────────────────────────────
 
+// Valeur de « 1 NAME ». Prénom inconnu (chaîne vide) : « /Dupont/ », sans espace de tête
+export function gedcomNameValue(firstName: string, lastName: string): string {
+  const given = firstName ? `${oneLine(firstName)} ` : ''
+  return `${given}/${oneLine(lastName).replace(/\//g, '')}/`
+}
+
 // « Jean /Dupont/ » : lu par indexOf, l'ancienne expression régulière était quadratique sur les espaces
-function parseGedcomName(value: string): { firstName: string; lastName: string } {
+export function parseGedcomName(value: string): { firstName: string; lastName: string } {
   const open = value.indexOf('/')
   const close = open >= 0 ? value.indexOf('/', open + 1) : -1
   if (open >= 0 && close > open) {
@@ -283,6 +283,15 @@ function personKey(firstName: string, lastName: string, birthDate: Date | null, 
 
 function pairKey(a: string, b: string | null): string {
   return b ? [a, b].sort().join('|') : `${a}|`
+}
+
+// GEDCOM 5.5.1 n'admet que M, F et U (inconnu, autre). « X » n'existe qu'en 7.0 : un sexe « autre » s'écrit U,
+// et l'import relit X comme avant.
+export function gedcomSexValue(sex: PersonSex | null): 'M' | 'F' | 'U' | null {
+  if (sex === 'male') return 'M'
+  if (sex === 'female') return 'F'
+  if (sex === 'other') return 'U'
+  return null
 }
 
 function sanitizeXref(id: string): string {
@@ -453,11 +462,11 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
     for (const person of persons) {
       const xref = sanitizeXref(person.id)
       lines.push(`0 @I${xref}@ INDI`)
-      lines.push(`1 NAME ${oneLine(person.firstName)} /${oneLine(person.lastName).replace(/\//g, '')}/`)
+      lines.push(`1 NAME ${gedcomNameValue(person.firstName, person.lastName)}`)
       if (person.nickname) lines.push(`2 NICK ${oneLine(person.nickname)}`)
 
-      if (person.sex === 'male' || person.sex === 'M') lines.push('1 SEX M')
-      else if (person.sex === 'female' || person.sex === 'F') lines.push('1 SEX F')
+      const sexValue = gedcomSexValue(sexOrNull(person.sex))
+      if (sexValue) lines.push(`1 SEX ${sexValue}`)
 
       const personEvents = eventsByPerson.get(person.id) ?? []
       const birthDetails = personEvents.find((event) => event.type === 'birth')
@@ -519,9 +528,9 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
       const p1 = union.partner1PersonId ? personById.get(union.partner1PersonId) : null
       const p2 = union.partner2PersonId ? personById.get(union.partner2PersonId) : null
 
-      const p1IsFemale = p1?.sex === 'female' || p1?.sex === 'F'
-      const p1IsMale = p1?.sex === 'male' || p1?.sex === 'M'
-      const p2IsMale = p2?.sex === 'male' || p2?.sex === 'M'
+      const p1IsFemale = sexOrNull(p1?.sex) === 'female'
+      const p1IsMale = sexOrNull(p1?.sex) === 'male'
+      const p2IsMale = sexOrNull(p2?.sex) === 'male'
 
       // Swap to HUSB=male if we know p1 is female and p2 is male (or unknown)
       const shouldSwap = p1IsFemale && !p2IsMale === false ? false : p1IsFemale && (p2IsMale || !p1IsMale)
@@ -639,12 +648,30 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
     }
     const unionByPair = new Map(existingUnions.map((u) => [pairKey(u.partner1PersonId, u.partner2PersonId), u.id]))
     const linkKeys = new Set(existingLinks.map((l) => `${l.parentPersonId}:${l.childPersonId}`))
+    // Parents de chaque personne, pour refuser un lien qui ferait de quelqu'un son propre ancêtre
+    // (les validateurs de l'API relisent tout l'arbre à chaque lien : trop lent pour un import)
+    const parentsOf = new Map<string, string[]>()
+    for (const link of existingLinks) parentsOf.set(link.childPersonId, [...(parentsOf.get(link.childPersonId) ?? []), link.parentPersonId])
+    let ancestryBudget = MAX_ANCESTRY_STEPS
+    const isAncestorOf = (candidate: string, personId: string): boolean => {
+      const seen = new Set<string>()
+      const stack = [personId]
+      while (stack.length) {
+        const current = stack.pop()!
+        if (current === candidate) return true
+        if (seen.has(current) || --ancestryBudget < 0) continue
+        seen.add(current)
+        stack.push(...(parentsOf.get(current) ?? []))
+      }
+      return false
+    }
 
     let personsCreated = 0
     let personsReused = 0
     let unionsCreated = 0
     let linksCreated = 0
     let eventsCreated = 0
+    let relationsSkipped = 0
     // Adoptions déclarées sous l'enfant (« 2 PEDI adopted ») : enfant → familles où il est adopté
     const adoptedByChild = new Map(indiNodes.map((indi) => [indi.xref!, adoptedFamilies(indi)]))
 
@@ -655,10 +682,10 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
         const nameNode = findChild(indi, 'NAME')
         const { firstName, lastName } = nameNode
           ? parseGedcomName(nameNode.value)
-          : { firstName: '?', lastName: '' }
+          : { firstName: '', lastName: '' }
 
         const sexNode = findChild(indi, 'SEX')
-        const sex = sexNode?.value === 'M' ? 'male' : sexNode?.value === 'F' ? 'female' : null
+        const sex = sexOrNull(sexNode?.value)
 
         const birtNode = findChild(indi, 'BIRT')
         const birthDateIso = gedcomDateToIso(findChild(birtNode, 'DATE')?.value ?? '')
@@ -669,9 +696,8 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
 
         const profession = clip(findChild(indi, 'OCCU')?.value ?? null, 200)
 
-        const notes = clip(personNotes(indi, records), 2000)
-
-        const personFirstName = (firstName || '?').slice(0, 120)
+        // Prénom absent du fichier : chaîne vide, comme un prénom inconnu dans l'arbre
+        const personFirstName = (firstName || '').slice(0, 120)
         const personLastName = (lastName || '').slice(0, 120)
         const birthDate = isoDateToDbDate(birthDateIso)
         const deathDate = isoDateToDbDate(deathDateIso)
@@ -686,6 +712,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
           continue
         }
 
+        const notes = clip(personNotes(indi, records), 2000)
         const { events, ...extras } = personExtras(indi, records)
         const person = await tx.person.create({
           data: {
@@ -713,7 +740,8 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
         xrefToPersonId.set(indi.xref!, person.id)
         personsCreated++
         if (photoPath) photoRefs.push({ personId: person.id, file: photoPath })
-        for (const ref of mediaRefsForPerson(indi, records, photoPath)) {
+        const personMedia = mediaRefs.length < MAX_IMPORTED_MEDIA_REFS ? mediaRefsForPerson(indi, records, photoPath) : []
+        for (const ref of personMedia) {
           if (mediaRefs.length >= MAX_IMPORTED_MEDIA_REFS) break
           mediaRefs.push({ personId: person.id, ...ref })
         }
@@ -724,7 +752,12 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
         const wifeXref = findChild(fam, 'WIFE')?.value?.replace(/@/g, '').trim()
 
         const partner1Id = husbXref ? xrefToPersonId.get(husbXref) : undefined
-        const partner2Id = wifeXref ? xrefToPersonId.get(wifeXref) : undefined
+        let partner2Id = wifeXref ? xrefToPersonId.get(wifeXref) : undefined
+        // Une même personne des deux côtés d'une union : un seul partenaire
+        if (partner2Id && partner2Id === partner1Id) {
+          partner2Id = undefined
+          relationsSkipped++
+        }
 
         if (!partner1Id && !partner2Id) continue
 
@@ -770,6 +803,10 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
           for (const parentId of parentIds) {
             const linkKey = `${parentId}:${childId}`
             if (linkKeys.has(linkKey)) continue
+            if (parentId === childId || isAncestorOf(childId, parentId)) {
+              relationsSkipped++
+              continue
+            }
             await tx.parentChildLink.create({
               data: {
                 treeId,
@@ -781,6 +818,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
               },
             })
             linkKeys.add(linkKey)
+            parentsOf.set(childId, [...(parentsOf.get(childId) ?? []), parentId])
             linksCreated++
           }
         }
@@ -794,7 +832,7 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
           action: 'gedcom_imported',
           entityType: 'tree',
           entityId: treeId,
-          payloadJson: { personsCreated, personsReused, unionsCreated, linksCreated, eventsCreated, photoRefs: photoRefs.length, mediaRefs: mediaRefs.length },
+          payloadJson: { personsCreated, personsReused, unionsCreated, linksCreated, eventsCreated, relationsSkipped, photoRefs: photoRefs.length, mediaRefs: mediaRefs.length },
         },
       })
     }, { timeout: 60000 })
@@ -804,6 +842,6 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
 
     // photoRefs : chemin de la photo que le logiciel d'origine associait à chaque personne ; mediaRefs : les
     // autres fichiers cités, avec leur titre et leur source (rien n'est gardé en base)
-    return reply.send({ personsCreated, personsReused, unionsCreated, linksCreated, eventsCreated, photoRefs, mediaRefs })
+    return reply.send({ personsCreated, personsReused, unionsCreated, linksCreated, eventsCreated, relationsSkipped, photoRefs, mediaRefs })
   })
 }

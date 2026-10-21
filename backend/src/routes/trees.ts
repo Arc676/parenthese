@@ -16,6 +16,8 @@ import { reserveTreeUnlockAttempt, serializePasswordCheck } from '../lib/unlock-
 import type { MembershipRole } from '../types/auth.js'
 import { findParentChildValidationError, findUnionValidationError } from '../utils/relationship-guards.js'
 import { personPrecisionResets, unionPrecisionResets } from '../lib/date-precision.js'
+import { hasAnyName } from '../lib/person-names.js'
+import { sexSchema } from '../lib/person-sex.js'
 import { ContributionRouteError, resolveSubmissionContext } from './contributions.js'
 
 const MAX_TREES_PER_ACCOUNT = 10
@@ -84,33 +86,37 @@ const listAuditQuerySchema = z.object({
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/
 
 const createPersonSchema = z.object({
-  firstName: z.string().min(1).max(120),
-  lastName: z.string().min(1).max(120),
+  firstName: z.string().trim().max(120),
+  lastName: z.string().trim().max(120),
   birthName: z.string().max(120).optional().nullable(),
+  nickname: z.string().max(120).optional().nullable(),
   birthDate: z.string().regex(isoDateRegex).optional().nullable(),
   deathDate: z.string().regex(isoDateRegex).optional().nullable(),
   isDeceased: z.boolean().optional(),
   birthPlace: z.string().max(200).optional().nullable(),
+  deathPlace: z.string().max(200).optional().nullable(),
   profession: z.string().max(200).optional().nullable(),
   region: z.string().max(120).optional().nullable(),
   nationality: z.string().max(120).optional().nullable(),
-  sex: z.string().max(20).optional().nullable(),
+  sex: sexSchema,
   notes: z.string().max(2000).optional().nullable(),
-})
+}).refine((value) => hasAnyName(value.firstName, value.lastName), { message: 'name_required', path: ['lastName'] })
 
 const patchPersonSchema = z
   .object({
-    firstName: z.string().min(1).max(120).optional(),
-    lastName: z.string().min(1).max(120).optional(),
+    firstName: z.string().trim().max(120).optional(),
+    lastName: z.string().trim().max(120).optional(),
     birthName: z.string().max(120).optional().nullable(),
+    nickname: z.string().max(120).optional().nullable(),
     birthDate: z.string().regex(isoDateRegex).optional().nullable(),
     deathDate: z.string().regex(isoDateRegex).optional().nullable(),
     isDeceased: z.boolean().optional(),
     birthPlace: z.string().max(200).optional().nullable(),
+    deathPlace: z.string().max(200).optional().nullable(),
     profession: z.string().max(200).optional().nullable(),
     region: z.string().max(120).optional().nullable(),
     nationality: z.string().max(120).optional().nullable(),
-    sex: z.string().max(20).optional().nullable(),
+    sex: sexSchema,
     notes: z.string().max(2000).optional().nullable(),
   })
   .refine((value) => Object.keys(value).length > 0, {
@@ -1310,11 +1316,13 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
         firstName: payload.data.firstName.trim(),
         lastName: payload.data.lastName.trim(),
         birthName: toTrimmedStringOrNull(payload.data.birthName),
+        nickname: toTrimmedStringOrNull(payload.data.nickname),
         birthDate: toDateOrNull(payload.data.birthDate),
         deathDate: toDateOrNull(payload.data.deathDate),
         // Une date de décès dit déjà que la personne est décédée : le drapeau ne sert que sans date
         isDeceased: !payload.data.deathDate && Boolean(payload.data.isDeceased),
         birthPlace: toTrimmedStringOrNull(payload.data.birthPlace),
+        deathPlace: toTrimmedStringOrNull(payload.data.deathPlace),
         profession: toTrimmedStringOrNull(payload.data.profession),
         region: toTrimmedStringOrNull(payload.data.region),
         nationality: toTrimmedStringOrNull(payload.data.nationality),
@@ -1364,14 +1372,27 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(403).send({ error: 'forbidden' })
     }
 
+    // Au moins un nom : on regarde le résultat de la modification, pas seulement ce qu'elle envoie
+    if (payload.data.firstName !== undefined || payload.data.lastName !== undefined) {
+      const before = await app.prisma.person.findFirst({
+        where: { id: params.data.personId, treeId: params.data.id, deletedAt: null },
+        select: { firstName: true, lastName: true },
+      })
+      if (before && !hasAnyName(payload.data.firstName ?? before.firstName, payload.data.lastName ?? before.lastName)) {
+        return reply.code(400).send({ error: 'invalid_payload', details: 'name_required' })
+      }
+    }
+
     const data: {
       firstName?: string
       lastName?: string
       birthName?: string | null
+      nickname?: string | null
       birthDate?: Date | null
       deathDate?: Date | null
       isDeceased?: boolean
       birthPlace?: string | null
+      deathPlace?: string | null
       profession?: string | null
       region?: string | null
       nationality?: string | null
@@ -1392,6 +1413,10 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
       data.birthName = toTrimmedStringOrNull(payload.data.birthName)
     }
 
+    if (payload.data.nickname !== undefined) {
+      data.nickname = toTrimmedStringOrNull(payload.data.nickname)
+    }
+
     if (payload.data.birthDate !== undefined) {
       data.birthDate = toDateOrNull(payload.data.birthDate)
     }
@@ -1410,6 +1435,10 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
 
     if (payload.data.birthPlace !== undefined) {
       data.birthPlace = toTrimmedStringOrNull(payload.data.birthPlace)
+    }
+
+    if (payload.data.deathPlace !== undefined) {
+      data.deathPlace = toTrimmedStringOrNull(payload.data.deathPlace)
     }
 
     if (payload.data.profession !== undefined) {
@@ -2067,21 +2096,23 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
     return reply.send({ link })
   })
 
-  // Réordonner une fratrie : displayOrder des liens parent-enfant réécrit en une transaction
-  // Souvenirs rattachables : approuvés, d'une de ces personnes, dans cet arbre
-  const validLifeEventMedia = async (treeId: string, ownerIds: string[], mediaIds: string[] | undefined) => {
+  // Souvenirs rattachables : approuvés, d'une de ces personnes, dans cet arbre. La famille ne prend
+  // que des souvenirs libres : elle ne détache pas un souvenir du moment d'un autre.
+  const validLifeEventMedia = async (treeId: string, ownerIds: string[], mediaIds: string[] | undefined, onlyFree = false) => {
     if (!mediaIds?.length) return true
     const unique = [...new Set(mediaIds)]
-    const count = await app.prisma.mediaItem.count({ where: { id: { in: unique }, treeId, personId: { in: ownerIds }, status: 'approved', deletedAt: null } })
+    const count = await app.prisma.mediaItem.count({
+      where: { id: { in: unique }, treeId, personId: { in: ownerIds }, status: 'approved', deletedAt: null, ...(onlyFree ? { lifeEventId: null } : {}) },
+    })
     return count === unique.length
   }
 
   // Rattache exactement ces souvenirs au moment (et détache ceux qui ne sont plus dans la liste)
-  const setLifeEventMedia = async (treeId: string, eventId: string, mediaIds: string[] | undefined) => {
+  const setLifeEventMedia = async (db: Prisma.TransactionClient, treeId: string, eventId: string, mediaIds: string[] | undefined) => {
     if (mediaIds === undefined) return
     const unique = [...new Set(mediaIds)]
-    await app.prisma.mediaItem.updateMany({ where: { treeId, lifeEventId: eventId, id: { notIn: unique } }, data: { lifeEventId: null } })
-    if (unique.length) await app.prisma.mediaItem.updateMany({ where: { treeId, id: { in: unique } }, data: { lifeEventId: eventId } })
+    await db.mediaItem.updateMany({ where: { treeId, lifeEventId: eventId, id: { notIn: unique } }, data: { lifeEventId: null } })
+    if (unique.length) await db.mediaItem.updateMany({ where: { treeId, id: { in: unique } }, data: { lifeEventId: eventId } })
   }
 
   app.post('/trees/:id/persons/:personId/life/events', async (request, reply) => {
@@ -2117,7 +2148,7 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
 
     const person = await app.prisma.person.findFirst({
       where: { id: params.data.personId, treeId: params.data.id, deletedAt: null },
-      select: { id: true, firstName: true },
+      select: { id: true, firstName: true, lastName: true },
     })
     if (!person) return reply.code(404).send({ error: 'person_not_found' })
 
@@ -2142,55 +2173,59 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
       })
       if (existing) return reply.code(409).send({ error: 'event_exists', eventId: existing.id })
     }
-    if (!(await validLifeEventMedia(params.data.id, ownerIds, payload.data.mediaIds))) {
+    if (!(await validLifeEventMedia(params.data.id, ownerIds, payload.data.mediaIds, !isAdmin))) {
       return reply.code(400).send({ error: 'invalid_media_reference' })
     }
 
     const isPending = contribution?.autoStatus === 'pending'
     const title = payload.data.label?.trim() || payload.data.description?.trim() || payload.data.type
-    const session = contribution
-      ? await app.prisma.contributionSession.create({
+    // Session, moment, souvenirs et trace de la contribution : tout ou rien
+    const event = await app.prisma.$transaction(async (tx) => {
+      const session = contribution
+        ? await tx.contributionSession.create({
+          data: {
+            treeId: params.data.id,
+            submittedByUserId: contribution.submittedByUserId,
+            submittedByLabel: payload.data.submittedByLabel?.trim() || contribution.submittedByLabel,
+            mode: contribution.mode,
+            status: contribution.autoStatus,
+            title: `Moment pour ${person.firstName || person.lastName}`.slice(0, 120),
+            reviewedAt: isPending ? undefined : new Date(),
+            reviewedBy: isPending ? undefined : contribution.submittedByUserId,
+          },
+        })
+        : null
+
+      const event = await tx.lifeEvent.create({
         data: {
           treeId: params.data.id,
-          submittedByUserId: contribution.submittedByUserId,
-          submittedByLabel: payload.data.submittedByLabel?.trim() || contribution.submittedByLabel,
-          mode: contribution.mode,
-          status: contribution.autoStatus,
-          title: `Moment pour ${person.firstName}`.slice(0, 120),
-          reviewedAt: isPending ? undefined : new Date(),
-          reviewedBy: isPending ? undefined : contribution.submittedByUserId,
+          personId: unionId ? null : person.id,
+          unionId,
+          type: payload.data.type,
+          ...lifeEventData(payload.data, reserved),
+          status: isPending ? 'pending' : 'approved',
+          contributionSessionId: session?.id ?? null,
         },
       })
-      : null
+      await setLifeEventMedia(tx, params.data.id, event.id, payload.data.mediaIds)
 
-    const event = await app.prisma.lifeEvent.create({
-      data: {
-        treeId: params.data.id,
-        personId: unionId ? null : person.id,
-        unionId,
-        type: payload.data.type,
-        ...lifeEventData(payload.data, reserved),
-        status: isPending ? 'pending' : 'approved',
-        contributionSessionId: session?.id ?? null,
-      },
-    })
-    await setLifeEventMedia(params.data.id, event.id, payload.data.mediaIds)
-
-    if (session) {
-      await app.prisma.contributionChange.create({
-        data: {
-          sessionId: session.id,
-          entityType: 'life_event',
-          entityId: event.id,
-          action: 'create',
-          afterJson: {
-            personId: person.id, type: event.type, title, date: payload.data.date ?? null, dateEnd: payload.data.dateEnd ?? null,
-            datePrecision: payload.data.datePrecision ?? null, place: event.place, notes: event.notes, sources: event.sources,
+      if (session) {
+        await tx.contributionChange.create({
+          data: {
+            sessionId: session.id,
+            entityType: 'life_event',
+            entityId: event.id,
+            action: 'create',
+            afterJson: {
+              personId: person.id, type: event.type, title, date: payload.data.date ?? null, dateEnd: payload.data.dateEnd ?? null,
+              datePrecision: payload.data.datePrecision ?? null, place: event.place, notes: event.notes, sources: event.sources,
+            },
+            decision: isPending ? undefined : 'approved',
           },
-          decision: isPending ? undefined : 'approved',
-        },
-      })
-    }
+        })
+      }
+      return event
+    })
     return reply.code(201).send({ event: { id: event.id, status: event.status } })
   })
 
@@ -2221,11 +2256,13 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: 'invalid_media_reference' })
     }
 
-    await app.prisma.lifeEvent.update({
-      where: { id: params.data.eventId },
-      data: lifeEventData(payload.data, RESERVED_LIFE_EVENT_TYPES.has(existing.type)),
+    await app.prisma.$transaction(async (tx) => {
+      await tx.lifeEvent.update({
+        where: { id: params.data.eventId },
+        data: lifeEventData(payload.data, RESERVED_LIFE_EVENT_TYPES.has(existing.type)),
+      })
+      await setLifeEventMedia(tx, params.data.id, params.data.eventId, payload.data.mediaIds)
     })
-    await setLifeEventMedia(params.data.id, params.data.eventId, payload.data.mediaIds)
     return reply.send({ ok: true })
   })
 
@@ -2238,13 +2275,16 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
     const membership = await getAdminMembership(app, user.userId, params.data.id)
     if (!hasActiveAdminMembership(membership)) return reply.code(403).send({ error: 'forbidden' })
 
-    const deleted = await app.prisma.lifeEvent.updateMany({
-      where: { id: params.data.eventId, treeId: params.data.id, deletedAt: null, personId: { not: null }, type: { notIn: [...RESERVED_LIFE_EVENT_TYPES] } },
-      data: { deletedAt: new Date() },
+    const deletedCount = await app.prisma.$transaction(async (tx) => {
+      const deleted = await tx.lifeEvent.updateMany({
+        where: { id: params.data.eventId, treeId: params.data.id, deletedAt: null, personId: { not: null }, type: { notIn: [...RESERVED_LIFE_EVENT_TYPES] } },
+        data: { deletedAt: new Date() },
+      })
+      // Les souvenirs restent dans la fiche, simplement détachés du moment
+      if (deleted.count > 0) await tx.mediaItem.updateMany({ where: { treeId: params.data.id, lifeEventId: params.data.eventId }, data: { lifeEventId: null } })
+      return deleted.count
     })
-    if (deleted.count === 0) return reply.code(404).send({ error: 'event_not_found' })
-    // Les souvenirs restent dans la fiche, simplement détachés du moment
-    await app.prisma.mediaItem.updateMany({ where: { treeId: params.data.id, lifeEventId: params.data.eventId }, data: { lifeEventId: null } })
+    if (deletedCount === 0) return reply.code(404).send({ error: 'event_not_found' })
     return reply.code(204).send()
   })
 

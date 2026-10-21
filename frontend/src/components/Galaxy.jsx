@@ -3,7 +3,7 @@ import { getPersonMedias, getParents, getChildren, getPersonUnions, persons as g
 import { PERSON_R, FLOAT_SPEED, FLOAT_AMPLITUDE, REPULSION_RADIUS, REPULSION_STRENGTH, MAX_ORBIT_MEDIAS, ENTRANCE_GEN_DELAY, ENTRANCE_NODE_DURATION, ENTRANCE_NODE_STAGGER, ENTRANCE_MAX_GEN_SPAN, ENTRANCE_MAX_NODE_SPAN, ENTRANCE_LINE_DELAY, ENTRANCE_LINE_DURATION, ENTRANCE_ORBIT_DELAY, ENTRANCE_ORBIT_DURATION, ENTRANCE_ORBIT_STAGGER } from './galaxy/constants'
 import { easeOutCubic } from './galaxy/utils'
 import { computeLayout, generateNodeRandomData, coupleBarMeta } from './galaxy/elkLayout'
-import { computeBlockLayout } from './galaxy/blockLayout'
+import { computeBlockLayout, familyTabsOf, subgraphOf } from './galaxy/blockLayout'
 
 // Placement par blocs familiaux par défaut (mesures : tools/layout-bench). ?layout=sugiyama = placement Sugiyama.
 const USE_BLOCK_LAYOUT = typeof window === 'undefined' || new URLSearchParams(window.location.search).get('layout') !== 'sugiyama'
@@ -13,6 +13,7 @@ import { buildSiblingGroups, moveInOrder, pickSlot, rubberBand, springStep, isSe
 import { annotations as annotationData } from '../data/mockData'
 import { useImageCache } from './galaxy/useImageCache'
 import { useGalaxyInteractions } from './galaxy/useGalaxyInteractions'
+import { t as tr } from '../i18n/index.js'
 import './Galaxy.css'
 
 // Assez bas pour cadrer un grand arbre entier à l'ouverture
@@ -26,6 +27,7 @@ function approach(prev, target, k, eps = 1e-3) {
   return Math.abs(target - next) < eps ? target : next
 }
 const MAX_SCALE = 3.2
+// Carte des familles : l'arbre s'efface entre ces deux échelles, les tuiles de familles apparaissent
 // Ouverture sur la personne de départ quand l'arbre entier serait illisible
 const FOCUS_MIN_READABLE_SCALE = 0.5
 const FOCUS_SCALE = 0.95
@@ -40,16 +42,44 @@ const DROP_SPRING = { stiffness: 480, dampingRatio: 0.72 }
 const centerX = (node) => node.x + node.width / 2
 const prefersReducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, photoHint = false, reorderEnabled = false, onReorderSiblings = null }) => {
+const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, photoHint = false, onPhotoPlaceholderClick = null, reorderEnabled = false, onReorderSiblings = null, familyTabs = true }) => {
   const canvasRef = useRef(null)
-  // Lu au calcul du cadrage seulement : changer de personne de départ ne recadre pas une vue en cours
+  const layoutDataRef = useRef(null)
+  // Onglets de familles (réglage `familyTabs`) : la liste des familles de l'arbre, calculée une fois par
+  // version du graphe et par personne de départ, et l'onglet ouvert. Un onglet est le sous-arbre d'une
+  // grande belle-famille, posé avec le conjoint charnière comme référence.
+  const [tabs, setTabs] = useState([])
+  const [activeKey, setActiveKey] = useState(focusPersonId != null ? String(focusPersonId) : null)
+  const tabsCacheRef = useRef({ rev: -1, start: undefined, tabs: [] })
+  const pendingFocusRef = useRef(null) // personne cherchée dans un autre onglet, visée après le changement
+  const activeTabRef = useRef(null)
+  const familyTabsRef = useRef(familyTabs)
+  useEffect(() => { familyTabsRef.current = familyTabs }, [familyTabs])
+  const startRefRef = useRef(focusPersonId)
+  useEffect(() => { startRefRef.current = focusPersonId; setActiveKey(focusPersonId != null ? String(focusPersonId) : null) }, [focusPersonId])
+  // Lu au calcul du cadrage et par le réordonnancement : la référence de l'arbre affiché
   const focusPersonIdRef = useRef(focusPersonId)
-  // Mis à jour hors du rendu, avant l'effet de cadrage déclaré plus bas (même phase, ordre de déclaration)
-  useEffect(() => { focusPersonIdRef.current = focusPersonId }, [focusPersonId])
+  // La barre défile quand les onglets débordent : l'onglet ouvert se met en vue (sans animation) et les bords
+  // coupés se signalent par un fondu
+  const tabsBarRef = useRef(null)
+  const [tabsEdges, setTabsEdges] = useState('')
+  const updateTabsEdges = useCallback(() => {
+    const el = tabsBarRef.current
+    if (!el) return
+    const left = el.scrollLeft > 12, right = el.scrollLeft + el.clientWidth < el.scrollWidth - 12
+    setTabsEdges(`${left ? ' has-left' : ''}${right ? ' has-right' : ''}`)
+  }, [])
+  useEffect(() => {
+    document.querySelector('.family-tab.is-active')?.scrollIntoView({ behavior: 'auto', inline: 'nearest', block: 'nearest' })
+    updateTabsEdges()
+    window.addEventListener('resize', updateTabsEdges)
+    return () => window.removeEventListener('resize', updateTabsEdges)
+  }, [activeKey, tabs, updateTabsEdges])
+  // Clic sur un badge : l'onglet de cette famille (ou, depuis un onglet, celui d'où l'on vient)
+  const openFamily = useCallback((tabKey) => { if (tabKey != null) setActiveKey(String(tabKey)) }, [])
   // Propriétaire : un portrait vide survolé montre « + photo »
   const photoHintRef = useRef(photoHint)
   useEffect(() => { photoHintRef.current = photoHint }, [photoHint])
-  const layoutDataRef = useRef(null)
   const [layoutReady, setLayoutReady] = useState(false)
   const transformRef = useRef({ x: 0, y: 0, scale: 1 })
 
@@ -70,7 +100,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   const selectedPersonIdRef = useRef(null)
   const selectedGlowScales = useRef(new Map())
   const searchGlowScales = useRef(new Map())
-  const searchHighlightIdsRef = useRef([])
+  const searchHighlightSetRef = useRef(new Set())
   const immediateRelativesRef = useRef(new Set())
   const pathEdgesRef = useRef([])
   const pathNodesRef = useRef([])
@@ -139,7 +169,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     canvasRef, transformRef, targetTransformRef,
     layoutDataRef, nodeRandomDataRef, entranceRef,
     hoveredNodeIdRef: hoveredNodeId, hoveredMediaKeyRef: hoveredMediaKey, mouseWorldPosRef: mouseWorldPos,
-    getAnimatedPos, onPersonSelect, onMediaSelect,
+    getAnimatedPos, onPersonSelect, onMediaSelect, onPhotoPlaceholderClick, onOpenFamily: openFamily,
     annotationHandlers,
     minScale: MIN_SCALE,
     maxScale: MAX_SCALE,
@@ -184,12 +214,14 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
 
   // Placement complet pour un ordre de la fratrie, recalé sur la source (les parents ne bougent pas)
   const layoutForOrder = useCallback((group, order, base) => {
+    const tab = activeTabRef.current
+    const src = tab?.personIds ? subgraphOf(tab.personIds) : { persons: graphPersons, unions: graphUnions, filiations: graphFiliations }
     const graph = {
-      persons: graphPersons,
-      unions: graphUnions,
-      filiations: filiationsWithOrder(graphFiliations, graphUnions, group.source, order),
+      persons: src.persons,
+      unions: src.unions,
+      filiations: filiationsWithOrder(src.filiations, src.unions, group.source, order),
     }
-    const result = computeBlockLayout(graph)
+    const result = computeBlockLayout(graph, focusPersonIdRef.current, { familyTabs: familyTabsRef.current })
     const baseSource = base.children.find((n) => n.id === group.source)
     const source = result.children.find((n) => n.id === group.source)
     const shift = baseSource && source ? baseSource.x - source.x : 0
@@ -375,6 +407,14 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     focusPerson: (personId) => {
       const canvas = canvasRef.current
       const node = layoutDataRef.current?.children.find(n => n.id === `p-${personId}`)
+      // Rangée dans un autre onglet : on ouvre cet onglet, la personne est visée une fois l'arbre posé
+      if (!node && familyTabsRef.current) {
+        const id = String(personId)
+        const all = tabsCacheRef.current.tabs
+        const home = all.find((tb) => tb.personIds?.has(id) && !(tb.hinges || []).map(String).includes(id)) || all.find((tb) => tb.personIds?.has(id)) || all[0]
+        if (home && home.key !== activeTabRef.current?.key) { pendingFocusRef.current = id; setActiveKey(home.key) }
+        return
+      }
       if (!canvas || !node) return
       const rect = canvas.getBoundingClientRect()
       const pos = getAnimatedPos(node, performance.now())
@@ -428,7 +468,35 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
 
   // Layout
   useEffect(() => {
-    const result = USE_BLOCK_LAYOUT ? computeBlockLayout() : computeLayout()
+    // Onglets : la liste des familles, une fois par version du graphe et par personne de départ. Calculée
+    // avant l'arbre affiché, parce que chaque calcul de placement remplit les couples du module (coupleBarMeta)
+    const start = startRefRef.current != null ? String(startRefRef.current) : null
+    const cache = tabsCacheRef.current
+    if (USE_BLOCK_LAYOUT && familyTabs && (cache.rev !== graphRevision || cache.start !== start)) {
+      tabsCacheRef.current = { rev: graphRevision, start, tabs: familyTabsOf(null, startRefRef.current) }
+      setTabs(tabsCacheRef.current.tabs)
+    }
+    if (!familyTabs && tabsCacheRef.current.tabs.length) { tabsCacheRef.current = { rev: -1, start: undefined, tabs: [] }; setTabs([]) }
+    const tab = familyTabs ? (tabsCacheRef.current.tabs.find((tb) => tb.key === activeKey) || tabsCacheRef.current.tabs[0] || null) : null
+    activeTabRef.current = tab
+    // La personne de départ (ou la charnière de l'onglet) sert de référence aux rangées
+    focusPersonIdRef.current = tab ? tab.referenceId : startRefRef.current
+    const graph = tab?.personIds ? subgraphOf(tab.personIds) : null
+    const result = USE_BLOCK_LAYOUT ? computeBlockLayout(graph, focusPersonIdRef.current, { familyTabs }) : computeLayout(null, focusPersonIdRef.current)
+    // Les pastilles portent le nom de l'onglet où elles mènent (prénoms ajoutés aux homonymes)
+    for (const n of result.children) {
+      const target = n._familyTab && tabsCacheRef.current.tabs.find((tb) => tb.key === n._familyTab.tabKey)
+      if (target) n._familyTab = { ...n._familyTab, label: target.label, count: target.count }
+    }
+    // Dans l'onglet d'une belle-famille, chaque charnière (conjoint marié dans la famille d'où l'on vient)
+    // porte le badge de retour
+    if (tab?.parentKey) {
+      const parent = tabsCacheRef.current.tabs.find((tb) => tb.key === tab.parentKey)
+      for (const h of (tab.hinges || [tab.referenceId])) {
+        const node = result.children.find((n) => n.id === `p-${h}`)
+        if (parent && node) node._familyTab = { anchorId: node.id, label: parent.label, count: parent.count, tabKey: parent.key, place: 'above' }
+      }
+    }
 
     const canvas = canvasRef.current
     if (!canvas) return
@@ -475,7 +543,8 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     if (focusNode && fitScale < FOCUS_MIN_READABLE_SCALE) {
       scale = FOCUS_SCALE
       offsetX = cssW / 2 - (focusNode.x + focusNode.width / 2) * scale
-      offsetY = cssH * 0.42 - (focusNode.y + focusNode.height / 2) * scale
+      // Sur un écran étroit, la barre des familles couvre le haut : la personne de départ un peu plus bas
+      offsetY = cssH * (cssW < 768 ? 0.56 : 0.42) - (focusNode.y + focusNode.height / 2) * scale
     }
 
     const init = { x: offsetX, y: offsetY, scale }
@@ -558,7 +627,12 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     layoutDataRef.current = result
     needsRedrawRef.current = true
     setLayoutReady(true)
-  }, [graphRevision])
+    if (pendingFocusRef.current) {
+      const id = pendingFocusRef.current
+      pendingFocusRef.current = null
+      requestAnimationFrame(() => zoomApiRef?.current?.focusPerson?.(id))
+    }
+  }, [graphRevision, activeKey, familyTabs])
 
   // Sync selectedPersonId
   useEffect(() => {
@@ -567,7 +641,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
 
   // Sync searchHighlightIds
   useEffect(() => {
-    searchHighlightIdsRef.current = searchHighlightIds
+    searchHighlightSetRef.current = new Set(searchHighlightIds.map(id => `p-${id}`))
   }, [searchHighlightIds])
 
   // Recalculer les proches immédiats
@@ -646,15 +720,6 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       if (!layoutData || !canvas) { rafId = requestAnimationFrame(animate); return }
       const { x, y, scale } = transformRef.current
 
-      // Positions animées
-      const posMap = new Map()
-      layoutData.children.forEach(node => {
-        posMap.set(node.id, getAnimatedPos(node, timestamp))
-      })
-
-      const nodeMap = new Map()
-      layoutData.children.forEach(n => nodeMap.set(n.id, n))
-
       // Lissage hover states
       const hoverEasing = 0.12
       layoutData.children.forEach(node => {
@@ -667,11 +732,10 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
         const pMedias = getPersonMedias(node._data.id)
         const orbitSlots = rd?.orbitSlots || []
         const orbitCount = Math.min(pMedias.length, MAX_ORBIT_MEDIAS)
-        const pos = posMap.get(node.id)
         for (let i = 0; i < orbitCount; i++) {
           const key = `${node.id}:${i}`
           const slot = orbitSlots[i]
-          if (!slot || !pos) continue
+          if (!slot) continue
           const isHovered = hoveredMediaKey.current === key
           const prevMh = mediaHoverState.current.get(key) || { scale: 0, dx: 0, dy: 0 }
           const dirX = Math.cos(slot.angle)
@@ -717,7 +781,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
 
       // Animation search highlight glow
       const searchEasing = 0.12
-      const searchHighlightSet = new Set(searchHighlightIdsRef.current.map(id => `p-${id}`))
+      const searchHighlightSet = searchHighlightSetRef.current
       layoutData.children.forEach(node => {
         if (node._type !== 'person') return
         const targetSearchGlow = searchHighlightSet.has(node.id) ? 1.2 : 0
@@ -734,7 +798,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
         dirty = true
         lastPathInputRef.current = { selected: selectedElkId, hovered: currentHovered }
         if (selectedElkId && currentHovered && currentHovered !== selectedElkId && currentHovered.startsWith('p-')) {
-          const result = findPathBFS(selectedElkId, currentHovered, layoutData)
+          const result = findPathBFS(selectedElkId, currentHovered, layoutData, graphPersons)
           pathNodesRef.current = result ? result.nodePath : []
           pathEdgesRef.current = result ? result.edgePath : []
           pathLabelRef.current = result ? result.label : ''
@@ -752,8 +816,6 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       const PATH_EDGE_DURATION = 300
       const pathElapsed = pathStartTime.current > 0 ? timestamp - pathStartTime.current : -1
       const pathEasing = 0.12
-      const activePathEdges = new Set(pathEdgesRef.current.map(e => e.id))
-      const activePathNodes = new Set(pathNodesRef.current)
 
       for (let i = 0; i < pathEdgesRef.current.length; i++) {
         const e = pathEdgesRef.current[i]
@@ -771,12 +833,17 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
         if (pathProgressRef.current.get(n) !== staggeredTarget) { dirty = true; pathProgressRef.current.set(n, staggeredTarget) }
       }
 
-      for (const [key, val] of pathProgressRef.current) {
-        if (!activePathEdges.has(key) && !activePathNodes.has(key)) {
-          dirty = true
-          const next = val + (0 - val) * pathEasing
-          if (Math.abs(next) < 0.001) pathProgressRef.current.delete(key)
-          else pathProgressRef.current.set(key, next)
+      // Au repos, rien à éteindre : pas d'ensembles reconstruits à chaque frame
+      if (pathProgressRef.current.size > 0) {
+        const activePathEdges = new Set(pathEdgesRef.current.map(e => e.id))
+        const activePathNodes = new Set(pathNodesRef.current)
+        for (const [key, val] of pathProgressRef.current) {
+          if (!activePathEdges.has(key) && !activePathNodes.has(key)) {
+            dirty = true
+            const next = val + (0 - val) * pathEasing
+            if (Math.abs(next) < 0.001) pathProgressRef.current.delete(key)
+            else pathProgressRef.current.set(key, next)
+          }
         }
       }
 
@@ -795,6 +862,15 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
 
       // Rien n'a changé : on ne redessine pas
       if (!dirty) { rafId = requestAnimationFrame(animate); return }
+
+      // Positions animées, calculées seulement quand on redessine
+      const posMap = new Map()
+      layoutData.children.forEach(node => {
+        posMap.set(node.id, getAnimatedPos(node, timestamp))
+      })
+
+      const nodeMap = new Map()
+      layoutData.children.forEach(n => nodeMap.set(n.id, n))
 
       // === RENDU ===
       const ctx = canvas.getContext('2d')
@@ -1031,6 +1107,25 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     />
     {displayLabel && (
       <div className="path-label-overlay">{displayLabel}</div>
+    )}
+    {familyTabs && tabs.length > 1 && (
+      <nav ref={tabsBarRef} onScroll={updateTabsEdges} className={`family-tabs${annotationHandlers ? ' family-tabs--lowered' : ''}${tabsEdges}`} aria-label={tr('Familles')}>
+        {tabs.map((tb) => {
+          const active = tb.key === (tabs.some((x) => x.key === activeKey) ? activeKey : tabs[0].key)
+          return (
+            <button
+              key={tb.key}
+              type="button"
+              className={`family-tab${active ? ' is-active' : ''}`}
+              aria-current={active ? 'page' : undefined}
+              onClick={() => setActiveKey(tb.key)}
+            >
+              <span className="family-tab-name">{tb.label ? tr('Famille {name}', { name: tb.label }) : tr('Famille')}</span>
+              <span className="family-tab-count">{tb.count}</span>
+            </button>
+          )
+        })}
+      </nav>
     )}
     </>
   )

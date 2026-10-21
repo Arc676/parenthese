@@ -1,3 +1,6 @@
+// Identifiant des couples « séparés » créés par le placement (deux parents sans union enregistrée)
+export const SEPARATED_PAIR_PREFIX = 'pair:'
+
 // --- Constantes visuelles ---
 export const PERSON_W = 120
 export const PERSON_H = 120
@@ -13,8 +16,6 @@ export const COMPACT_SCALE = 0.6
 export const COMPACT_R = PERSON_R * COMPACT_SCALE
 export const COMPACT_W = 40
 export const COMPACT_JOIN_GAP = -18
-// Filiation qui traverse l'arbre (enfant placé sous l'autre lignée) : renvoi cliquable au lieu du trait
-export const RENVOI_MIN_DX = 360
 export const MAX_ORBIT_MEDIAS = 3
 export const ORBIT_RADIUS = 55
 export const ORBIT_MEDIA_SIZE = 22

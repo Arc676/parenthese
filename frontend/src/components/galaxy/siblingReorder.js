@@ -1,5 +1,6 @@
 // Réordonner une fratrie dans l'arbre : logique pure (sans canvas ni React), testée à part.
 // Une fratrie = les enfants reliés à une même source (union `u-…` ou parent seul `vu-…`).
+import { SEPARATED_PAIR_PREFIX } from './constants'
 
 const centerOf = (node) => node.x + node.width / 2
 
@@ -68,7 +69,10 @@ function filiationsOf(filiations, unions, source, childId) {
   if (source.startsWith('u-')) {
     const unionId = source.slice(2)
     const union = unions.find((u) => String(u.id) === unionId)
-    const partners = union ? [union.partner1Id, union.partner2Id].filter((id) => id != null).map(String) : []
+    // Couple « séparé » propre au dessin (elkLayout) : ses deux partenaires sont dans l'identifiant
+    const partners = union
+      ? [union.partner1Id, union.partner2Id].filter((id) => id != null).map(String)
+      : unionId.startsWith(SEPARATED_PAIR_PREFIX) ? unionId.slice(SEPARATED_PAIR_PREFIX.length).split(':') : []
     const viaUnion = filiations.filter((f) => sameChild(f) && String(f.unionId) === unionId)
     // Union reconstituée par le placement : deux liens directs vers chacun des partenaires
     return viaUnion.length ? viaUnion : filiations.filter((f) => sameChild(f) && !f.unionId && partners.includes(String(f.parentId)))

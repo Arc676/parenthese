@@ -35,10 +35,10 @@
 .pc-hidden-input { display: none; }
 
 /* ── En-tête ── */
-.pc-head { display: flex; gap: 16px; align-items: flex-start; padding-right: 36px; }
-.pc-photo-wrap { display: grid; gap: 8px; justify-items: center; flex: none; }
+.pc-head { --pc-name-h: 42px; --pc-name-gap: 6px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px 16px; align-items: start; padding-right: 36px; }
+.pc-photo-wrap { position: relative; display: grid; gap: 8px; justify-items: center; flex: none; }
 .pc-photo {
-  width: 84px; height: 84px; border-radius: 24%; overflow: hidden;
+  position: relative; width: 84px; height: 84px; border-radius: 24%; overflow: hidden;
   background: var(--pz-a100); box-shadow: 0 0 0 1px rgba(42, 38, 34, .06), var(--pz-shadow);
   display: grid; place-items: center;
 }
@@ -54,21 +54,36 @@
 .pc-photo--add:active:not(:disabled) { transform: scale(.97); }
 .pc-photo--add:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 3px; }
 .pc-photo--add:disabled { opacity: .6; cursor: default; }
-.pc-photo-actions { display: grid; gap: 4px; justify-items: center; }
 /* Menu du choix de source du portrait : au-dessus de la fiche (z-index 1000), sous la modale Immich (2200) */
 .pc-source-backdrop { position: fixed; inset: 0; z-index: 1100; }
 .pc-source-menu { position: fixed; z-index: 1150; min-width: 220px; }
-.pc-photo-btn {
-  border: 0; background: none; padding: 2px 4px; cursor: pointer;
-  font: 500 12px var(--pz-sans); color: var(--pz-a700); text-decoration: underline; text-underline-offset: 2px;
+/* Mode modification : le portrait prend la hauteur des deux champs Prénom et Nom (écart compris) et reste carré */
+.person-card--edit-mode .pc-id { padding-top: 0; }
+.person-card--edit-mode .pc-photo-wrap { display: block; }
+/* Taille fixée par les champs, pas par le contenu : une vraie photo a une taille propre qui faisait grandir le portrait */
+.person-card--edit-mode .pc-photo-wrap > .pc-photo { --pc-photo-edit: calc(var(--pc-name-h) * 2 + var(--pc-name-gap)); width: var(--pc-photo-edit); height: var(--pc-photo-edit); }
+
+.pc-photo-badge {
+  position: absolute; right: -6px; bottom: -6px; z-index: 1;
+  width: 30px; height: 30px; display: grid; place-items: center; padding: 0;
+  border: 0; border-radius: 50%; background: #fff; color: var(--pz-ink-2); cursor: pointer;
+  box-shadow: 0 0 0 1px rgba(42, 38, 34, .06), var(--pz-shadow);
+  transition: transform 140ms var(--pz-ease), background-color 160ms ease;
+  -webkit-tap-highlight-color: transparent;
 }
-.pc-photo-btn--danger { color: var(--pz-danger); }
-.pc-photo-btn:disabled { opacity: .5; cursor: default; }
+@media (hover: hover) and (pointer: fine) { .pc-photo-badge:hover:not(:disabled) { background: var(--pz-a50); color: var(--pz-a700); } }
+.pc-photo-badge:active:not(:disabled) { transform: scale(.94); }
+.pc-photo-badge:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 2px; }
+.pc-photo-badge:disabled { opacity: .5; cursor: default; }
 
 .pc-id { display: grid; gap: 6px; min-width: 0; padding-top: 4px; }
 .pc-name { margin: 0; font: 400 28px/1.08 var(--pz-serif); letter-spacing: -.01em; color: var(--pz-ink); text-wrap: balance; }
 .pc-name em { font-style: italic; font-weight: 300; }
-.pc-life { margin: 0; font: 400 13.5px/1.4 var(--pz-sans); color: var(--pz-muted); }
+.pc-meta { margin: 0; font: 400 13.5px/1.5 var(--pz-sans); color: var(--pz-muted); text-wrap: pretty; }
+.pc-meta-item { display: inline; }
+.pc-meta-item--nowrap { white-space: nowrap; }
+.pc-nick { font: italic 300 15.5px/1 var(--pz-serif); color: var(--pz-ink-2); }
+.pc-meta-sep { margin: 0 .45em; color: var(--pz-faint); }
 .pc-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .pc-chips:empty { display: none; }
 /* Place dans la fratrie (mode édition) : ‹ 2 sur 3 › dans une pastille */
@@ -87,7 +102,7 @@
   .pc-order-btn:hover:not(:disabled) { background: var(--pz-line-soft); color: var(--pz-ink); }
 }
 @media (pointer: coarse) { .pc-order-btn { width: 32px; height: 32px; } }
-.pc-name-edit { display: grid; gap: 6px; }
+.pc-name-edit { display: grid; gap: var(--pc-name-gap); }
 
 /* ── Champs d'édition ── */
 .pc-input {
@@ -98,12 +113,15 @@
 }
 .pc-input:focus { outline: none; border-color: var(--pz-a500); box-shadow: 0 0 0 3px var(--pz-a100); }
 .pc-input::placeholder { color: var(--pz-faint); }
-.pc-input--name { font: 400 20px/1.2 var(--pz-serif); min-height: 42px; }
+.pc-input--name { font: 400 20px/1.2 var(--pz-serif); min-height: var(--pc-name-h); }
 .pc-input--last { font-style: italic; }
 .pc-note-input { min-height: 88px; resize: vertical; }
 
 /* ── Onglets et corps ── */
 .pc-tabs { flex: none; }
+/* Quatre onglets en modification (Liens en plus) : « Souvenirs · 3 » ne passe jamais à la ligne, il prend la place
+   que les onglets courts lui laissent */
+.pc-tabs .pz-tab { flex: 1 1 auto; padding: 0 10px; white-space: nowrap; }
 .pc-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0 -6px; padding: 0 6px 2px; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--pz-line) transparent; }
 .pc-inline-msg { font: 500 13px/1.45 var(--pz-sans); }
 .pc-inline-msg--loading { padding: 10px 12px; border-radius: var(--pz-r-s); background: var(--pz-bg); color: var(--pz-muted); }
@@ -237,8 +255,15 @@
     left: 0; right: 0; bottom: 0; width: auto;
     max-height: 78dvh; padding: 10px 18px calc(18px + env(safe-area-inset-bottom));
     border-radius: 26px 26px 0 0; border-bottom: 0;
-    animation: pc-sheet 400ms var(--pz-ease-drawer) both;
+    /* Pas de fill-mode « both » : une fois l'entrée finie, le glisser (style inline) reprend la main sur transform */
+    animation: pc-sheet 400ms var(--pz-ease-drawer) backwards;
+    transition: transform 240ms var(--pz-ease-drawer);
   }
+  /* Pendant le glisser, la feuille suit le doigt sans transition */
+  .person-card[data-dragging] { transition: none; }
+  /* La poignée et l'en-tête portent le geste : le navigateur ne doit pas le prendre pour un défilement (les champs gardent le leur) */
+  .person-card .pc-grab, .person-card .pc-close, .person-card .pc-head { touch-action: none; }
+  .person-card .pc-head :is(input, textarea, select, label, [contenteditable]) { touch-action: auto; }
   .pc-grab { display: block; width: 38px; height: 4px; margin: 0 auto 2px; border-radius: 4px; background: var(--pz-line); flex: none; }
   .pc-close { top: 10px; right: 10px; }
   .pc-photo { width: 68px; height: 68px; }
@@ -248,4 +273,31 @@
 
 @media (prefers-reduced-motion: reduce) {
   .person-card { animation: pz-fade 200ms ease both; }
+  .person-card { transition-duration: 1ms; }
 }
+
+/* Prénom inconnu (issue Anaïs, 18/10) : libellé en italique, case à cocher sous les champs de nom */
+.pc-name-unknown { font-style: italic; font-weight: 300; }
+.pc-unknown-first { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin: -4px 0 0; font: 400 12.5px var(--pz-sans); color: var(--pz-ink-2); cursor: pointer; white-space: nowrap; }
+.pc-unknown-first input { width: 15px; height: 15px; accent-color: var(--pz-a500); }
+.pc-name-error { margin: 6px 0 0; font: 500 12.5px var(--pz-sans); color: var(--pz-danger); }
+.pc-save-error { margin: 0; font: 500 12.5px/1.4 var(--pz-sans); color: var(--pz-danger); }
+
+/* Modification de l'onglet Infos : pastilles des champs vides (DA terracotta, sans nouvelle couleur) */
+.pc-fill-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.pc-fill-chip { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px dashed var(--pz-a300); background: var(--pz-a50); color: var(--pz-a700); font: 500 13px var(--pz-sans); cursor: pointer; }
+@media (hover: hover) and (pointer: fine) { .pc-fill-chip:hover { background: var(--pz-a100); border-color: var(--pz-a500); } }
+.pc-fill-chip:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 2px; }
+
+/* Liens : parents adoptifs, réglage de la filiation */
+.pc-section-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+.pc-adopt-tag { font: 500 12px var(--pz-sans); color: var(--pz-a700); background: var(--pz-a50); border: 1px solid var(--pz-a300); border-radius: 999px; padding: 1px 9px; }
+.pc-parentage { display: grid; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--pz-line-soft); }
+.pc-seg { width: 100%; }
+.pc-seg .pz-tab { flex: 1; }
+/* Sexe (issue #114) : étiquette au-dessus, trois choix sur toute la largeur, chacun sur une ligne */
+.pc-row--seg { flex-direction: column; align-items: stretch; gap: 6px; }
+.pc-row--seg .pz-tab { white-space: nowrap; padding: 0 8px; }
+
+/* Titres de section de l'onglet Infos et Liens : casse normale, Newsreader 15 px, comme la maquette (.sec) */
+.pc-infos .pz-eyebrow { text-transform: none; letter-spacing: 0; font: 400 15px/1.3 var(--pz-serif); color: var(--pz-ink); }

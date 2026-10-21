@@ -67,9 +67,12 @@
 .contrib-invite-passwords { display: grid; gap: 6px; }
 .contrib-pass-hint { margin: 2px 4px 0; font: 400 12.5px/1.45 var(--pz-sans); color: var(--pz-muted); }
 .contrib-invite-message { display: grid; gap: 8px; }
+.contrib-invite-message-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; }
+.contrib-invite-message-label { font: 500 12.5px var(--pz-sans); color: var(--pz-muted); }
+.contrib-link-btn { border: 0; padding: 4px 2px; background: none; cursor: pointer; font: 500 12.5px var(--pz-sans); color: var(--pz-a700); text-decoration: underline; text-underline-offset: 2px; }
+.contrib-link-btn:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 2px; border-radius: 4px; }
 .contrib-invite-textarea { width: 100%; box-sizing: border-box; padding: 12px 14px; background: var(--pz-surface); border: 1px solid var(--pz-line); border-radius: var(--pz-r-m); font: 400 13.5px/1.5 var(--pz-sans); color: var(--pz-ink-2); resize: vertical; outline: none; field-sizing: content; min-height: 9.5lh; }
 .contrib-invite-textarea:focus { border-color: var(--pz-a500); box-shadow: 0 0 0 3px var(--pz-a100); }
-.contrib-invite-message-actions { display: flex; justify-content: flex-end; }
 .contrib-role-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 8px 8px 12px; background: var(--pz-surface); border: 1px solid var(--pz-line); border-radius: var(--pz-r-m); }
 .contrib-role-badge { display: grid; gap: 1px; min-width: 130px; flex: 1; }
 .contrib-role-badge strong { font: 500 14px var(--pz-sans); color: var(--pz-ink); }

@@ -4,6 +4,8 @@ import { UserPlus, X, Search, ChevronDown } from 'lucide-react'
 import './AddPersonPanel.css'
 import PzBusy from './PzBusy.jsx'
 import { t } from '../i18n/index.js'
+import { firstNameLabel } from '../utils/personName.js'
+import { SEX_CHOICES } from '../utils/personSex.js'
 
 // Titre traduit d'un bloc : le passage entre <em> et </em> garde son italique
 function withEmphasis(text) {
@@ -32,12 +34,18 @@ function withEmphasis(text) {
  */
 function AddPersonPanel({ visible, persons = [], loading = false, error = '', onSubmit, onClose }) {
   const [firstName, setFirstName] = useState('')
+  // Prénom inconnu : enregistré vide, affiché « Prénom inconnu » dans l'arbre et la fiche
+  const [unknownFirstName, setUnknownFirstName] = useState(false)
   const [lastName, setLastName] = useState('')
   const [birthName, setBirthName] = useState('')
+  const [nickname, setNickname] = useState('')
+  const [sex, setSex] = useState(null)
   const [birthDate, setBirthDate] = useState('')
   const [deathDate, setDeathDate] = useState('')
   // Décédé(e) sans date connue (issue #77)
   const [isDeceased, setIsDeceased] = useState(false)
+  // Lien d'enfant ou de parent : la personne qui est l'enfant du lien a été adoptée
+  const [adopted, setAdopted] = useState(false)
   // Les champs de date gardent leur texte : on les recrée après chaque ajout
   const [dateFieldsKey, setDateFieldsKey] = useState(0)
   const [relations, setRelations] = useState([])
@@ -45,6 +53,8 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
   const [relationDropdownOpen, setRelationDropdownOpen] = useState(false)
   const [selectedRelationType, setSelectedRelationType] = useState('parent')
   const [touched, setTouched] = useState({})
+  // Prénom inconnu sans nom de famille : la personne n'aurait aucun nom
+  const [lastNameMissing, setLastNameMissing] = useState(false)
   const [justAdded, setJustAdded] = useState(false)
 
   const firstNameRef = useRef(null)
@@ -89,14 +99,18 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
   useEffect(() => {
     if (justAdded && !loading && !error) {
       setFirstName('')
+      setUnknownFirstName(false)
       setLastName('')
       setBirthName('')
+      setNickname('')
+      setSex(null)
       setBirthDate('')
       setDeathDate('')
       setIsDeceased(false)
       setDateFieldsKey((k) => k + 1)
       setRelations([])
       setTouched({})
+      setLastNameMissing(false)
       setJustAdded(false)
       firstNameRef.current?.focus()
     }
@@ -114,7 +128,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
 
     setRelations((prev) => [
       ...prev,
-      { personId: person.id, personName: `${person.firstName} ${person.lastName || ''}`.trim(), type: selectedRelationType },
+      { personId: person.id, personName: `${firstNameLabel(person)} ${person.lastName || ''}`.trim(), type: selectedRelationType },
     ])
     setRelationSearch('')
     setRelationDropdownOpen(false)
@@ -127,26 +141,32 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
   const handleSubmit = (e) => {
     e.preventDefault()
 
-    if (!firstName.trim()) {
+    if (!unknownFirstName && !firstName.trim()) {
       setTouched({ firstName: true })
       firstNameRef.current?.focus()
+      return
+    }
+
+    if (unknownFirstName && !lastName.trim()) {
+      setLastNameMissing(true)
       return
     }
 
     setJustAdded(true)
 
     onSubmit({
-      firstName: firstName.trim(),
+      firstName: unknownFirstName ? '' : firstName.trim(),
       lastName: lastName.trim(),
       birthName: birthName.trim() || null,
+      nickname: nickname.trim() || null,
+      sex,
       birthDate: birthDate || null,
       deathDate: deathDate || null,
       isDeceased: !deathDate && isDeceased,
-      relations,
+      // Adopté(e) : s'applique aux liens d'enfant ou de parent de cette fiche
+      relations: relations.map((rel) => ({ ...rel, adopted: adopted && (rel.type === 'child' || rel.type === 'parent') })),
     })
   }
-
-  const isValid = firstName.trim().length > 0
 
   const relationTypeLabels = {
     parent: t('Parent de'),
@@ -171,7 +191,6 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
     >
       <div className="apn-head">
         <div className="pz-modal-head">
-          <p className="pz-eyebrow">{t('Nouvelle fiche')}</p>
           <h2 id="addPersonTitle" className="pz-title">{withEmphasis(t("Ajouter <em>quelqu'un</em>"))}</h2>
         </div>
         <button type="button" className="pz-btn pz-btn--ghost pz-btn--icon apn-close" onClick={onClose} aria-label={t('Fermer')}>
@@ -188,30 +207,49 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
                 ref={firstNameRef}
                 id="ap-firstName"
                 type="text"
-                className={touched.firstName && !firstName.trim() ? 'apn-input--error' : ''}
+                className={touched.firstName && !unknownFirstName && !firstName.trim() ? 'apn-input--error' : ''}
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-                onBlur={() => setTouched((prev) => ({ ...prev, firstName: true }))}
                 placeholder={t('Marie')}
                 autoComplete="off"
-                aria-invalid={touched.firstName && !firstName.trim()}
+                disabled={unknownFirstName}
+                aria-invalid={touched.firstName && !unknownFirstName && !firstName.trim()}
               />
             </div>
+            {/* Visible tant que le prénom est vide, et tant qu'elle est cochée (pour pouvoir la décocher).
+                Hors de la colonne Prénom pour tenir sur une ligne : sous les deux champs sur ordinateur, sous Prénom sur téléphone */}
+            {(!firstName.trim() || unknownFirstName) && (
+              <label className="apn-deceased apn-row-check">
+                <input
+                  type="checkbox"
+                  checked={unknownFirstName}
+                  onChange={(e) => {
+                    setUnknownFirstName(e.target.checked)
+                    setTouched({})
+                  }}
+                />
+                {t('Je ne connais pas son prénom')}
+              </label>
+            )}
             <div className="pz-field">
               <label htmlFor="ap-lastName">{t('Nom')}</label>
               <input
                 id="ap-lastName"
                 type="text"
                 value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
+                onChange={(e) => {
+                  setLastName(e.target.value)
+                  setLastNameMissing(false)
+                }}
                 placeholder={t('Dupont')}
                 autoComplete="off"
               />
             </div>
           </div>
-          {touched.firstName && !firstName.trim() && (
+          {touched.firstName && !unknownFirstName && !firstName.trim() && (
             <p className="apn-error-text">{t('Il faut au moins un prénom.')}</p>
           )}
+          {lastNameMissing && <p className="apn-error-text">{t('Il faut au moins un nom si le prénom est inconnu.')}</p>}
 
           <div className="pz-field">
             <label htmlFor="ap-birthName">{t('Nom de naissance')} <span className="apn-optional">{t('si différent')}</span></label>
@@ -225,6 +263,36 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
             />
           </div>
 
+          <div className="pz-field">
+            <label htmlFor="ap-nickname">{t('Surnom')} <span className="apn-optional">{t('facultatif')}</span></label>
+            <input
+              id="ap-nickname"
+              type="text"
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              placeholder={t('Loulou')}
+              autoComplete="off"
+              maxLength={120}
+            />
+          </div>
+
+          <div className="pz-field">
+            <span className="pz-label" id="ap-sex-label">{t('Sexe')} <span className="apn-optional">{t('facultatif')}</span></span>
+            <div className="pz-tabs apn-types apn-sex" role="group" aria-labelledby="ap-sex-label">
+              {SEX_CHOICES.map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={sex === value}
+                  className={`pz-tab ${sex === value ? 'is-active' : ''}`}
+                  onClick={() => setSex(sex === value ? null : value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="pz-row2 apn-row">
             <div className="pz-field">
               <label htmlFor="ap-birthDate">{t('Naissance')}</label>
@@ -233,17 +301,18 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
             <div className="pz-field">
               <label htmlFor="ap-deathDate">{t('Décès')}</label>
               <DateField key={`d-${dateFieldsKey}`} id="ap-deathDate" value={deathDate} onChange={setDeathDate} />
-              {!deathDate && (
-                <label className="apn-deceased">
-                  <input type="checkbox" checked={isDeceased} onChange={(e) => setIsDeceased(e.target.checked)} />
-                  {t('Décédé(e), date inconnue')}
-                </label>
-              )}
             </div>
+            {/* Hors de la colonne Décès pour tenir sur une ligne, comme la case du prénom */}
+            {!deathDate && (
+              <label className="apn-deceased apn-row-check">
+                <input type="checkbox" checked={isDeceased} onChange={(e) => setIsDeceased(e.target.checked)} />
+                {sex === 'male' ? t('Décédé, date inconnue') : sex === 'female' ? t('Décédée, date inconnue') : t('Décédé(e), date inconnue')}
+              </label>
+            )}
           </div>
 
           <section className="apn-section">
-            <h3 className="pz-eyebrow">{t('Place dans la famille')}</h3>
+            <h3 className="apn-section-title">{t('Place dans la famille')}</h3>
 
             <div className="pz-tabs apn-types" role="radiogroup" aria-label={t('Type de lien')}>
               {Object.entries(relationTypeTabs).map(([type, label]) => (
@@ -285,9 +354,9 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
                     <li key={p.id}>
                       <button type="button" className="apn-dropdown-item" onClick={() => handleAddRelation(p)}>
                         <span className="apn-avatar" aria-hidden="true">
-                          {p.photo ? <img src={p.photo} alt="" /> : (p.firstName || '?').charAt(0)}
+                          {p.photo ? <img src={p.photo} alt="" /> : (p.firstName || '').trim().charAt(0) || '?'}
                         </span>
-                        <span className="apn-dropdown-name">{p.firstName} <em>{p.lastName || ''}</em></span>
+                        <span className="apn-dropdown-name">{firstNameLabel(p)} <em>{p.lastName || ''}</em></span>
                         {(p.birthYear || p.birthDate) && (
                           <span className="apn-dropdown-date">{p.birthYear || String(p.birthDate).slice(0, 4)}</span>
                         )}
@@ -297,6 +366,13 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
                 </ul>
               )}
             </div>
+
+            {(selectedRelationType === 'child' || selectedRelationType === 'parent') && (
+              <label className="apn-deceased">
+                <input type="checkbox" checked={adopted} onChange={(e) => setAdopted(e.target.checked)} />
+                {sex === 'male' ? t('Adopté') : sex === 'female' ? t('Adoptée') : t('Adopté(e)')}
+              </label>
+            )}
 
             {relations.length > 0 && (
               <div className="apn-links">
@@ -325,7 +401,9 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
           <button type="button" className="pz-btn pz-btn--ghost" onClick={onClose}>
             {t('Annuler')}
           </button>
-          <button type="submit" className="pz-btn pz-btn--primary" disabled={!isValid || loading}>
+          {/* Toujours actif : sans prénom, l'appui le dit et ramène au champ (le dire dès qu'on quittait le prénom
+              affichait une erreur avant même d'avoir rempli la fiche) */}
+          <button type="submit" className="pz-btn pz-btn--primary" disabled={loading}>
             <UserPlus size={16} strokeWidth={2} />
             <PzBusy busy={loading} busyLabel={t('Ajout en cours')}>{t('Ajouter cette personne')}</PzBusy>
           </button>

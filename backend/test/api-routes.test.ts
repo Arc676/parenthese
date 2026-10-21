@@ -80,6 +80,9 @@ const { prismaMock } = vi.hoisted(() => ({
     },
     annotation: {
       findMany: vi.fn(),
+      count: vi.fn().mockResolvedValue(0),
+      create: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     contributionSession: {
       create: vi.fn(),
@@ -488,7 +491,7 @@ describe('Graph routes', () => {
     prismaMock.person.findMany.mockResolvedValue([
       { ...base, id: 'p-1', firstName: 'Louis', lastName: 'Ragot', sex: 'male', birthDate: new Date('1879-01-01T00:00:00Z'), birthDatePrecision: 'about', birthPlace: 'La Roche-sur-Yon', deathDate: new Date('1950-05-02T00:00:00Z'), deathPlace: 'Nantes', nickname: 'Loulou', profession: 'Instituteur' },
       { ...base, id: 'p-2', firstName: 'Marie', lastName: 'Bodin', sex: 'female', birthDate: null, birthDatePrecision: null, birthPlace: null, isDeceased: true },
-      { ...base, id: 'p-3', firstName: 'Jean', lastName: 'Ragot', sex: 'male', birthDate: null, birthDatePrecision: null, birthPlace: null },
+      { ...base, id: 'p-3', firstName: 'Jean', lastName: 'Ragot', sex: 'M', birthDate: null, birthDatePrecision: null, birthPlace: null },
     ])
     prismaMock.union.findMany.mockResolvedValue([
       { id: 'u-1', partner1PersonId: 'p-1', partner2PersonId: 'p-2', startDate: new Date('1905-01-01T00:00:00Z'), startDatePrecision: 'estimated', startPlace: 'Limoges', endDate: null },
@@ -515,6 +518,8 @@ describe('Graph routes', () => {
     expect(text).toContain('2 PEDI adopted')
     // Décédée sans date (issue #77) : la forme courte de la norme
     expect(text).toContain('1 NAME Marie /Bodin/\n1 SEX F\n1 DEAT Y\n')
+    // Ancienne écriture « M » en base : exportée comme un homme (issue #114)
+    expect(text).toContain('1 NAME Jean /Ragot/\n1 SEX M\n')
 
     const roots = parseGedcom(text)
     const records = indexGedcomRecords(roots)
@@ -753,6 +758,198 @@ describe('Moments de l’onglet Vie', () => {
   })
 })
 
+describe('Écritures en plusieurs temps : tout passe par une transaction', () => {
+  // Le client de la transaction est un autre objet que app.prisma : une écriture faite hors transaction se voit
+  const txClient = () => ({
+    annotation: { create: vi.fn().mockResolvedValue({ id: 'a' }), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    mediaItem: { updateMany: vi.fn().mockResolvedValue({ count: 1 }), findMany: vi.fn().mockResolvedValue([]), update: vi.fn() },
+    lifeEvent: { create: vi.fn().mockResolvedValue({ id: 'e-1', status: 'approved' }), update: vi.fn(), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    contributionSession: { create: vi.fn() },
+    contributionChange: { create: vi.fn() },
+    auditLog: { create: vi.fn() },
+  })
+
+  it('lot d’annotations : créations, modifications, suppressions et trace dans la même transaction', async () => {
+    const app = createApp()
+    const auth = { authorization: `Bearer ${await createUserToken(app)}` }
+    const tx = txClient()
+    prismaMock.$transaction.mockImplementationOnce(async (callback: (client: unknown) => Promise<unknown>) => callback(tx))
+
+    const response = await app.inject({
+      method: 'POST', url: '/trees/tree-1/annotations/batch', headers: auth,
+      payload: { create: [{ type: 'text', x: 0, y: 0, content: 'Été 1952' }, { type: 'text', x: 1, y: 1, content: 'Noël' }], update: [{ id: 'a-1', x: 5 }], delete: ['a-2'] },
+    })
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({ ok: true, created: 2, updated: 1, deleted: 1 })
+    expect(tx.annotation.create).toHaveBeenCalledTimes(2)
+    expect(tx.annotation.updateMany).toHaveBeenCalledTimes(2)
+    expect(tx.auditLog.create).toHaveBeenCalledTimes(1)
+    expect(prismaMock.annotation.create).not.toHaveBeenCalled()
+    expect(prismaMock.annotation.updateMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('lot d’annotations : une erreur au milieu fait échouer toute la transaction', async () => {
+    const app = createApp()
+    const auth = { authorization: `Bearer ${await createUserToken(app)}` }
+    const tx = txClient()
+    tx.annotation.create.mockResolvedValueOnce({ id: 'a' }).mockRejectedValueOnce(new Error('base indisponible'))
+    prismaMock.$transaction.mockImplementationOnce(async (callback: (client: unknown) => Promise<unknown>) => callback(tx))
+
+    const response = await app.inject({
+      method: 'POST', url: '/trees/tree-1/annotations/batch', headers: auth,
+      payload: { create: [{ type: 'text', x: 0, y: 0, content: 'a' }, { type: 'text', x: 1, y: 1, content: 'b' }] },
+    })
+    expect(response.statusCode).toBe(500)
+    expect(tx.auditLog.create).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('réordonner les souvenirs : positions, renumérotation et trace dans la même transaction', async () => {
+    const app = createApp()
+    const auth = { authorization: `Bearer ${await createUserToken(app)}` }
+    const tx = txClient()
+    prismaMock.mediaItem.findMany.mockResolvedValueOnce([{ id: 'm-1' }, { id: 'm-2' }])
+    prismaMock.$transaction.mockImplementationOnce(async (callback: (client: unknown) => Promise<unknown>) => callback(tx))
+
+    const response = await app.inject({
+      method: 'PATCH', url: '/trees/tree-1/persons/person-1/media/reorder', headers: auth,
+      payload: { orderedMediaIds: ['m-2', 'm-1'] },
+    })
+    expect(response.statusCode).toBe(200)
+    expect(tx.mediaItem.updateMany).toHaveBeenCalledTimes(2)
+    expect(tx.auditLog.create).toHaveBeenCalledTimes(1)
+    expect(prismaMock.mediaItem.updateMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('moment : création et rattachement des souvenirs dans la même transaction', async () => {
+    const app = createApp()
+    const auth = { authorization: `Bearer ${await createUserToken(app)}` }
+    const tx = txClient()
+    prismaMock.mediaItem.count.mockResolvedValue(1)
+    prismaMock.$transaction.mockImplementationOnce(async (callback: (client: unknown) => Promise<unknown>) => callback(tx))
+
+    const response = await app.inject({
+      method: 'POST', url: '/trees/tree-1/persons/person-1/life/events', headers: auth,
+      payload: { label: 'Départ pour Paris', mediaIds: ['m-1'] },
+    })
+    expect(response.statusCode).toBe(201)
+    expect(tx.lifeEvent.create).toHaveBeenCalledTimes(1)
+    expect(tx.mediaItem.updateMany).toHaveBeenCalledWith({ where: { treeId: 'tree-1', id: { in: ['m-1'] } }, data: { lifeEventId: 'e-1' } })
+    expect(prismaMock.lifeEvent.create).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('la famille ne prend que des souvenirs libres, l’administrateur peut déplacer un souvenir d’un moment à l’autre', async () => {
+    const app = createApp()
+    const auth = { authorization: `Bearer ${await createUserToken(app)}` }
+    const post = () => app.inject({ method: 'POST', url: '/trees/tree-1/persons/person-1/life/events', headers: auth, payload: { label: 'Communion', mediaIds: ['m-1'] } })
+    prismaMock.mediaItem.count.mockResolvedValue(1)
+    prismaMock.lifeEvent.create.mockResolvedValue({ id: 'e-1', status: 'approved' })
+
+    expect((await post()).statusCode).toBe(201)
+    expect(prismaMock.mediaItem.count.mock.calls.at(-1)[0].where).not.toHaveProperty('lifeEventId')
+
+    prismaMock.treeMembership.findUnique.mockResolvedValue({ role: 'member', tree: { deletedAt: null, settings: null } })
+    prismaMock.contributionSession.create.mockResolvedValue({ id: 's-1' })
+    expect((await post()).statusCode).toBe(201)
+    expect(prismaMock.mediaItem.count.mock.calls.at(-1)[0].where).toMatchObject({ lifeEventId: null })
+    await app.close()
+  })
+})
+
+describe('Import GEDCOM', () => {
+  it('une personne des deux côtés d’une union garde un seul partenaire, une boucle parent-enfant est refusée', async () => {
+    const app = createApp()
+    const auth = { authorization: `Bearer ${await createUserToken(app)}` }
+    prismaMock.person.findMany.mockResolvedValue([])
+    prismaMock.union.findMany.mockResolvedValue([])
+    prismaMock.parentChildLink.findMany.mockResolvedValue([])
+    prismaMock.parentChildLink.findFirst.mockResolvedValue(null)
+    prismaMock.person.create.mockImplementation(async ({ data }: { data: { firstName: string } }) => ({ id: `p-${data.firstName}` }))
+    let unionCount = 0
+    prismaMock.union.create.mockImplementation(async () => ({ id: `u-${++unionCount}` }))
+
+    const content = [
+      '0 HEAD',
+      '0 @I1@ INDI', '1 NAME Jean /Martin/',
+      '0 @I2@ INDI', '1 NAME Paul /Martin/',
+      // Jean marié à lui-même (fichier abîmé)
+      '0 @F1@ FAM', '1 HUSB @I1@', '1 WIFE @I1@',
+      // Paul enfant de Jean, puis Jean enfant de Paul : la seconde famille ferait une boucle
+      '0 @F2@ FAM', '1 HUSB @I1@', '1 CHIL @I2@',
+      '0 @F3@ FAM', '1 HUSB @I2@', '1 CHIL @I1@',
+      '0 TRLR',
+    ].join('\n')
+    const response = await app.inject({ method: 'POST', url: '/trees/tree-1/import/gedcom', headers: auth, payload: { content } })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toMatchObject({ personsCreated: 2, linksCreated: 1, relationsSkipped: 2 })
+    expect(prismaMock.union.create.mock.calls[0][0].data).toMatchObject({ partner1PersonId: 'p-Jean', partner2PersonId: null })
+    expect(prismaMock.parentChildLink.create).toHaveBeenCalledTimes(1)
+    expect(prismaMock.parentChildLink.create.mock.calls[0][0].data).toMatchObject({ parentPersonId: 'p-Jean', childPersonId: 'p-Paul' })
+    await app.close()
+  })
+})
+
+describe('Sexe dans le GEDCOM (issue #114)', () => {
+  const importer = async (app: FastifyInstance, content: string) => {
+    const auth = { authorization: `Bearer ${await createUserToken(app)}` }
+    prismaMock.person.findMany.mockResolvedValue([])
+    prismaMock.union.findMany.mockResolvedValue([])
+    prismaMock.parentChildLink.findMany.mockResolvedValue([])
+    prismaMock.person.create.mockImplementation(async ({ data }: { data: { firstName: string } }) => ({ id: `p-${data.firstName}` }))
+    prismaMock.person.create.mockClear()
+    const response = await app.inject({ method: 'POST', url: '/trees/tree-1/import/gedcom', headers: auth, payload: { content } })
+    expect(response.statusCode).toBe(200)
+    return Object.fromEntries(prismaMock.person.create.mock.calls.map((call: [{ data: { firstName: string; sex: string | null } }]) => [call[0].data.firstName, call[0].data.sex]))
+  }
+
+  it('import : M, F, X (GEDCOM 7), U et absent donnent male, female, other, null, null', async () => {
+    const app = createApp()
+    const content = [
+      '0 HEAD',
+      '0 @I1@ INDI', '1 NAME Jean /Martin/', '1 SEX M',
+      '0 @I2@ INDI', '1 NAME Marie /Martin/', '1 SEX F',
+      '0 @I3@ INDI', '1 NAME Camille /Martin/', '1 SEX X',
+      '0 @I4@ INDI', '1 NAME Dominique /Martin/', '1 SEX U',
+      '0 @I5@ INDI', '1 NAME Claude /Martin/',
+      '0 TRLR',
+    ].join('\n')
+    expect(await importer(app, content)).toEqual({ Jean: 'male', Marie: 'female', Camille: 'other', Dominique: null, Claude: null })
+    await app.close()
+  })
+
+  it('aller-retour : other sort en SEX U (GEDCOM 5.5.1), non précisé sans ligne SEX, le reste se relit à l’identique', async () => {
+    const app = createApp()
+    await app.ready()
+    const token = (app as any).jwt.sign({ kind: 'tree_access', sub: 'tree:tree-1:visitor', treeId: 'tree-1', role: 'visitor', accessVersion: new Date('2026-02-11T10:00:00.000Z').getTime() })
+    const base = { lastName: 'Martin', birthDate: null, birthDatePrecision: null, birthPlace: null, birthDateEnd: null, deathDateEnd: null, deathDatePrecision: null, deathPlace: null, nickname: null, notes: null, profession: null, deathDate: null }
+    prismaMock.tree.findFirst.mockResolvedValue({ id: 'tree-1', name: 'Martin', rootPersonId: null })
+    prismaMock.person.findMany.mockResolvedValue([
+      { ...base, id: 'p-1', firstName: 'Jean', sex: 'male' },
+      { ...base, id: 'p-2', firstName: 'Marie', sex: 'female' },
+      { ...base, id: 'p-3', firstName: 'Camille', sex: 'other' },
+      { ...base, id: 'p-4', firstName: 'Claude', sex: null },
+    ])
+    prismaMock.union.findMany.mockResolvedValue([])
+    prismaMock.parentChildLink.findMany.mockResolvedValue([])
+    prismaMock.lifeEvent.findMany.mockResolvedValue([])
+
+    const response = await app.inject({ method: 'GET', url: '/trees/tree-1/export/gedcom', headers: { authorization: `Bearer ${token}` } })
+    expect(response.statusCode).toBe(200)
+    const text = response.body.replace(/\r\n/g, '\n')
+    expect(text).toContain('1 NAME Camille /Martin/\n1 SEX U\n')
+    expect(text).not.toContain('SEX X')
+    expect(text).toMatch(/1 NAME Claude \/Martin\/\n(?!1 SEX)/)
+
+    // SEX U se relit comme non précisé : 5.5.1 n'a pas de valeur pour « autre ». SEX X reste lu à l'import (ligne 915).
+    expect(await importer(app, text)).toEqual({ Jean: 'male', Marie: 'female', Camille: null, Claude: null })
+    await app.close()
+  })
+})
+
 describe('Visit log', () => {
   it('refuses the visit log to a non-admin member', async () => {
     const app = createApp()
@@ -982,6 +1179,80 @@ describe('Relationship guardrails', () => {
     expect(response.statusCode).toBe(400)
     expect(response.json().error).toBe('parent_child_cycle_detected')
     expect(prismaMock.parentChildLink.create).not.toHaveBeenCalled()
+    await app.close()
+  })
+})
+
+describe('Surnom (nickname) en écriture directe', () => {
+  it('PATCH accepte le surnom, le coupe, et vide = null', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    const patch = (payload: object) => app.inject({ method: 'PATCH', url: '/trees/tree-1/persons/person-1', headers: { authorization: `Bearer ${token}` }, payload })
+
+    expect((await patch({ nickname: '  Loulou  ' })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ nickname: 'Loulou' })
+
+    expect((await patch({ nickname: '   ' })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ nickname: null })
+    await app.close()
+  })
+
+  it('refuse un surnom de plus de 120 caractères', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    const res = await app.inject({ method: 'PATCH', url: '/trees/tree-1/persons/person-1', headers: { authorization: `Bearer ${token}` }, payload: { nickname: 'x'.repeat(121) } })
+    expect(res.statusCode).toBe(400)
+    await app.close()
+  })
+})
+
+describe('Sexe d’une personne en écriture directe (issue #114)', () => {
+  it('PATCH ramène le sexe à male / female / other, null = non précisé, refuse une valeur inconnue', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    const patch = (payload: object) => app.inject({ method: 'PATCH', url: '/trees/tree-1/persons/person-1', headers: { authorization: `Bearer ${token}` }, payload })
+
+    expect((await patch({ sex: 'F' })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ sex: 'female' })
+
+    expect((await patch({ sex: 'male' })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ sex: 'male' })
+
+    expect((await patch({ sex: 'other' })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ sex: 'other' })
+
+    expect((await patch({ sex: null })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ sex: null })
+
+    const calls = prismaMock.person.updateMany.mock.calls.length
+    expect((await patch({ sex: 'robot' })).statusCode).toBe(400)
+    expect(prismaMock.person.updateMany.mock.calls.length).toBe(calls)
+    await app.close()
+  })
+})
+
+describe('Lieu de décès et filiation adoptive (écriture)', () => {
+  it('PATCH accepte le lieu de décès, le coupe, et vide = null', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    const patch = (payload: object) => app.inject({ method: 'PATCH', url: '/trees/tree-1/persons/person-1', headers: { authorization: `Bearer ${token}` }, payload })
+
+    expect((await patch({ deathPlace: '  Nantes, France  ' })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ deathPlace: 'Nantes, France' })
+
+    expect((await patch({ deathPlace: '   ' })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ deathPlace: null })
+    await app.close()
+  })
+
+  it('PATCH d’un lien accepte le type de filiation (naissance ou adoption)', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    prismaMock.parentChildLink.findFirst.mockResolvedValue({ id: 'link-1', parentPersonId: 'person-2', childPersonId: 'person-1', viaUnionId: null, parentageType: 'biologique' })
+    prismaMock.parentChildLink.updateMany.mockResolvedValueOnce({ count: 1 })
+    const res = await app.inject({ method: 'PATCH', url: '/trees/tree-1/links/link-1', headers: { authorization: `Bearer ${token}` }, payload: { parentageType: 'adoption' } })
+    expect(res.statusCode).toBe(200)
+    expect(prismaMock.parentChildLink.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ parentageType: 'adoption' })
     await app.close()
   })
 })

@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect, useRef, forwardRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Save, Trash2, Plus, X, Search, Check, Play, ImagePlus, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react'
-import { getParents, getChildren, getPersonUnions, getPersonMedias, getDemoLife, filiations, persons, unions } from '../data/mockData'
+import { Save, Trash2, Plus, X, Search, Check, Play, ImagePlus, Camera, Crop, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react'
+import { getParents, getChildren, getPersonUnions, getPersonMedias, getDemoLife, getPersonById, filiations, persons, unions } from '../data/mockData'
 import { fetchPersonLife } from '../api/treeApi.js'
 import LifeTimeline from './LifeTimeline.jsx'
 import MomentSheet from './MomentSheet.jsx'
@@ -10,10 +10,19 @@ import GeoMediaThumbnail from './GeoMediaThumbnail'
 import ImmichFacePanel from './ImmichFacePanel.jsx'
 import './PersonCard.css'
 import PzBusy from './PzBusy.jsx'
+import { useSheetDrag, useSheetMode } from '../hooks/useSheetDrag'
+import PortraitCropModal from './PortraitCropModal.jsx'
+import { imagePlacement } from '../utils/portraitCrop.js'
 import { t, dateLocale } from '../i18n/index.js'
 import { formatPlace } from '../utils/place.js'
+import { firstNameLabel, fullNameLabel, isFirstNameUnknown } from '../utils/personName.js'
 import { isYearOnly } from '../utils/dateInput.js'
 import DateField from './DateField.jsx'
+import { runOnce } from '../utils/saveOnLeave.js'
+import { normalizeSex, SEX_CHOICES } from '../utils/personSex.js'
+
+// Aucune modification en cours (référence stable)
+const NO_EDITS = Object.freeze({})
 
 const TYPE_LABELS = {
   photo: t('Photo'),
@@ -44,6 +53,11 @@ const PersonCard = ({
   onManageMedia,
   onAvatarUpload,
   onAvatarDelete,
+  onAvatarCrop,
+  pendingPortraitCrop = null,
+  onPendingPortraitCropDone = null,
+  photoSourceRequest = null,
+  onPhotoSourceRequestDone = null,
   treeId = null,
   immichToken = null,
   onImmichChange,
@@ -54,6 +68,8 @@ const PersonCard = ({
   onDelete,
   onAddRelation,
   onRemoveRelation,
+  onSetParentage,
+  pendingParentage = null,
   relationActionLoading = false,
   relationActionSuccess = '',
   relationActionError = '',
@@ -61,6 +77,7 @@ const PersonCard = ({
   onMoveSibling,
   onUploadMomentFile,
   onMomentSaved,
+  saveOnLeaveRef = null,
 }) => {
   // Souvenirs d'abord quand il y en a, ou quand on peut en ajouter : c'est là qu'est le bouton
   const [tab, setTab] = useState(() => (getPersonMedias(person.id).length > 0 || canManageMedia ? 'medias' : 'infos'))
@@ -92,11 +109,22 @@ const PersonCard = ({
     }
   }, [tab, person.id, treeId, immichToken, lifeRevision])
 
-  // État local pour les modifications en mode édition
-  const [edits, setEdits] = useState({})
-  const [hasChanges, setHasChanges] = useState(false)
+  // Modifications en cours, rattachées à la personne qu'elles concernent. Au changement de fiche,
+  // le premier rendu ne doit pas voir celles de la personne d'avant : un champ qui s'initialise à
+  // ce moment-là (DateField) les garderait, et la date d'une personne passait sur une autre.
+  const [editState, setEditState] = useState(() => ({ personId: person.id, values: {}, changed: false }))
+  const ownEdits = editState.personId === person.id
+  const edits = ownEdits ? editState.values : NO_EDITS
+  const hasChanges = ownEdits && editState.changed
+  // Prénom inconnu (case cochée) et saisie de prénom vide sans case : le prénom est demandé avant l'enregistrement
+  const [unknownFirstName, setUnknownFirstName] = useState(() => isFirstNameUnknown(person))
+  const [firstNameMissing, setFirstNameMissing] = useState(false)
+  const [lastNameMissing, setLastNameMissing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  // Enregistrement en cours : un second appel (bouton, puis changement de fiche) reçoit la même promesse
+  const saveInFlight = useRef(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showImmichPanel, setShowImmichPanel] = useState(false)
   // null : connexion Immich de l'arbre inconnue, puis booléen. Le menu de source ne se propose
@@ -106,39 +134,70 @@ const PersonCard = ({
   const [showSourceMenu, setShowSourceMenu] = useState(false)
   const [sourceMenuPos, setSourceMenuPos] = useState({ top: 0, left: 0 })
   const sourceBtnRef = useRef(null)
+  // Menu du badge appareil photo (position, ou null fermé) et fenêtre de recadrage ({ src, mode, ownsUrl }, ou null)
+  const [photoMenuPos, setPhotoMenuPos] = useState(null)
+  const [cropState, setCropState] = useState(null)
+  // Taille naturelle de la photo affichée dans la fiche, pour placer le portrait recadré
+  const [photoSize, setPhotoSize] = useState(null)
 
   // Inline relation search state
   const [activeRelationSearch, setActiveRelationSearch] = useState(null) // 'parent' | 'spouse' | 'child' | null
   const [relationSearchQuery, setRelationSearchQuery] = useState('')
   const relationSearchRef = useRef(null)
   const avatarInputRef = useRef(null)
+  // Infos en modification : champs ouverts depuis une pastille (et leur focus)
+  const [openedFields, setOpenedFields] = useState([])
+  const [focusField, setFocusField] = useState(null)
+  const bodyRef = useRef(null)
+  // Feuille du bas (téléphone) : on la ferme en la glissant par la poignée ou l'en-tête, comme la croix
+  const sheetMode = useSheetMode()
+  const drag = useSheetDrag({ enabled: sheetMode, zone: '.pc-grab, .pc-head, .pc-close', onClose })
 
   // Reset edits quand la personne change
   useEffect(() => {
-    setEdits({})
-    setHasChanges(false)
+    setEditState({ personId: person.id, values: {}, changed: false })
+    setUnknownFirstName(isFirstNameUnknown(person))
+    setFirstNameMissing(false)
+    setLastNameMissing(false)
     setShowDeleteConfirm(false)
     setActiveRelationSearch(null)
     setRelationSearchQuery('')
     setSaveSuccess(false)
+    setSaveError('')
     setShowSourceMenu(false)
     setMomentSheet(null)
     setLifeNotice('')
+    setPhotoMenuPos(null)
+    setCropState(null)
+    setPhotoSize(null)
+    setOpenedFields([])
+    setFocusField(null)
   }, [person.id])
+
+  // Pastille cliquée : le champ s'ouvre à sa place et prend le focus
+  useEffect(() => {
+    if (!focusField) return
+    const target = bodyRef.current?.querySelector(`[data-pc-field="${focusField}"] input, [data-pc-field="${focusField}"] textarea`)
+    target?.focus()
+    setFocusField(null)
+  }, [focusField])
 
   // Connexion Immich de l'arbre : métadonnées sans clé. Une erreur (rôle périmé, réseau) se
   // traduit par « non configuré » : la fiche reste utilisable, simplement sans choix de source.
   // Seul un administrateur de l'arbre voit l'option Immich, comme côté serveur.
+  // Dépend de la présence de onImmichChange, pas de sa valeur : App le recrée à chaque rendu, ce qui
+  // relançait la lecture de la config et refermait le menu des sources juste après son ouverture
+  const canChangeImmich = Boolean(onImmichChange)
   useEffect(() => {
     let cancelled = false
     setImmichConfigured(null)
     setShowSourceMenu(false)
-    if (!editMode || !isAdmin || !treeId || !onImmichChange || !immichToken) return undefined
+    if (!editMode || !isAdmin || !treeId || !canChangeImmich || !immichToken) return undefined
     fetchImmichConfig(treeId, immichToken)
       .then(({ config }) => { if (!cancelled) setImmichConfigured(Boolean(config?.configured)) })
       .catch(() => { if (!cancelled) setImmichConfigured(false) })
     return () => { cancelled = true }
-  }, [editMode, isAdmin, treeId, immichToken, onImmichChange])
+  }, [editMode, isAdmin, treeId, immichToken, canChangeImmich])
 
   useEffect(() => {
     if (!showSourceMenu) return undefined
@@ -146,6 +205,39 @@ const PersonCard = ({
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [showSourceMenu])
+
+  // Escape ferme le menu du badge
+  useEffect(() => {
+    if (!photoMenuPos) return undefined
+    const onKeyDown = (event) => { if (event.key === 'Escape') setPhotoMenuPos(null) }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [photoMenuPos])
+
+  const openPhotoMenu = () => {
+    if (avatarActionLoading) return
+    const rect = sourceBtnRef.current?.getBoundingClientRect()
+    if (rect) {
+      setPhotoMenuPos({
+        top: Math.round(rect.bottom) + 6,
+        left: Math.round(Math.min(rect.left, window.innerWidth - 232)),
+      })
+    }
+  }
+
+  // Fermer la fenêtre de recadrage ; l'aperçu envoyé est libéré
+  const closeCrop = () => {
+    if (cropState?.ownsUrl) URL.revokeObjectURL(cropState.src)
+    setCropState(null)
+  }
+
+  // Placement du portrait dans la fiche (carrée), comme le canevas
+  const photoPlacement = photoSize ? imagePlacement(photoSize.w, photoSize.h, 1, person.avatarCrop) : null
+  const photoStyle = photoPlacement
+    ? { position: 'absolute', maxWidth: 'none', left: `${photoPlacement.left}%`, top: `${photoPlacement.top}%`, width: `${photoPlacement.width}%`, height: `${photoPlacement.height}%` }
+    : undefined
+  // Même forme de cadre que dans l'arbre (renderers.js)
+  const treeFrameType = getPersonById(person.id)?.frameType || person.frameType
 
   const immichUsable = isAdmin && Boolean(immichConfigured || person.avatarFromImmich)
   const openAvatarPicker = () => {
@@ -165,6 +257,21 @@ const PersonCard = ({
   }
   const chooseFileSource = () => { setShowSourceMenu(false); avatarInputRef.current?.click() }
   const chooseImmichSource = () => { setShowSourceMenu(false); setShowImmichPanel(true) }
+
+  // Clic sur « + photo » dans l'arbre : la photo vient d'être envoyée, le recadrage s'ouvre tout de suite
+  useEffect(() => {
+    if (!pendingPortraitCrop || String(pendingPortraitCrop.personId) !== String(person.id)) return
+    setCropState({ src: pendingPortraitCrop.src, mode: 'new', ownsUrl: true })
+    onPendingPortraitCropDone?.()
+  }, [pendingPortraitCrop, person.id, onPendingPortraitCropDone])
+
+  // Clic sur « + photo » dans l'arbre, en modification avec Immich : même menu que le badge, sans clic de plus
+  useEffect(() => {
+    if (!photoSourceRequest || String(photoSourceRequest.personId) !== String(person.id)) return
+    if (immichConfigured === null) return
+    onPhotoSourceRequestDone?.()
+    if (immichUsable) openAvatarPicker()
+  }, [photoSourceRequest, person.id, immichConfigured, immichUsable, onPhotoSourceRequestDone]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Focus search input when relation search opens
   useEffect(() => {
@@ -193,22 +300,100 @@ const PersonCard = ({
   }
 
   const handleFieldChange = (field, value) => {
-    setEdits(prev => ({ ...prev, [field]: value }))
-    setHasChanges(true)
+    const personId = person.id
+    setEditState(prev => ({
+      personId,
+      values: { ...(prev.personId === personId ? prev.values : {}), [field]: value },
+      changed: true,
+    }))
   }
 
-  const handleSave = async () => {
-    if (!hasChanges || !onSave) return
+  // Onglet Infos en modification : seuls les champs remplis (ou ouverts) s'affichent, le reste est en pastilles
+  const isFilled = (value) => value !== null && value !== undefined && String(value).trim() !== ''
+  // Un champ ouvert par sa pastille, ou en cours de saisie, reste affiché jusqu'à l'enregistrement,
+  // même vidé : sinon il disparaît sous les doigts et la frappe part dans le champ suivant
+  const openedHas = (field) => openedFields.includes(field) || field in edits
+  const openField = (field) => {
+    setOpenedFields((prev) => (prev.includes(field) ? prev : [...prev, field]))
+    setFocusField(field)
+  }
+  const birthFilled = isFilled(getEditValue('birthYear', person.birthDate || person.birthYear))
+  const deathFilled = isFilled(getEditValue('deathYear', person.deathDate || person.deathYear))
+  const deceasedNow = editMode ? !getEditValue('isAlive', person.isAlive) : !person.isAlive
+  const editSex = normalizeSex(getEditValue('sex', person.sex))
+  const notesShown = editMode && (isFilled(getEditValue('note', person.note)) || openedHas('note'))
+  // En lecture : toujours visible si demandé (naissance, décès d'une personne décédée), sinon si rempli
+  const infoRow = (field, label, filled, content, always = false) => {
+    const shown = editMode ? (filled || openedHas(field)) : (always || filled)
+    if (!shown) return null
+    return (
+      <div className="pc-row" data-pc-field={field}>
+        <span className="pc-label">{label}</span>
+        {content}
+      </div>
+    )
+  }
+  const chipCandidates = [
+    { field: 'nickname', label: t('Surnom'), filled: isFilled(getEditValue('nickname', person.nickname)), relevant: true },
+    { field: 'birthYear', label: t('Date de naissance'), filled: birthFilled, relevant: true },
+    { field: 'birthPlace', label: t('Lieu de naissance'), filled: isFilled(getEditValue('birthPlace', person.birthPlace)), relevant: true },
+    { field: 'deathYear', label: t('Date de décès'), filled: deathFilled, relevant: deceasedNow },
+    { field: 'deathPlace', label: t('Lieu de décès'), filled: isFilled(getEditValue('deathPlace', person.deathPlace)), relevant: deceasedNow },
+    { field: 'birthName', label: t('Nom de naissance'), filled: isFilled(getEditValue('birthName', person.birthName)), relevant: true },
+    { field: 'profession', label: t('Métier'), filled: isFilled(getEditValue('profession', person.profession)), relevant: true },
+    { field: 'region', label: t('Région'), filled: isFilled(getEditValue('region', person.region)), relevant: true },
+    { field: 'nationality', label: t('Nationalité'), filled: isFilled(getEditValue('nationality', person.nationality)), relevant: true },
+    { field: 'note', label: t('Notes'), filled: isFilled(getEditValue('note', person.note)), relevant: true },
+  ]
+  const emptyChips = editMode ? chipCandidates.filter((c) => c.relevant && !c.filled && !openedHas(c.field)) : []
+
+  // Enregistre les modifications de cette fiche (bouton « Enregistrer » et départ de la fiche).
+  // Résultat : 'saved', 'unchanged' (rien à enregistrer) ou 'blocked' (validation, ou échec réseau :
+  // le message reste sur la fiche, la saisie n'est pas jetée).
+  const persistEdits = () => runOnce(saveInFlight, async () => {
+    if (!hasChanges || !onSave) return 'unchanged'
+    if (!unknownFirstName && 'firstName' in edits && !String(edits.firstName).trim()) {
+      setFirstNameMissing(true)
+      return 'blocked'
+    }
+    // Prénom inconnu : il faut alors un nom de famille
+    if (unknownFirstName && !String(getEditValue('lastName', person.lastName) ?? '').trim()) {
+      setLastNameMissing(true)
+      return 'blocked'
+    }
+    const savedFor = person.id
     setSaving(true)
+    setSaveError('')
     try {
-      await onSave(person.id, edits)
-      setHasChanges(false)
+      await onSave(savedFor, edits)
+      setEditState(prev => (prev.personId === savedFor ? { ...prev, changed: false } : prev))
+      setOpenedFields([])
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 2000)
+      return 'saved'
+    } catch (error) {
+      // Serveur injoignable (status 0, message traduit par le client) ; sinon un texte clair, jamais un message technique
+      setSaveError(error?.status === 0 ? error.message : t("L'enregistrement a échoué. Vos modifications sont gardées, réessayez."))
+      return 'blocked'
     } finally {
       setSaving(false)
     }
-  }
+  })
+
+  // App enregistre la fiche avant de la quitter (changement de personne, fermeture, sortie du mode
+  // modification) : la référence suit toujours la dernière version de persistEdits
+  useEffect(() => {
+    if (!saveOnLeaveRef) return undefined
+    saveOnLeaveRef.current = persistEdits
+    return () => { if (saveOnLeaveRef.current === persistEdits) saveOnLeaveRef.current = null }
+  })
+
+  // Sortie du mode modification : les modifications restantes (abandonnées) ne reviennent pas à la prochaine entrée
+  useEffect(() => {
+    if (!editMode) setEditState({ personId: person.id, values: {}, changed: false })
+  }, [editMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSave = () => { persistEdits() }
 
   const handleDelete = () => {
     if (!onDelete) return
@@ -220,7 +405,9 @@ const PersonCard = ({
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file || !onAvatarUpload) return
-    await onAvatarUpload(person.id, file)
+    const result = await onAvatarUpload(person.id, file)
+    // Juste après l'envoi, la fenêtre de recadrage s'ouvre (« Garder tel quel » laisse la photo entière)
+    if (result?.previewUrl) setCropState({ src: result.previewUrl, mode: 'new', ownsUrl: true })
   }
 
   // Relation actions
@@ -274,6 +461,18 @@ const PersonCard = ({
     return childFiliations[0]
   })()
   const personMedias = getPersonMedias(person.id)
+  // Filiation d'adoption entre un enfant et un parent (lien direct ou via une union)
+  const parentageAdopted = (childId, parentId) => filiations.some((f) => (
+    String(f.childId) === String(childId)
+    && f.parentageType === 'adoption'
+    && (String(f.parentId) === String(parentId) || (f.unionId && personUnions.some((u) => String(u.id) === String(f.unionId))))
+  ))
+  // Un contributeur voit son choix en attente avant l'envoi ; sinon le lien enregistré
+  const parentsAdopted = pendingParentage ? pendingParentage === 'adoption' : filiations.some((f) => String(f.childId) === String(person.id) && f.parentageType === 'adoption')
+  const adoptedChildLabel = (child) => {
+    if (!parentageAdopted(child.id, person.id)) return null
+    return child.sex === 'female' ? t('adoptée') : t('adopté')
+  }
 
   // Frise de vie : la famille vient de l'arbre déjà chargé, les événements de la route /life,
   // demandée seulement à l'ouverture de l'onglet (la démo a ses propres données)
@@ -295,6 +494,8 @@ const PersonCard = ({
     unions: personUnions.map((union) => ({
       ...union,
       partner: persons.find((p) => p.id === (union.partner1Id === person.id ? union.partner2Id : union.partner1Id)) || null,
+      // Enfants du couple : placent dans la frise une union dont la date manque
+      childIds: filiations.filter((f) => f.unionId && String(f.unionId) === String(union.id)).map((f) => f.childId),
     })),
   }
 
@@ -333,16 +534,16 @@ const PersonCard = ({
         const p2 = persons.find(p => p.id === union.partner2Id)
         // Union sans type (fréquent après un import GEDCOM) : pas de « (null) » à côté des prénoms
         const kind = union.unionType ? ` (${unionTypeLabel(union.unionType)})` : ''
-        return `${p1?.firstName || '?'} + ${p2?.firstName || '?'}${kind}`
+        return `${p1 ? firstNameLabel(p1) : '?'} + ${p2 ? firstNameLabel(p2) : '?'}${kind}`
       }
     }
 
     if (preferredFiliation.parentId && parentsList.length <= 1) {
       const parent = persons.find(p => p.id === preferredFiliation.parentId)
       if (preferredFiliation.parentageType === 'inconnu') {
-        return t('{name} (parent unique, autre parent inconnu)', { name: parent?.firstName || '?' })
+        return t('{name} (parent unique, autre parent inconnu)', { name: parent ? firstNameLabel(parent) : '?' })
       }
-      return t('{name} (parent unique)', { name: parent?.firstName || '?' })
+      return t('{name} (parent unique)', { name: parent ? firstNameLabel(parent) : '?' })
     }
     return null
   }
@@ -415,18 +616,24 @@ const PersonCard = ({
     return parts.join(' – ')
   })()
   const ageLabel = age === null ? null : person.isAlive ? t('{age} ans', { age }) : t('{age} ans au décès', { age })
+  // Une seule ligne sous le nom : surnom, repères de vie, âge, séparés par un point médian
+  const metaItems = [
+    person.nickname && { key: 'nick', node: <em className="pc-nick">{person.nickname}</em>, nowrap: true },
+    lifeLine && { key: 'life', node: lifeLine },
+    ageLabel && { key: 'age', node: ageLabel, nowrap: true },
+  ].filter(Boolean)
 
   const renderRelationRow = (target, relationType, meta) => (
     <div key={`${relationType}-${target?.id}`} className="pc-rel-row">
       <span className="pc-rel-avatar" aria-hidden="true">
         {target?.photo ? <img src={target.photo} alt="" /> : <span>{target?.firstName?.[0] || '?'}</span>}
       </span>
-      <span className="pc-rel-name">{target?.firstName} {target?.lastName || ''}</span>
+      <span className="pc-rel-name">{target ? fullNameLabel(target) : ''}</span>
       {meta && <span className="pc-rel-meta">{meta}</span>}
       <button
         type="button"
         className="pz-btn pz-btn--ghost pz-btn--icon pc-rel-remove"
-        aria-label={t('Retirer {name}', { name: target?.firstName })}
+        aria-label={t('Retirer {name}', { name: target ? fullNameLabel(target) : '' })}
         onClick={() => handleRelationRemove(target.id, relationType)}
         disabled={relationActionLoading}
       >
@@ -455,7 +662,14 @@ const PersonCard = ({
   )
 
   return (
-    <div className={`person-card ${editMode ? 'person-card--edit-mode' : ''}`} role="dialog" aria-label={t('Fiche de {name}', { name: `${person.firstName} ${person.lastName || ''}` })}>
+    <div
+      className={`person-card ${editMode ? 'person-card--edit-mode' : ''}`}
+      role="dialog"
+      aria-label={t('Fiche de {name}', { name: fullNameLabel(person) })}
+      style={drag.style}
+      data-dragging={drag.dragging || undefined}
+      {...drag.bind}
+    >
       <span className="pc-grab" aria-hidden="true" />
       <button type="button" className="pz-btn pz-btn--ghost pz-btn--icon pc-close" onClick={onClose} aria-label={t('Fermer la fiche')}>
         <X size={18} strokeWidth={2} />
@@ -481,41 +695,32 @@ const PersonCard = ({
               className="pc-photo pc-photo--add"
               onClick={() => avatarInputRef.current?.click()}
               disabled={avatarActionLoading}
+              aria-label={t('Ajouter une photo')}
+              title={t('Ajouter une photo')}
             >
               <ImagePlus size={22} strokeWidth={1.8} aria-hidden="true" />
-              <span>{avatarActionLoading ? t('Envoi') : t('Ajouter une photo')}</span>
             </button>
           ) : (
             <div className="pc-photo">
               {person.photo
-                ? <img src={person.photo} alt={`${person.firstName} ${person.lastName || ''}`} />
+                ? <img src={person.photo} alt={fullNameLabel(person)} onLoad={(event) => setPhotoSize({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight })} style={photoStyle} />
                 : <span className="pc-photo-initials">{initials}</span>}
             </div>
           )}
           {editMode && onAvatarUpload && (
-            <div className="pc-photo-actions">
-              <button
-                ref={sourceBtnRef}
-                type="button"
-                className="pc-photo-btn"
-                onClick={openAvatarPicker}
-                disabled={avatarActionLoading}
-                aria-haspopup="menu"
-                aria-expanded={showSourceMenu}
-              >
-                {person.photo ? t('Changer') : t('Ajouter une photo')}
-              </button>
-              {person.photo && (
-                <button
-                  type="button"
-                  className="pc-photo-btn pc-photo-btn--danger"
-                  onClick={() => onAvatarDelete?.(person.id, person.avatarFromImmich)}
-                  disabled={avatarActionLoading}
-                >
-                  {t('Retirer')}
-                </button>
-              )}
-            </div>
+            <button
+              ref={sourceBtnRef}
+              type="button"
+              className="pc-photo-badge"
+              onClick={openPhotoMenu}
+              disabled={avatarActionLoading}
+              aria-label={t('Changer la photo')}
+              title={t('Changer la photo')}
+              aria-haspopup="menu"
+              aria-expanded={showSourceMenu}
+            >
+              <Camera size={14} strokeWidth={2} aria-hidden="true" />
+            </button>
           )}
         </div>
 
@@ -526,27 +731,46 @@ const PersonCard = ({
                 type="text"
                 className="pc-input pc-input--name"
                 value={getEditValue('firstName', person.firstName)}
-                onChange={(e) => handleFieldChange('firstName', e.target.value)}
+                onChange={(e) => {
+                  setFirstNameMissing(false)
+                  handleFieldChange('firstName', e.target.value)
+                }}
                 placeholder={t('Prénom')}
                 aria-label={t('Prénom')}
+                disabled={unknownFirstName}
+                aria-invalid={firstNameMissing}
               />
               <input
                 type="text"
                 className="pc-input pc-input--name pc-input--last"
                 value={getEditValue('lastName', person.lastName)}
-                onChange={(e) => handleFieldChange('lastName', e.target.value)}
+                onChange={(e) => {
+                  setLastNameMissing(false)
+                  handleFieldChange('lastName', e.target.value)
+                }}
                 placeholder={t('Nom')}
                 aria-label={t('Nom')}
               />
+              {firstNameMissing && <p className="pc-name-error">{t('Il faut au moins un prénom.')}</p>}
+              {lastNameMissing && <p className="pc-name-error">{t('Il faut au moins un nom si le prénom est inconnu.')}</p>}
             </div>
           ) : (
             <h2 className="pc-name">
-              {person.firstName} <em>{person.lastName}</em>
+              {isFirstNameUnknown(person) ? <span className="pc-name-unknown">{firstNameLabel(person)}</span> : person.firstName}
+              {person.lastName && <>{' '}<em>{person.lastName}</em></>}
             </h2>
           )}
-          {!editMode && lifeLine && <p className="pc-life">{lifeLine}</p>}
+          {!editMode && metaItems.length > 0 && (
+            <p className="pc-meta">
+              {metaItems.map((item, i) => (
+                <span key={item.key} className={`pc-meta-item${item.nowrap ? ' pc-meta-item--nowrap' : ''}`}>
+                  {item.node}
+                  {i < metaItems.length - 1 && <span className="pc-meta-sep" aria-hidden="true">·</span>}
+                </span>
+              ))}
+            </p>
+          )}
           <div className="pc-chips">
-            {editMode && <span className="pz-tag pz-tag--accent pz-tag--dot">{t('Édition')}</span>}
             {editMode && siblingPlace && (
               <span className="pz-tag pc-order" role="group" aria-label={t('Place {n} sur {total} parmi les frères et sœurs', { n: siblingPlace.index + 1, total: siblingPlace.count })}>
                 <button type="button" className="pc-order-btn" onClick={() => onMoveSibling?.(-1)} disabled={siblingPlace.index === 0} aria-label={t('Déplacer à gauche')} title={t('Déplacer à gauche')}>
@@ -558,10 +782,24 @@ const PersonCard = ({
                 </button>
               </span>
             )}
-            {!editMode && ageLabel && <span className="pz-tag">{ageLabel}</span>}
             {!editMode && person.profession && <span className="pz-tag">{person.profession}</span>}
           </div>
         </div>
+        {editMode && ((unknownFirstName || !String(getEditValue('firstName', person.firstName) ?? '').trim())) && (
+          <label className="pc-unknown-first">
+            <input
+              type="checkbox"
+              checked={unknownFirstName}
+              onChange={(e) => {
+                setUnknownFirstName(e.target.checked)
+                setFirstNameMissing(false)
+                setLastNameMissing(false)
+                handleFieldChange('firstName', '')
+              }}
+            />
+            {t('Je ne connais pas son prénom')}
+          </label>
+        )}
       </header>
 
       {avatarActionError && <div className="pz-error pc-inline-msg">{avatarActionError}</div>}
@@ -590,7 +828,7 @@ const PersonCard = ({
           <div className="pc-souvenirs">
             {personMedias.length === 0 && (
               <div className="pc-empty">
-                <p className="pz-sub">{t('Pas encore de souvenir pour {name}.', { name: person.firstName })}</p>
+                <p className="pz-sub">{t('Pas encore de souvenir pour {name}.', { name: firstNameLabel(person) })}</p>
                 <p className="pz-small">{canManageMedia ? t('Une photo, une anecdote, sa voix. Vous pouvez ajouter le premier.') : t('Une photo, une anecdote, sa voix.')}</p>
               </div>
             )}
@@ -677,24 +915,30 @@ const PersonCard = ({
 
         {/* ── Infos ── */}
         {tab === 'infos' && (
-          <div className="pc-infos">
+          <div className="pc-infos" ref={bodyRef}>
             <section className="pc-section">
               <h3 className="pz-eyebrow">{t('État civil')}</h3>
               <div className="pc-rows">
-                <div className="pc-row">
-                  <span className="pc-label">{t('Naissance')}</span>
-                  {renderEditableValue({ field: 'birthYear', value: person.birthDate || person.birthYear, placeholder: t('Date de naissance'), type: 'date' })}
-                </div>
-                {(person.birthPlace || editMode) && (
-                  <div className="pc-row">
-                    <span className="pc-label">{t('Lieu')}</span>
-                    {renderEditableValue({ field: 'birthPlace', value: person.birthPlace || '', placeholder: t('Lieu de naissance'), format: formatPlace })}
-                  </div>
-                )}
-                {(person.birthName || editMode) && (
-                  <div className="pc-row">
-                    <span className="pc-label">{t('Nom de naissance')}</span>
-                    {renderEditableValue({ field: 'birthName', value: person.birthName || '', placeholder: t('Nom de naissance') })}
+                {infoRow('birthYear', t('Naissance'), birthFilled, renderEditableValue({ field: 'birthYear', value: person.birthDate || person.birthYear, placeholder: t('Date de naissance'), type: 'date' }), true)}
+                {infoRow('birthPlace', t('Lieu'), isFilled(getEditValue('birthPlace', person.birthPlace)), renderEditableValue({ field: 'birthPlace', value: person.birthPlace || '', placeholder: t('Lieu de naissance'), format: formatPlace }))}
+                {infoRow('birthName', t('Nom de naissance'), isFilled(getEditValue('birthName', person.birthName)), renderEditableValue({ field: 'birthName', value: person.birthName || '', placeholder: t('Nom de naissance') }))}
+                {infoRow('nickname', t('Surnom'), isFilled(getEditValue('nickname', person.nickname)), renderEditableValue({ field: 'nickname', value: person.nickname || '', placeholder: t('Surnom') }))}
+                {editMode && (
+                  <div className="pc-row pc-row--seg" data-pc-field="sex">
+                    <span className="pc-label" id="pc-sex-label">{t('Sexe')}</span>
+                    <div className="pz-tabs pc-seg" role="group" aria-labelledby="pc-sex-label">
+                      {SEX_CHOICES.map(({ value, label }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          aria-pressed={editSex === value}
+                          className={`pz-tab ${editSex === value ? 'is-active' : ''}`}
+                          onClick={() => handleFieldChange('sex', editSex === value ? null : value)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
                 {editMode && (
@@ -706,41 +950,32 @@ const PersonCard = ({
                       onClick={() => handleFieldChange('isAlive', !getEditValue('isAlive', person.isAlive))}
                     >
                       <span className="pc-alive-dot" />
-                      {getEditValue('isAlive', person.isAlive) ? t('En vie') : t('Décédé(e)')}
+                      {getEditValue('isAlive', person.isAlive) ? t('En vie') : editSex === 'male' ? t('Décédé') : editSex === 'female' ? t('Décédée') : t('Décédé(e)')}
                     </button>
                   </div>
                 )}
-                {(!getEditValue('isAlive', person.isAlive) || (!editMode && !person.isAlive)) && (
-                  <div className="pc-row">
-                    <span className="pc-label">{t('Décès')}</span>
-                    {renderEditableValue({ field: 'deathYear', value: person.deathDate || person.deathYear || '', placeholder: t('Date de décès'), type: 'date', emptyLabel: t('Date inconnue') })}
-                  </div>
-                )}
+                {infoRow('deathYear', t('Décès'), deathFilled, renderEditableValue({ field: 'deathYear', value: person.deathDate || person.deathYear || '', placeholder: t('Date de décès'), type: 'date', emptyLabel: t('Date inconnue') }), deceasedNow)}
+                {infoRow('deathPlace', t('Lieu de décès'), isFilled(getEditValue('deathPlace', person.deathPlace)), renderEditableValue({ field: 'deathPlace', value: person.deathPlace || '', placeholder: t('Lieu de décès'), format: formatPlace }))}
                 {!editMode && (
                   <div className="pc-row">
                     <span className="pc-label">{t('Âge')}</span>
                     <span className="value">{ageLabel || '-'}</span>
                   </div>
                 )}
-                {(person.region || editMode) && (
-                  <div className="pc-row">
-                    <span className="pc-label">{t('Région')}</span>
-                    {renderEditableValue({ field: 'region', value: person.region || '', placeholder: t('Région') })}
-                  </div>
-                )}
-                {(person.nationality || editMode) && (
-                  <div className="pc-row">
-                    <span className="pc-label">{t('Nationalité')}</span>
-                    {renderEditableValue({ field: 'nationality', value: person.nationality || '', placeholder: t('Nationalité') })}
-                  </div>
-                )}
-                {(person.profession || editMode) && (
-                  <div className="pc-row">
-                    <span className="pc-label">{t('Métier')}</span>
-                    {renderEditableValue({ field: 'profession', value: person.profession || '', placeholder: t('Métier') })}
-                  </div>
-                )}
+                {infoRow('region', t('Région'), isFilled(getEditValue('region', person.region)), renderEditableValue({ field: 'region', value: person.region || '', placeholder: t('Région') }))}
+                {infoRow('nationality', t('Nationalité'), isFilled(getEditValue('nationality', person.nationality)), renderEditableValue({ field: 'nationality', value: person.nationality || '', placeholder: t('Nationalité') }))}
+                {infoRow('profession', t('Métier'), isFilled(getEditValue('profession', person.profession)), renderEditableValue({ field: 'profession', value: person.profession || '', placeholder: t('Métier') }))}
               </div>
+              {/* Modification : une pastille par champ vide, qui ouvre le champ à sa place */}
+              {editMode && emptyChips.length > 0 && (
+                <div className="pc-fill-chips">
+                  {emptyChips.map((chip) => (
+                    <button key={chip.field} type="button" className="pc-fill-chip" onClick={() => openField(chip.field)}>
+                      + {chip.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </section>
 
             {!editMode && (parentsList.length > 0 || personUnions.length > 0 || childrenList.length > 0) && (
@@ -750,7 +985,7 @@ const PersonCard = ({
                   {parentsList.length > 0 && (
                     <div className="pc-row">
                       <span className="pc-label">{t('Parents')}</span>
-                      <span className="value">{getParentageLabel() || parentsList.map(p => `${p.firstName} ${p.lastName}`).join(t(' et '))}</span>
+                      <span className="value">{getParentageLabel() || parentsList.map(p => fullNameLabel(p)).join(t(' et '))}</span>
                     </div>
                   )}
                   {preferredFiliation && preferredFiliation.parentageType !== 'biologique' && parentsList.length <= 1 && (
@@ -767,7 +1002,7 @@ const PersonCard = ({
                           const partnerId = u.partner1Id === person.id ? u.partner2Id : u.partner1Id
                           const partner = persons.find(p => p.id === partnerId)
                           const yearRange = u.startYear ? (u.endYear ? `${u.startYear}–${u.endYear}` : t('depuis {year}', { year: u.startYear })) : ''
-                          return `${partner?.firstName || '?'} ${partner?.lastName || ''}${yearRange ? ` (${yearRange})` : ''}`
+                          return `${partner ? firstNameLabel(partner) : '?'} ${partner?.lastName || ''}${yearRange ? ` (${yearRange})` : ''}`
                         }).join(', ')}
                       </span>
                     </div>
@@ -775,15 +1010,15 @@ const PersonCard = ({
                   {childrenList.length > 0 && (
                     <div className="pc-row">
                       <span className="pc-label">{t('Enfants')}</span>
-                      <span className="value">{childrenList.map(c => c.firstName).join(', ')}</span>
+                      <span className="value">{childrenList.map(c => firstNameLabel(c)).join(', ')}</span>
                     </div>
                   )}
                 </div>
               </section>
             )}
 
-            {(person.note || editMode) && (
-              <section className="pc-section">
+            {(editMode ? notesShown : person.note) && (
+              <section className="pc-section" data-pc-field="note">
                 <h3 className="pz-eyebrow">{t('Notes')}</h3>
                 {editMode ? (
                   <textarea
@@ -811,9 +1046,21 @@ const PersonCard = ({
             )}
 
             <section className="pc-section">
-              <h3 className="pz-eyebrow">{t('Parents')}</h3>
+              <div className="pc-section-head">
+                <h3 className="pz-eyebrow">{t('Parents')}</h3>
+                {parentsAdopted && parentsList.length > 0 && <span className="pc-adopt-tag">{t('Parents adoptifs')}</span>}
+              </div>
               {parentsList.length > 0 ? parentsList.map(p => renderRelationRow(p, 'parent')) : <p className="pc-rel-empty">{t("Aucun parent pour l'instant")}</p>}
               {renderRelationAdd('parent', t('Ajouter un parent'), t('Rechercher un parent'))}
+              {parentsList.length > 0 && (
+                <div className="pc-parentage">
+                  <span className="pc-label">{t('Lien avec ses parents')}</span>
+                  <div className="pz-tabs pc-seg" role="radiogroup" aria-label={t('Lien avec ses parents')}>
+                    <button type="button" role="radio" aria-checked={!parentsAdopted} className={`pz-tab ${!parentsAdopted ? 'is-active' : ''}`} onClick={() => onSetParentage?.(person.id, 'biologique')}>{t('Naissance')}</button>
+                    <button type="button" role="radio" aria-checked={parentsAdopted} className={`pz-tab ${parentsAdopted ? 'is-active' : ''}`} onClick={() => onSetParentage?.(person.id, 'adoption')}>{t('Adoption')}</button>
+                  </div>
+                </div>
+              )}
             </section>
 
             <section className="pc-section">
@@ -828,7 +1075,7 @@ const PersonCard = ({
 
             <section className="pc-section">
               <h3 className="pz-eyebrow">{t('Enfants')}</h3>
-              {childrenList.length > 0 ? childrenList.map(c => renderRelationRow(c, 'child')) : <p className="pc-rel-empty">{t('Aucun enfant')}</p>}
+              {childrenList.length > 0 ? childrenList.map(c => renderRelationRow(c, 'child', adoptedChildLabel(c))) : <p className="pc-rel-empty">{t('Aucun enfant')}</p>}
               {renderRelationAdd('child', t('Ajouter un enfant'), t('Rechercher un enfant'))}
             </section>
           </div>
@@ -836,11 +1083,12 @@ const PersonCard = ({
       </div>
 
       {/* ── Actions d'édition ── */}
+      {editMode && saveError && <p className="pc-save-error" role="alert">{saveError}</p>}
       {editMode && (
         <footer className="pc-foot">
           {showDeleteConfirm ? (
             <div className="pc-delete-confirm">
-              <span>{t("Supprimer {name} de l'arbre ?", { name: person.firstName })}</span>
+              <span>{t("Supprimer {name} de l'arbre ?", { name: firstNameLabel(person) })}</span>
               <div className="pc-delete-actions">
                 <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => setShowDeleteConfirm(false)}>{t('Annuler')}</button>
                 <button type="button" className="pz-btn pz-btn--danger pz-btn--sm" onClick={handleDelete}>{t('Supprimer')}</button>
@@ -883,6 +1131,49 @@ const PersonCard = ({
           </>,
           document.body,
         )
+      )}
+
+      {/* ── Menu du badge : changer, recadrer, retirer ── */}
+      {photoMenuPos && (
+        createPortal(
+          <>
+            <div className="pc-source-backdrop" onClick={() => setPhotoMenuPos(null)} />
+            <div className="pc-source-menu pz-menu" role="menu" aria-label={t('Options du portrait')} style={{ top: `${photoMenuPos.top}px`, left: `${photoMenuPos.left}px` }}>
+              <button type="button" role="menuitem" className="pz-menu-item" onClick={() => { setPhotoMenuPos(null); openAvatarPicker() }}>
+                <ImagePlus size={16} aria-hidden="true" /> {t('Changer la photo')}
+              </button>
+              {person.photo && !person.avatarFromImmich && onAvatarCrop && (
+                <button type="button" role="menuitem" className="pz-menu-item" onClick={() => { setPhotoMenuPos(null); setCropState({ src: person.photo, mode: 'recrop', ownsUrl: false }) }}>
+                  <Crop size={16} aria-hidden="true" /> {t('Recadrer')}
+                </button>
+              )}
+              {person.photo && (
+                <button type="button" role="menuitem" className="pz-menu-item pz-menu-item--danger" onClick={() => { setPhotoMenuPos(null); onAvatarDelete?.(person.id, person.avatarFromImmich) }} disabled={avatarActionLoading}>
+                  <Trash2 size={16} aria-hidden="true" /> {t('Retirer')}
+                </button>
+              )}
+            </div>
+          </>,
+          document.body,
+        )
+      )}
+
+      {/* ── Recadrage du portrait (fenêtre pz) ── */}
+      {cropState && onAvatarCrop && (
+        <PortraitCropModal
+          src={cropState.src}
+          frameType={treeFrameType}
+          name={fullNameLabel(person)}
+          mode={cropState.mode}
+          initialCrop={cropState.mode === 'new' ? null : person.avatarCrop}
+          saving={avatarActionLoading}
+          error={avatarActionError}
+          onSave={async (crop) => {
+            const saved = await onAvatarCrop(person.id, crop)
+            if (saved) closeCrop()
+          }}
+          onClose={closeCrop}
+        />
       )}
 
       {/* ── Association d'un visage Immich (modale) ── */}
@@ -960,7 +1251,7 @@ const RelationSearchInline = forwardRef(function RelationSearchInline(
                 <span className="pc-rel-avatar" aria-hidden="true">
                   {p.photo ? <img src={p.photo} alt="" /> : <span>{p.firstName[0]}</span>}
                 </span>
-                <span className="pc-rel-name">{p.firstName} <em>{p.lastName || ''}</em></span>
+                <span className="pc-rel-name">{firstNameLabel(p)} <em>{p.lastName || ''}</em></span>
                 {p.birthYear && <span className="pc-rel-meta">{p.birthYear}</span>}
               </button>
             </li>

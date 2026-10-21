@@ -1,0 +1,70 @@
+/* ============================================================
+   Recadrage du portrait (fenêtre pz)
+   Le masque garde la forme du cadre de la personne dans l'arbre. La photo glisse dessous.
+   Les variables --pz-* viennent de src/styles/pz.css.
+   ============================================================ */
+
+.pcrop-modal { width: min(100%, 440px); }
+
+.pcrop-body { display: grid; gap: 14px; min-width: 0; }
+
+.pcrop-stage {
+  position: relative; width: min(100%, 300px); aspect-ratio: 1 / 1; margin: 0 auto;
+  overflow: hidden; border-radius: 18px; background: var(--pz-line-soft, #efe9e1);
+  touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none;
+  outline: none;
+}
+.pcrop-stage.is-dragging { cursor: grabbing; }
+.pcrop-stage:focus-visible { box-shadow: 0 0 0 2px var(--pz-a500); }
+
+/* La photo, placée en pourcentages du conteneur par portraitCrop.js */
+.pcrop-img {
+  position: absolute; max-width: none; pointer-events: none;
+  transition: left 220ms var(--pz-ease), top 220ms var(--pz-ease), width 220ms var(--pz-ease), height 220ms var(--pz-ease);
+}
+.pcrop-stage.is-dragging .pcrop-img { transition: none; }
+
+/* Masque : l'ombre étendue assombrit tout ce qui est hors du cadre */
+.pcrop-window {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none;
+  box-shadow: 0 0 0 999px rgba(42, 38, 34, .55), inset 0 0 0 1px rgba(255, 255, 255, .75);
+}
+.pcrop-window--round { border-radius: 50%; }
+.pcrop-window--square { border-radius: 4px; }
+.pcrop-window--rect { border-radius: 6px; }
+/* Polaroid : une bordure blanche autour de la zone photo */
+.pcrop-window--polaroid { border-radius: 2px; box-shadow: 0 0 0 7px #fff, 0 0 0 999px rgba(42, 38, 34, .55); }
+
+.pcrop-loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--pz-muted); }
+
+.pcrop-hint { margin: 0; text-align: center; color: var(--pz-muted); }
+
+.pcrop-zoom {
+  display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 14px;
+  min-height: 40px; max-width: 300px; width: 100%; margin: 0 auto;
+}
+.pcrop-zoom input[type="range"] { width: 100%; min-height: 40px; accent-color: var(--pz-a500); cursor: pointer; }
+.pcrop-zoom input[type="range"]:disabled { opacity: .5; cursor: default; }
+
+.pcrop-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+@media (hover: hover) and (pointer: fine) {
+  .pcrop-modal .pz-btn--ghost:hover:not(:disabled) { background: var(--pz-line-soft); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pcrop-img { transition: none; }
+}
+
+/* Forme du cadre : chaque choix montre sa forme, son nom est dans aria-label et title */
+.pcrop-shapes { width: min(100%, 300px); margin: 0 auto; }
+.pcrop-shapes .pz-tab { display: grid; place-items: center; min-height: 40px; padding: 0; color: var(--pz-muted); }
+.pcrop-shapes .pz-tab.is-active { color: var(--pz-a700, #93402A); }
+.pcrop-shapes .pz-tab:disabled { cursor: default; opacity: .5; }
+.pcrop-ico { display: block; border: 1.75px solid currentColor; }
+.pcrop-ico--round { width: 20px; height: 20px; border-radius: 50%; }
+.pcrop-ico--square { width: 20px; height: 20px; border-radius: 3px; }
+/* Polaroïd : la marge du bas plus large que les côtés */
+.pcrop-ico--polaroid { width: 20px; height: 22px; border-radius: 2px; border-bottom-width: 5px; }
+.pcrop-ico--portrait { width: 16px; height: 22px; border-radius: 3px; }
+.pcrop-ico--landscape { width: 26px; height: 16px; border-radius: 3px; }

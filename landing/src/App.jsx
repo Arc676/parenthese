@@ -769,17 +769,31 @@ function HeroGraph({ className = '', label }) {
 
 // ─── Header ───────────────────────────────────────────────────────────────────
 
-function Header({ t, onCta, elevated }) {
+function Header({ t, onCta, loginHref, elevated }) {
   return (
     <header className={`site-nav${elevated ? ' is-elevated' : ''}`}>
       <div className="wrap nav-in">
-        <a href={t.home} aria-label={t.logoHome}><LogoLockup height={22} /></a>
+        <a href={t.home} aria-label={t.logoHome} className="site-logo">
+          {/* Sur téléphone, le symbole seul : le nom « Parenthèse » reste dans le nom accessible du lien */}
+          <LogoLockup height={22} className="lg lk lk-full" decorative />
+          <LogoLockup height={24} mark className="lg lk lk-mark" decorative />
+        </a>
         <nav aria-label="Sections">
           <a href="#comment">{t.nav.how}</a>
           <a href="#demo">{t.nav.demo}</a>
           {t.nav.privacy && <a href={t.privacyHref}>{t.nav.privacy}</a>}
         </nav>
-        <button type="button" onClick={onCta} className="btn p sm">{t.cta}</button>
+        <div className="nav-cta">
+          <a href={loginHref} className="btn s sm nav-login" aria-label={t.nav.login}>
+            {/* Silhouette de profil, icône « user » de Lucide (ISC), tracée à la main : la landing n'embarque pas la bibliothèque */}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="7" r="4" />
+              <path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" />
+            </svg>
+            <span className="nav-login-text">{t.nav.login}</span>
+          </a>
+          <button type="button" onClick={onCta} className="btn p sm">{t.cta}</button>
+        </div>
       </div>
     </header>
   )
@@ -910,6 +924,8 @@ const appSource = () => {
 
 // Les CTA mènent à la création de compte dans l'app
 const appSignupUrl = () => `https://app.parenthese.io/?account=register&source=${appSource()}`
+// Un compte déjà créé : la connexion, pas l'inscription (sans source : rendu au build, pas de window)
+const appLoginUrl = () => 'https://app.parenthese.io/?account=login'
 
 export default function App({ locale = 'fr' }) {
   const t = COPY[locale]
@@ -985,7 +1001,7 @@ export default function App({ locale = 'fr' }) {
   return (
     <div className="min-h-screen">
 
-      <Header t={t} onCta={() => goToSignup('header')} elevated={headerElevated} />
+      <Header t={t} onCta={() => goToSignup('header')} loginHref={withAppQuery(appLoginUrl(), locale)} elevated={headerElevated} />
       <main>
 
       {/* ─── HERO ────────────────────────────────────────────────────── */}
@@ -1122,6 +1138,7 @@ export default function App({ locale = 'fr' }) {
         <Logo height={18} />
         <nav aria-label={t.footer.label}>
           {t.footer.guides && <a href="#guides">{t.footer.guides}</a>}
+          <a href={withAppQuery(appLoginUrl(), locale)}>{t.footer.login}</a>
           <a href={t.privacyHref}>{t.footer.privacy}</a>
           <a href="https://github.com/IliesAllali/parenthese" rel="noopener noreferrer">{t.footer.source}</a>
           <a href="https://iliesallali.design/">{t.footer.madeBy}</a>
