@@ -8,7 +8,7 @@ import { indexGedcomRecords, mediaRefsForPerson, noteText, photoPathForPerson } 
 import type { GedcomRecords } from '../lib/gedcom-photos.js'
 import type { MembershipRole } from '../types/auth.js'
 import { nextSiblingOrder } from '../lib/sibling-order.js'
-import { sexOrNull } from '../lib/person-sex.js'
+import { sexOrNull, type PersonSex } from '../lib/person-sex.js'
 
 const treeIdParamSchema = z.object({
   id: z.string().min(1),
@@ -285,6 +285,15 @@ function pairKey(a: string, b: string | null): string {
   return b ? [a, b].sort().join('|') : `${a}|`
 }
 
+// GEDCOM 5.5.1 n'admet que M, F et U (inconnu, autre). « X » n'existe qu'en 7.0 : un sexe « autre » s'écrit U,
+// et l'import relit X comme avant.
+export function gedcomSexValue(sex: PersonSex | null): 'M' | 'F' | 'U' | null {
+  if (sex === 'male') return 'M'
+  if (sex === 'female') return 'F'
+  if (sex === 'other') return 'U'
+  return null
+}
+
 function sanitizeXref(id: string): string {
   return id.replace(/[^A-Za-z0-9_]/g, '_')
 }
@@ -456,10 +465,8 @@ export const gedcomRoutes: FastifyPluginAsync = async (app) => {
       lines.push(`1 NAME ${gedcomNameValue(person.firstName, person.lastName)}`)
       if (person.nickname) lines.push(`2 NICK ${oneLine(person.nickname)}`)
 
-      const sex = sexOrNull(person.sex)
-      if (sex === 'male') lines.push('1 SEX M')
-      else if (sex === 'female') lines.push('1 SEX F')
-      else if (sex === 'other') lines.push('1 SEX X')
+      const sexValue = gedcomSexValue(sexOrNull(person.sex))
+      if (sexValue) lines.push(`1 SEX ${sexValue}`)
 
       const personEvents = eventsByPerson.get(person.id) ?? []
       const birthDetails = personEvents.find((event) => event.type === 'birth')

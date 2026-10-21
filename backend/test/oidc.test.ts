@@ -168,6 +168,29 @@ describe('compte relié, créé ou refusé', () => {
     expect(prismaMock.user.create).not.toHaveBeenCalled()
   })
 
+  it('identité déjà reliée : retrouvée par émetteur et sujet, jamais par email (le fournisseur a pu le réattribuer)', async () => {
+    prismaMock.userIdentity.findUnique.mockResolvedValue({ userId: 'user-9' })
+    oidcMock.finishAuthorization.mockResolvedValue({ ...identity, email: 'reattribue@example.com' })
+    const { cookie } = await start()
+    const res = await callback(cookie)
+    expect(prismaMock.userIdentity.findUnique).toHaveBeenCalledWith({
+      where: { issuer_subject: { issuer: ISSUER, subject: 'sub-1' } },
+      select: { userId: true },
+    })
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled()
+    expect(fragmentOf(res.headers.location).get('oidc')).toBeTruthy()
+  })
+
+  it("nouveau sujet avec un email vérifié déjà relié à un autre sujet : refusé, le compte ne change pas de mains", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'user-7', passwordHash: null, identities: [{ id: 'identity-1' }] })
+    oidcMock.finishAuthorization.mockResolvedValue({ ...identity, subject: 'sub-2' })
+    const { cookie } = await start()
+    const res = await callback(cookie)
+    expect(fragmentOf(res.headers.location).get('oidc_error')).toBe('oidc_email_taken')
+    expect(prismaMock.userIdentity.create).not.toHaveBeenCalled()
+    expect(prismaMock.user.create).not.toHaveBeenCalled()
+  })
+
   it("email vérifié d'un compte à mot de passe : refusé, ni relié ni dupliqué (le compte a pu être créé par un tiers)", async () => {
     prismaMock.user.findUnique.mockResolvedValue({ id: 'user-7', passwordHash: 'hash' })
     const { cookie } = await start()
