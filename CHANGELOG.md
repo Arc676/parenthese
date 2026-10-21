@@ -2,6 +2,14 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
+## 1.3.0 (2026-10-21)
+
+### Memories from Immich
+
+- Admins with Immich configured can add photos and videos from their library, from a person's memories or when adding a moment. Search by context, filter by photos or videos or by face, open a larger preview and pick several at once (#103 by @Askrosm, #128).
+- Photos come in as Immich's preview, so iPhone HEIC pictures work, and downloads stop as soon as they pass the size limit (#103).
+- Several memories picked at once are added in one go, each titled from its file name (#128).
+
 ## 1.2.1 (2026-10-21)
 
 ### Fixes
