@@ -49,6 +49,45 @@ describe('fichiers envoyés : type lu dans les octets', () => {
   })
 })
 
+// Boîte ftyp minimale : taille, « ftyp », marque principale
+function ftypBox(brand: string): Buffer {
+  const box = Buffer.alloc(24)
+  box.writeUInt32BE(24, 0)
+  box.write('ftyp', 4, 'latin1')
+  box.write(brand, 8, 'latin1')
+  return box
+}
+
+describe('HEIC et AVIF : reconnus, jamais pris pour une vidéo', () => {
+  it.each(['heic', 'heix', 'mif1', 'msf1', 'heim', 'heis'])('marque %s : image/heic, refusée à l’envoi', (brand) => {
+    expect(sniffMimeType(ftypBox(brand), 'photo', 'IMG_0001.HEIC')).toBe('image/heic')
+    expect(accepted(ftypBox(brand), 'photo', 'IMG_0001.HEIC')).toBeNull()
+    expect(accepted(ftypBox(brand), 'video', 'IMG_0001.MOV')).toBeNull()
+  })
+
+  it('marque avif : image/avif, refusée à l’envoi (pas de conversion)', () => {
+    expect(sniffMimeType(ftypBox('avif'), 'photo')).toBe('image/avif')
+    expect(accepted(ftypBox('avif'), 'photo')).toBeNull()
+  })
+
+  it('marque hevc : image/heic quand l’envoi se déclare photo, vidéo MP4 sinon (une vidéo HEVC reste acceptée)', () => {
+    expect(sniffMimeType(ftypBox('hevc'), 'photo')).toBe('image/heic')
+    expect(accepted(ftypBox('hevc'), 'video')).toBe('video/mp4')
+  })
+
+  it('les vidéos MP4 et QuickTime ne changent pas', () => {
+    expect(accepted(ftypBox('isom'), 'video')).toBe('video/mp4')
+    expect(accepted(ftypBox('mp42'), 'video')).toBe('video/mp4')
+    expect(accepted(ftypBox('qt  '), 'video')).toBe('video/quicktime')
+    expect(accepted(ftypBox('M4A '), 'audio')).toBe('audio/mp4')
+  })
+
+  it('une image HEIC n’entre dans aucun type de média autorisé', () => {
+    expect(isMimeAllowedForType('photo', 'image/heic')).toBe(false)
+    expect(isMimeAllowedForType('photo', 'image/avif')).toBe(false)
+  })
+})
+
 describe('photos : métadonnées retirées, rotation appliquée', () => {
   it('retire le GPS et tourne les pixels selon l orientation du téléphone', async () => {
     const withGps = await sharp({ create: { width: 64, height: 48, channels: 3, background: { r: 200, g: 120, b: 60 } } })

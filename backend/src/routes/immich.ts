@@ -17,7 +17,7 @@ import {
   type ImmichPersonSummary,
 } from '../lib/immich.js'
 import { decryptImmichApiKey, encryptImmichApiKey } from '../lib/immich-secret.js'
-import { InvalidMediaError, isImmichAvatarPath, removeStoredFile, sniffMimeType } from '../lib/media-files.js'
+import { IMAGE_MIME_TYPES, InvalidMediaError, isImmichAvatarPath, removeStoredFile, sniffMimeType } from '../lib/media-files.js'
 import { exceedsStorageQuota, getStorageRoot, prepareUploadedFile, requireAdminMembership } from './media.js'
 
 // Reconnaissance des visages : associer une personne de l'arbre à une personne Immich, dont la
@@ -315,7 +315,7 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
     // Le type se lit dans les octets, pas dans ce qu'Immich déclare : la vignette finit dans une
     // balise <img>. Vide, trop grande ou pas une image : rien à montrer.
     const mimeType = thumbnail?.length ? sniffMimeType(thumbnail, 'photo') : null
-    if (!thumbnail || !mimeType?.startsWith('image/')) {
+    if (!thumbnail || !mimeType || !(IMAGE_MIME_TYPES as readonly string[]).includes(mimeType)) {
       request.log.warn('Vignette Immich vide, trop grande ou qui n’est pas une image')
       return reply.code(404).send({ error: 'thumbnail_not_found' })
     }
