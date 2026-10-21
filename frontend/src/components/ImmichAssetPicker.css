@@ -45,7 +45,7 @@
 .iap :is(.iap-open, .iap-select, .iap-face-choice, .pz-tab):focus-visible { outline: 2px solid var(--pz-a500); outline-offset: -3px; }
 .iap-clear-label { display: inline; }
 .iap-empty { display: grid; justify-items: center; align-content: center; min-height: 210px; gap: 12px; color: var(--pz-faint); text-align: center; }
-.iap-empty > p { margin: 0; font: 400 15px/1.45 var(--pz-sans); color: var(--pz-ink-2); }
+.iap-empty > p { margin: 0; font: 400 20px/1.2 var(--pz-serif); color: var(--pz-ink-2); }
 .iap-empty .pz-busy { width: 40px; height: 24px; }
 .iap-pagination { display: flex; align-items: center; justify-content: space-between; padding: 0 22px 18px; }
 .iap-footer { position: sticky; bottom: 0; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 18px 28px; background: var(--pz-surface); border-top: 1px solid var(--pz-line); z-index: 2; }
@@ -58,7 +58,7 @@
 .iap-image--large { background: var(--pz-ink); }
 .iap-image--large img { width: 100%; height: 100%; object-fit: contain; }
 .iap-preview-caption { display: grid; gap: 4px; padding: 14px 28px 20px; }
-.iap-preview-caption > p { margin: 0; font: 400 15px/1.4 var(--pz-serif); color: var(--pz-ink); overflow-wrap: anywhere; }
+.iap-preview-caption > p { margin: 0; font: 400 20px/1.2 var(--pz-serif); color: var(--pz-ink); overflow-wrap: anywhere; }
 @media (hover: hover) and (pointer: fine) {
   .iap-open:hover .iap-image img { transform: scale(1.035); }
   .iap-asset:hover { box-shadow: 0 0 0 1px var(--pz-a300), var(--pz-shadow); }

@@ -113,7 +113,7 @@ const MediaManagerPanel = ({
       for (const item of immichFiles) {
         const ok = await onUpload({
           file: item.file,
-          caption: item.file.name.replace(/.[^.]+$/, '') || null,
+          caption: item.file.name.replace(/\.[^.]+$/, '') || null,
           source: source.trim() || null,
           mediaType: item.file.type.startsWith('video/') ? 'video' : 'photo',
           citationText: '',
@@ -231,59 +231,44 @@ const MediaManagerPanel = ({
           )}
 
           {pickingImmich && canManage && <ImmichAssetPicker treeId={treeId} token={token} onClose={() => setPickingImmich(false)} onSelect={addImmichFile} />}
-          {!isCitation && !isYoutubeVideo && !immichAvailable && (
-            <div className="pz-field">
-              <label htmlFor="mediaUploadFile" className="mm-drop">
-                <span className="mm-drop-icon" aria-hidden="true"><Upload size={20} strokeWidth={1.8} /></span>
-                <span className="mm-drop-text">
-                  <strong>{file ? file.name : t('Choisir un fichier')}</strong>
-                  <span>{file ? t('Pour en prendre un autre, touchez ici') : mediaType === 'photo' ? t('5 Mo au maximum') : t('20 Mo au maximum')}</span>
-                </span>
-              </label>
-              <input
-                id="mediaUploadFile"
-                className="mm-drop-input"
-                type="file"
-                accept={fileAccept}
-                onChange={(event) => { setFile(event.target.files?.[0] || null); setImmichFiles([]) }}
-              />
-            </div>
-          )}
-          {!isCitation && !isYoutubeVideo && immichAvailable && (() => {
-            // Depuis Immich est un lien dans la zone de dépôt (pas un bouton à part)
-            const immichLink = <button type="button" className="mm-drop-link" disabled={loading || sending} onClick={() => setPickingImmich(true)}>{t('depuis Immich')}</button>
+          {!isCitation && !isYoutubeVideo && (() => {
+            // Immich ne donne que des photos et des vidéos : le lien n'apparaît que pour ces deux types
+            const withImmich = immichAvailable && (mediaType === 'photo' || mediaType === 'video')
+            // Le lien est un bouton dans le label : un clic dessus n'ouvre pas le sélecteur de fichiers
+            const immichLink = withImmich && <button type="button" className="mm-drop-link" disabled={loading || sending} onClick={() => setPickingImmich(true)}>{t('depuis Immich')}</button>
             const count = immichFiles.length
-            const label = count === 1 ? t('1 souvenir choisi dans Immich') : count > 1 ? t('{n} souvenirs choisis dans Immich', { n: count }) : file ? file.name : null
+            const title = count === 1 ? t('1 souvenir choisi dans Immich')
+              : count > 1 ? t('{n} souvenirs choisis dans Immich', { n: count })
+                : file ? file.name : t('Choisir un fichier')
+            const hint = count > 0 ? <>{t('En ajouter d’autres')} {immichLink}</>
+              : file ? t('Pour en prendre un autre, touchez ici')
+                : mediaType === 'photo' ? t('5 Mo au maximum') : t('20 Mo au maximum')
             return (
               <div className="pz-field">
+                <label htmlFor="mediaUploadFile" className="mm-drop">
+                  <span className="mm-drop-icon" aria-hidden="true"><Upload size={20} strokeWidth={1.8} /></span>
+                  <span className="mm-drop-text">
+                    <strong>{title}{withImmich && count === 0 && !file && <> {t('ou')} {immichLink}</>}</strong>
+                    <span>{hint}</span>
+                  </span>
+                </label>
                 <input
                   id="mediaUploadFile"
                   ref={fileInput}
                   className="mm-drop-input"
                   type="file"
                   accept={fileAccept}
-                  aria-label={t('Choisir un fichier')}
                   onChange={(event) => { setFile(event.target.files?.[0] || null); setImmichFiles([]) }}
                 />
-                <div className="mm-drop" onClick={(event) => { if (!event.target.closest('button')) fileInput.current?.click() }}>
-                  <span className="mm-drop-icon" aria-hidden="true"><Upload size={20} strokeWidth={1.8} /></span>
-                  <span className="mm-drop-text">
-                    <strong>{label || <>{t('Choisir un fichier')} {t('ou')} {immichLink}</>}</strong>
-                    <span>{file ? <>{t('Pour en prendre un autre, touchez ici')} {t('ou')} {immichLink}</> : count > 0 ? <>{t('ou')} {immichLink}</> : (mediaType === 'photo' ? t('5 Mo au maximum') : t('20 Mo au maximum'))}</span>
-                  </span>
-                </div>
                 {count > 0 && (
-                  <>
-                    <ul className="mm-immich-queue" aria-label={t('Souvenirs choisis dans Immich')}>
-                      {immichFiles.map((item) => (
-                        <li key={item.key}>
-                          <span>{item.file.name}</span>
-                          <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => setImmichFiles((list) => list.filter((entry) => entry.key !== item.key))} disabled={sending}>{t('Retirer')}</button>
-                        </li>
-                      ))}
-                    </ul>
-                    <p className="pz-hint">{t('Chaque souvenir garde le nom de son fichier Immich.')}</p>
-                  </>
+                  <ul className="mm-immich-queue" aria-label={t('Souvenirs choisis dans Immich')}>
+                    {immichFiles.map((item) => (
+                      <li key={item.key}>
+                        <span>{item.file.name}</span>
+                        <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => setImmichFiles((list) => list.filter((entry) => entry.key !== item.key))} disabled={sending}>{t('Retirer')}</button>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
             )
@@ -316,17 +301,16 @@ const MediaManagerPanel = ({
           )}
 
           <div className={canManage ? 'pz-row2' : undefined}>
-            <div className="pz-field">
+            {immichFiles.length === 0 && <div className="pz-field">
               <label htmlFor="mediaUploadCaption">{canManage ? t('Titre') : t('Une légende')} <span className="mm-optional">{t('facultatif')}</span></label>
               <input
                 id="mediaUploadCaption"
                 type="text"
-                disabled={immichFiles.length > 0}
                 value={caption}
                 onChange={(event) => setCaption(event.target.value)}
                 placeholder={t('Été à Quiberon, 1978')}
               />
-            </div>
+            </div>}
             {canManage && <div className="pz-field">
               <label htmlFor="mediaUploadSource">{t('Source')} <span className="mm-optional">{t('facultatif')}</span></label>
               <input
@@ -359,7 +343,7 @@ const MediaManagerPanel = ({
           <div className="pz-modal-actions">
             <button type="submit" className="pz-btn pz-btn--primary" disabled={!canUpload}>
               <Plus size={16} aria-hidden="true" />
-              <PzBusy busy={loading} busyLabel={t('Envoi du souvenir')}>{t('Ajouter ce souvenir')}</PzBusy>
+              <PzBusy busy={loading || sending} busyLabel={t('Envoi du souvenir')}>{immichFiles.length > 1 ? t('Ajouter ces {n} souvenirs', { n: immichFiles.length }) : t('Ajouter ce souvenir')}</PzBusy>
             </button>
           </div>
         </form>
