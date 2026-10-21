@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 
 import { env } from '../config/env.js'
-import { hashPassword, verifyPassword } from '../lib/auth.js'
+import { confirmsWithPassword, hashPassword, verifyPassword } from '../lib/auth.js'
 import { isOidcEnabled } from '../lib/oidc.js'
 import { createAccountIfAllowed, isRegistrationOpen } from '../lib/registration.js'
 import { signUserSession } from '../lib/user-session.js'
@@ -237,7 +237,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     }
 
     // hasPassword : l'écran de suppression demande le mot de passe, ou l'email pour un compte sans mot de passe
-    return reply.send({ user: { id: user.id, email: user.email, firstName: user.firstName, hasPassword: Boolean(user.passwordHash) } })
+    return reply.send({ user: { id: user.id, email: user.email, firstName: user.firstName, hasPassword: confirmsWithPassword(user.passwordHash) } })
   })
 
   app.get('/me/last-tree', async (request, reply) => {
@@ -379,17 +379,19 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
       const payload = await request.jwtVerify<AnyJwtPayload & { exp?: number; iat?: number }>()
 
-      if (!user.passwordHash) {
-        // Compte né d'une connexion OIDC : pas de mot de passe à redonner. Il retape son email, et la session doit
-        // venir d'une connexion récente chez le fournisseur (une session volée ou oubliée ouverte ne suffit pas).
+      const withPassword = confirmsWithPassword(user.passwordHash)
+      if (!withPassword) {
+        // Compte né d'une connexion OIDC, ou dont la connexion par mot de passe est fermée : pas de mot de passe à
+        // redonner. Il retape son email, et la session doit venir d'une connexion récente chez le fournisseur
+        // (une session volée ou oubliée ouverte ne suffit pas).
         const sessionAgeMs = typeof payload.iat === 'number' ? Date.now() - payload.iat * 1000 : Infinity
         if (sessionAgeMs > RECENT_SIGN_IN_MS) {
           return reply.code(403).send({ error: 'recent_sign_in_required' })
         }
       }
 
-      const isValid = user.passwordHash
-        ? Boolean(parsed.data.password) && await verifyPassword(parsed.data.password as string, user.passwordHash)
+      const isValid = withPassword
+        ? Boolean(parsed.data.password) && await verifyPassword(parsed.data.password as string, user.passwordHash as string)
         : (parsed.data.confirmEmail ?? '').trim().toLowerCase() === user.email
       if (!isValid) {
         return reply.code(403).send({ error: 'invalid_password' })

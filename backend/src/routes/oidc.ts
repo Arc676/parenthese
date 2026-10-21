@@ -13,6 +13,7 @@ import {
   type OidcIdentity,
   type OidcPending,
 } from '../lib/oidc.js'
+import { confirmsWithPassword } from '../lib/auth.js'
 import { createAccountIfAllowed } from '../lib/registration.js'
 import { signUserSession } from '../lib/user-session.js'
 
@@ -64,7 +65,10 @@ async function resolveAccount(app: FastifyInstance, identity: OidcIdentity): Pro
   if (!identity.email) return { error: 'oidc_email_missing' }
   if (env.OIDC_REQUIRE_VERIFIED_EMAIL && !identity.emailVerified) return { error: 'oidc_email_unverified' }
 
-  const existing = await app.prisma.user.findUnique({ where: { email: identity.email }, select: { id: true, passwordHash: true } })
+  const existing = await app.prisma.user.findUnique({
+    where: { email: identity.email },
+    select: { id: true, passwordHash: true, identities: { select: { id: true }, take: 1 } },
+  })
   if (existing) {
     // Relier un compte existant demande toujours un email vérifié, même avec OIDC_REQUIRE_VERIFIED_EMAIL=false :
     // sinon quiconque déclare l'adresse d'un autre chez le fournisseur prendrait son compte
@@ -72,6 +76,9 @@ async function resolveAccount(app: FastifyInstance, identity: OidcIdentity): Pro
     // Jamais vers un compte à mot de passe : l'inscription ne vérifie pas l'adresse, un tiers aurait pu créer ce
     // compte avec l'email de la victime, et sa connexion par le fournisseur y serait reliée, lisible par le tiers
     if (existing.passwordHash) return { error: 'oidc_email_taken' }
+    // Un compte déjà relié à une autre identité (un autre sujet) n'est jamais repris par un nouveau sujet qui
+    // présente le même email : le fournisseur a pu réattribuer l'adresse. Le compte reste à celui qui l'a relié.
+    if (existing.identities?.length) return { error: 'oidc_email_taken' }
 
     await app.prisma.userIdentity.create({
       data: { userId: existing.id, issuer: identity.issuer, subject: identity.subject },
@@ -210,7 +217,7 @@ export const oidcRoutes: FastifyPluginAsync = async (app) => {
 
       return reply.send({
         token: signUserSession(app, user),
-        user: { id: user.id, email: user.email, firstName: user.firstName, hasPassword: Boolean(user.passwordHash) },
+        user: { id: user.id, email: user.email, firstName: user.firstName, hasPassword: confirmsWithPassword(user.passwordHash) },
       })
     },
   )

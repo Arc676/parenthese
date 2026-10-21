@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import type { FastifyInstance } from 'fastify'
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
@@ -53,6 +53,7 @@ let storageRoot = ''
 let passwordHash = ''
 let createApp: () => FastifyInstance
 let resolveTreeMediaDirectory: (treeId: string, root?: string) => string | null
+let env: { PASSWORD_LOGIN: boolean }
 
 function applyTestEnv(): void {
   process.env.NODE_ENV = 'test'
@@ -97,6 +98,7 @@ beforeAll(async () => {
 
   createApp = (await import('../src/app.js')).createApp
   resolveTreeMediaDirectory = (await import('../src/lib/tree-purge.js')).resolveTreeMediaDirectory
+  ;({ env } = await import('../src/config/env.js'))
 })
 
 afterAll(async () => {
@@ -218,6 +220,73 @@ describe('DELETE /auth/me', () => {
       expect(prismaMock.user.delete).not.toHaveBeenCalled()
       await app.close()
     }, 15000)
+  })
+
+  describe('compte à mot de passe relié à OIDC, connexion par mot de passe fermée (PASSWORD_LOGIN=false)', () => {
+    const signedAt = async (app: FastifyInstance, minutesAgo: number) => {
+      await app.ready()
+      return (app as any).jwt.sign({
+        kind: 'user', sub: 'user-1', jti: randomUUID(), userId: 'user-1', email: 'user@example.com',
+        iat: Math.floor(Date.now() / 1000) - minutesAgo * 60,
+      }, { expiresIn: '1h' })
+    }
+
+    beforeEach(() => {
+      env.PASSWORD_LOGIN = false
+      prismaMock.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'user@example.com', passwordHash })
+    })
+
+    afterEach(() => {
+      env.PASSWORD_LOGIN = true
+    })
+
+    it('se supprime avec son email retapé, juste après une connexion (le mot de passe ne peut plus servir)', async () => {
+      const app = createApp()
+      const response = await app.inject({
+        method: 'DELETE', url: '/auth/me',
+        headers: { authorization: `Bearer ${await signedAt(app, 2)}` },
+        payload: { confirmEmail: 'user@example.com' },
+      })
+      expect(response.statusCode).toBe(200)
+      expect(prismaMock.user.delete).toHaveBeenCalled()
+      await app.close()
+    })
+
+    it('refuse une session de plus de 15 minutes, même avec le bon email', async () => {
+      const app = createApp()
+      const response = await app.inject({
+        method: 'DELETE', url: '/auth/me',
+        headers: { authorization: `Bearer ${await signedAt(app, 20)}` },
+        payload: { confirmEmail: 'user@example.com' },
+      })
+      expect(response.statusCode).toBe(403)
+      expect(response.json()).toEqual({ error: 'recent_sign_in_required' })
+      expect(prismaMock.user.delete).not.toHaveBeenCalled()
+      await app.close()
+    })
+
+    it('refuse un autre email', async () => {
+      const app = createApp()
+      const response = await app.inject({
+        method: 'DELETE', url: '/auth/me',
+        headers: { authorization: `Bearer ${await signedAt(app, 2)}` },
+        payload: { confirmEmail: 'autre@example.com' },
+      })
+      expect(response.statusCode).toBe(403)
+      expect(prismaMock.user.delete).not.toHaveBeenCalled()
+      await app.close()
+    })
+
+    it('dit à l’écran de demander l’email, pas un mot de passe (hasPassword=false)', async () => {
+      const app = createApp()
+      const response = await app.inject({
+        method: 'GET', url: '/auth/me',
+        headers: { authorization: `Bearer ${await signedAt(app, 2)}` },
+      })
+      expect(response.statusCode).toBe(200)
+      expect(response.json().user.hasPassword).toBe(false)
+      await app.close()
+    })
   })
 
   it('rejects a wrong password without deleting anything', async () => {
