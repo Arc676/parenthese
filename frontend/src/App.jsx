@@ -51,7 +51,7 @@ import {
   reorderSiblings,
   uploadPersonMedia,
 } from './api/treeApi'
-import { fetchImmichConfig, getImmichErrorMessage, unassignImmichPerson } from './api/immichApi.js'
+import { getImmichErrorMessage, unassignImmichPerson } from './api/immichApi.js'
 import { fetchAuthOptions, oidcStartUrl } from './api/authApi'
 import { useAuth } from './hooks/useAuth'
 import { useTreeAccess, getTreeTokenStorageKey, getSlugFromPathname, readTreeAccessRole, TREE_ID_FROM_ENV } from './hooks/useTreeAccess'
@@ -1715,51 +1715,6 @@ function App() {
     }
   }, [auth.userAuth.token, tree.treeContext.accessToken, tree.treeContext.treeId, refreshTreeAndKeepSelection])
 
-  // « + photo » dans l'arbre : le sélecteur part dans le clic (Safari iOS refuse un input file ouvert hors geste),
-  // puis la fenêtre de recadrage s'ouvre dans la fiche de la personne
-  const portraitInputRef = useRef(null)
-  const portraitPickerPersonIdRef = useRef(null)
-  const [pendingPortraitCrop, setPendingPortraitCrop] = useState(null)
-  const [photoSourceRequest, setPhotoSourceRequest] = useState(null)
-  const [immichSourceReady, setImmichSourceReady] = useState(false)
-
-  // Administrateur : Immich proposé dans le menu des sources seulement s'il est configuré
-  useEffect(() => {
-    let cancelled = false
-    const treeId = tree.treeContext.treeId
-    const token = tree.treeContext.accessToken || auth.userAuth.token
-    if (!userRole.isAdmin || !tree.canEditCurrentTree || !treeId || !token) {
-      setImmichSourceReady(false)
-      return undefined
-    }
-    fetchImmichConfig(treeId, token)
-      .then(({ config }) => { if (!cancelled) setImmichSourceReady(Boolean(config?.configured)) })
-      .catch(() => { if (!cancelled) setImmichSourceReady(false) })
-    return () => { cancelled = true }
-  }, [userRole.isAdmin, tree.canEditCurrentTree, tree.treeContext.treeId, tree.treeContext.accessToken, auth.userAuth.token])
-
-  const handlePhotoPlaceholderClick = useCallback((personId) => {
-    // En modification avec Immich : le menu des sources s'ouvre dans la fiche (le badge en est l'ancre)
-    if (editMode.isActive && immichSourceReady) {
-      setPhotoSourceRequest({ personId })
-    } else {
-      // Sans menu : le sélecteur de fichiers part tout de suite, dans le clic
-      portraitPickerPersonIdRef.current = personId
-      portraitInputRef.current?.click()
-    }
-    handlePersonSelect(personId)
-  }, [editMode.isActive, immichSourceReady, handlePersonSelect])
-
-  const handlePortraitPicked = useCallback(async (event) => {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    const personId = portraitPickerPersonIdRef.current
-    portraitPickerPersonIdRef.current = null
-    if (!file || personId === null) return
-    const result = await handlePersonAvatarUpload(personId, file)
-    if (result?.previewUrl) setPendingPortraitCrop({ personId, src: result.previewUrl })
-  }, [handlePersonAvatarUpload])
-
   // Visage venu d'Immich : recharger l'arbre pour montrer le nouveau portrait (ou le portrait restant)
   const handleImmichChange = useCallback(async (personId) => {
     await refreshTreeAndKeepSelection(personId, { relayout: false, avatarCacheBust: Date.now() })
@@ -3244,17 +3199,11 @@ function App() {
         zoomApiRef={galaxyZoomApiRef}
         focusPersonId={tree.treeContext.rootPersonId}
         assetRevision={tree.assetRevision}
-        // « + photo » seulement en modification : en lecture, un clic sur un portrait vide ouvre la fiche (issue #124)
-        photoHint={tree.canEditCurrentTree && editMode.isActive}
-        onPhotoPlaceholderClick={tree.canEditCurrentTree && editMode.isActive ? handlePhotoPlaceholderClick : null}
         reorderEnabled={canReorderSiblings}
         onReorderSiblings={handleReorderSiblings}
         familyTabs={familyTabs}
       />
       <ZoomControl zoomApiRef={galaxyZoomApiRef} />
-      {tree.canEditCurrentTree && (
-        <input ref={portraitInputRef} type="file" accept="image/*" className="pc-hidden-input" onChange={handlePortraitPicked} />
-      )}
       {tree.selectedPerson && (
         <PersonCard
           person={tree.selectedPerson}
@@ -3267,10 +3216,6 @@ function App() {
           onAvatarUpload={tree.canEditCurrentTree ? handlePersonAvatarUpload : undefined}
           onAvatarDelete={tree.canEditCurrentTree ? handlePersonAvatarDelete : undefined}
           onAvatarCrop={tree.canEditCurrentTree ? handlePersonAvatarCrop : undefined}
-          pendingPortraitCrop={pendingPortraitCrop}
-          onPendingPortraitCropDone={() => setPendingPortraitCrop(null)}
-          photoSourceRequest={photoSourceRequest}
-          onPhotoSourceRequestDone={() => setPhotoSourceRequest(null)}
           treeId={tree.treeContext.treeId || null}
           immichToken={tree.treeContext.accessToken || auth.userAuth.token}
           onImmichChange={tree.canEditCurrentTree ? handleImmichChange : undefined}
