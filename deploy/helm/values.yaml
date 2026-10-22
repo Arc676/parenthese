@@ -1,0 +1,45 @@
+database:
+  enabled: false
+  image:
+    name: postgres
+    tag: 16-alpine
+  secret:
+    name: null
+    userKey: username
+    passwordKey: password
+    databaseKey: database
+  volumeClaim:
+    class: null
+    create: false
+    name: db-data
+    size: 2Gi
+
+api:
+  dbUrl: db
+  hostnames: []
+  image:
+    name: ghcr.io/iliesallali/parenthese-web
+    tag: latest
+  jwt:
+    expiry: 7d
+    treeExpiry: 24h
+    secret:
+      name: null
+      secretKey: secret
+  volumeClaim:
+    class: null
+    create: false
+    name: app-data
+    size: 2Gi
+
+web:
+  hostname: null
+  httproute:
+    enabled: false
+    parentRefs: []
+  ingress:
+    enabled: false
+    ingressClass: nginx
+  image:
+    name: ghcr.io/iliesallali/parenthese-api
+    tag: latest

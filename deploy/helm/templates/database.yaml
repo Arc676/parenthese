@@ -1,0 +1,47 @@
+{{- if .Values.database.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: database
+  namespace: "{{ .Release.Namespace }}"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: parenthese-db
+  template:
+    metadata:
+      labels:
+        app: parenthese-db
+    spec:
+      containers:
+        - name: db
+          image: "{{ .Values.database.image.name }}:{{ .Values.database.image.tag }}"
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.database.secret.name }}"
+                  key: "{{ .Values.database.secret.userKey }}"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.database.secret.name }}"
+                  key: "{{ .Values.database.secret.passwordKey }}"
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.database.secret.name }}"
+                  key: "{{ .Values.database.secret.databaseKey }}"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+              readOnly: false
+          ports:
+            - containerPort: 5432
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: "{{ .Values.database.volumeClaim.name }}"
+{{- end }}
