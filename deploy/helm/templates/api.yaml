@@ -1,0 +1,58 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: "{{ .Release.Namespace }}"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: parenthese-api
+  template:
+    metadata:
+      labels:
+        app: parenthese-api
+    spec:
+      containers:
+        - name: api
+          image: "{{ .Values.database.image.name }}:{{ .Values.database.image.tag }}"
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.database.secret.name }}"
+                  key: "{{ .Values.database.secret.userKey }}"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.database.secret.name }}"
+                  key: "{{ .Values.database.secret.passwordKey }}"
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.database.secret.name }}"
+                  key: "{{ .Values.database.secret.databaseKey }}"
+            - name: DATABASE_URL
+              value: postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ .Values.api.dbUrl }}:5432/$(POSTGRES_DB)
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: 4000
+            - name: MEDIA_STORAGE_PATH
+              value: /app/storage/media
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.api.jwt.secret.name }}"
+                  key: "{{ .Values.api.jwt.secret.databaseKey }}"
+          volumeMounts:
+            - name: data
+              mountPath: /app/storage/media
+              readOnly: false
+          ports:
+            - containerPort: 4000
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: "{{ .Values.api.volumeClaim.name }}"

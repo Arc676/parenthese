@@ -1,0 +1,29 @@
+{{- if .Values.database.volumeClaim.create }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: "{{ .Values.database.volumeClaim.name }}"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: "{{ .Values.database.volumeClaim.size }}"
+  storageClassName: "{{ .Values.database.volumeClaim.class }}"
+{{- end }}
+{{- if .Values.api.volumeClaim.create }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: "{{ .Values.api.volumeClaim.name }}"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: "{{ .Values.api.volumeClaim.size }}"
+  storageClassName: "{{ .Values.api.volumeClaim.class }}"
+{{- end }}
+
