@@ -3,7 +3,7 @@ import { getPersonMedias, getParents, getChildren, getPersonUnions, persons as g
 import { PERSON_R, FLOAT_SPEED, FLOAT_AMPLITUDE, REPULSION_RADIUS, REPULSION_STRENGTH, MAX_ORBIT_MEDIAS, ENTRANCE_GEN_DELAY, ENTRANCE_NODE_DURATION, ENTRANCE_NODE_STAGGER, ENTRANCE_MAX_GEN_SPAN, ENTRANCE_MAX_NODE_SPAN, ENTRANCE_LINE_DELAY, ENTRANCE_LINE_DURATION, ENTRANCE_ORBIT_DELAY, ENTRANCE_ORBIT_DURATION, ENTRANCE_ORBIT_STAGGER } from './galaxy/constants'
 import { easeOutCubic } from './galaxy/utils'
 import { computeLayout, generateNodeRandomData, coupleBarMeta } from './galaxy/elkLayout'
-import { computeBlockLayout, familyTabsOf, subgraphOf } from './galaxy/blockLayout'
+import { computeBlockLayout, familyTabsOf, lineToFamily, subgraphOf } from './galaxy/blockLayout'
 
 // Placement par blocs familiaux par défaut (mesures : tools/layout-bench). ?layout=sugiyama = placement Sugiyama.
 const USE_BLOCK_LAYOUT = typeof window === 'undefined' || new URLSearchParams(window.location.search).get('layout') !== 'sugiyama'
@@ -43,7 +43,7 @@ const DROP_SPRING = { stiffness: 480, dampingRatio: 0.72 }
 const centerX = (node) => node.x + node.width / 2
 const prefersReducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, reorderEnabled = false, onReorderSiblings = null, familyTabs = true, annotationViewRef = null, onAnnotationsAnchored = null }) => {
+const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, reorderEnabled = false, onReorderSiblings = null, familyTabs = true, annotationViewRef = null, onAnnotationsAnchored = null, selfPersonId = null }) => {
   const canvasRef = useRef(null)
   const layoutDataRef = useRef(null)
   // Onglets de familles (réglage `familyTabs`) : la liste des familles de l'arbre, calculée une fois par
@@ -482,7 +482,10 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     activeTabRef.current = tab
     // La personne de départ (ou la charnière de l'onglet) sert de référence aux rangées
     focusPersonIdRef.current = tab ? tab.referenceId : startRefRef.current
-    const graph = tab?.personIds ? subgraphOf(tab.personIds) : null
+    // Dans l'onglet d'une autre famille, la personne commune (« C'est moi », sinon la personne de départ) reste
+    // là, reliée par sa ligne directe (Patch, 21/10 : « je veux me voir tout le temps »)
+    const line = tab?.personIds ? lineToFamily(selfPersonId ?? startRefRef.current ?? tabsCacheRef.current.tabs[0]?.resolvedRef, tab.personIds) : new Set()
+    const graph = tab?.personIds ? subgraphOf(new Set([...tab.personIds, ...line])) : null
     // Annotations d'avant l'ancrage (x, y seuls) : rattachées une fois à la personne la plus proche dans le
     // placement de l'onglet de départ, puis enregistrées. Calculé avant l'arbre affiché (coupleBarMeta, voir plus haut)
     const legacy = annotationData.some((a) => !readAnchor(a))
@@ -498,6 +501,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       const target = n._familyTab && tabsCacheRef.current.tabs.find((tb) => tb.key === n._familyTab.tabKey)
       if (target) n._familyTab = { ...n._familyTab, label: target.label, count: target.count }
     }
+    for (const n of result.children) if (n._type === 'person' && line.has(n.id.replace(/^p-/, ''))) n._line = true
     // Dans l'onglet d'une belle-famille, chaque charnière (conjoint marié dans la famille d'où l'on vient)
     // porte le badge de retour
     if (tab?.parentKey) {
@@ -642,7 +646,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       pendingFocusRef.current = null
       requestAnimationFrame(() => zoomApiRef?.current?.focusPerson?.(id))
     }
-  }, [graphRevision, activeKey, familyTabs])
+  }, [graphRevision, activeKey, familyTabs, selfPersonId])
 
   // Sync selectedPersonId
   useEffect(() => {

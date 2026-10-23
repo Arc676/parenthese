@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeBlockLayout, filCroiseAutreFamille } from './blockLayout'
+import { computeBlockLayout, filCroiseAutreFamille, lineToFamily } from './blockLayout'
 import { COMPACT_W, PERSON_W } from './constants'
 
 const person = (id) => ({ id, firstName: id, lastName: '' })
@@ -132,5 +132,39 @@ describe('computeBlockLayout, couple tourné vers les familles de chacun', () =>
     const { children } = computeBlockLayout(graph)
     const x = (id) => { const n = children.find(c => c.id === id); return n.x + n.width / 2 }
     expect(Math.sign(x('p-marc') - x('p-nadia'))).toBe(Math.sign(x('u-uLH') - x('u-uPO')))
+  })
+})
+
+describe('lineToFamily, ligne directe vers un onglet de famille', () => {
+  // gp + gm → mere (+ pere) → moi ; mere a un frère (oncle) ; gm vient de la famille B (b1 + b2 → gm, b1 frère bx)
+  const graph = {
+    persons: ['gp', 'gm', 'mere', 'pere', 'oncle', 'moi', 'b1', 'b2', 'bx'].map(person),
+    unions: [union('u1', 'gp', 'gm'), union('u2', 'pere', 'mere'), union('u3', 'b1', 'b2')],
+    filiations: [fil('f1', 'mere', 'u1'), fil('f2', 'oncle', 'u1'), fil('f3', 'moi', 'u2'), fil('f4', 'gm', 'u3'), fil('f5', 'bx', 'u3')],
+  }
+
+  it("rend le chemin jusqu'au premier membre, avec les deux parents à chaque pas, sans fratrie", () => {
+    const line = lineToFamily('moi', ['gm', 'b1', 'b2', 'bx'], graph)
+    expect([...line].sort()).toEqual(['gp', 'mere', 'moi', 'pere'])
+  })
+
+  it('rend un ensemble vide si la personne est déjà membre ou inconnue', () => {
+    expect(lineToFamily('gm', ['gm', 'b1'], graph).size).toBe(0)
+    expect(lineToFamily('personne', ['gm'], graph).size).toBe(0)
+    expect(lineToFamily(null, ['gm'], graph).size).toBe(0)
+  })
+
+  it('se dessine en entier avec la famille', () => {
+    const members = ['gm', 'b1', 'b2', 'bx']
+    const line = lineToFamily('moi', members, graph)
+    const keep = new Set([...members, ...line])
+    const sub = {
+      persons: graph.persons.filter(p => keep.has(p.id)),
+      unions: graph.unions.filter(u => keep.has(u.partner1Id) && keep.has(u.partner2Id)),
+      filiations: graph.filiations.filter(f => keep.has(f.childId)),
+    }
+    const drawn = new Set(computeBlockLayout(sub, 'gm').children.filter(n => n._type === 'person').map(n => n.id))
+    for (const id of line) expect(drawn.has(`p-${id}`)).toBe(true)
+    expect(drawn.has('p-oncle')).toBe(false)
   })
 })

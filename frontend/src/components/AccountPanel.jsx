@@ -34,13 +34,13 @@ const AccountPanel = ({
 
   const displayName = linkedPerson
     ? `${linkedPerson.firstName || ''} ${linkedPerson.lastName || ''}`.trim()
-    : userDisplayName || t('Mon compte')
+    : userDisplayName || (userEmail ? t('Mon compte') : t('Qui êtes-vous dans cet arbre ?'))
 
   return (
     <div className="pz-overlay account-overlay account-overlay--open" onClick={onClose}>
       <div className="pz-modal account-card" role="dialog" aria-modal="true" aria-labelledby="accountPanelTitle" onClick={(event) => event.stopPropagation()}>
         <div className="pz-modal-head">
-          <p className="pz-eyebrow">{t('Mon compte')}</p>
+          <p className="pz-eyebrow">{userEmail ? t('Mon compte') : t('Dans cet arbre')}</p>
           <h1 id="accountPanelTitle" className="pz-title">{displayName}</h1>
           {userEmail && <p className="pz-sub">{userEmail}</p>}
         </div>

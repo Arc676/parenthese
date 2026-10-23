@@ -5,7 +5,7 @@ import { cropShape, cropViewport, isLandscapeRect, resolveFrameKind } from '../.
 // le Map global utilisé plus bas)
 import { Map as mapIcon, MapPin as mapPinIcon, Route as routeIcon } from '@lucide/icons'
 import {
-  PERSON_R, UNKNOWN_R, UNION_W, UNION_H, COMPACT_R, COMPACT_SCALE,
+  PERSON_R, UNKNOWN_R, UNION_W, UNION_H, COMPACT_R, COMPACT_SCALE, LINE_SCALE, LINE_ALPHA,
   MAX_ORBIT_MEDIAS, ORBIT_MEDIA_SIZE,
   COLORS,
   LOD_SHADOW_MIN_SCALE, LOD_DETAIL_MIN_SCALE, LOD_LABEL_FADE_IN, LOD_LABEL_FADE_OUT, CULL_MARGIN,
@@ -531,7 +531,9 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
   }
 
   // --- Hover scale + entrance scale (conjoint isolé : en petit) ---
-  const k = node._compact ? COMPACT_SCALE : 1
+  // Ligne directe venue d'une autre famille (onglets) : un peu plus petite et estompée
+  const k = node._compact ? COMPACT_SCALE : node._line ? LINE_SCALE : 1
+  const dim = node._line ? LINE_ALPHA : 1
   const R = PERSON_R * k
   const hs = hoverScales.get(node.id) || 0
   // Personne soulevée pour changer sa place dans la fratrie : un peu plus grande, ombre plus portée
@@ -573,7 +575,7 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
   // --- Halo glow ---
   if (withDetail) {
     const glowR = R + (12 + hs * 6) * k
-    const glowAlpha = (person.isAlive ? 0.15 + hs * 0.1 : 0.08 + hs * 0.06) * nodeProgress
+    const glowAlpha = (person.isAlive ? 0.15 + hs * 0.1 : 0.08 + hs * 0.06) * nodeProgress * dim
     const glow = ctx.createRadialGradient(cx, cy, R * 0.6, cx, cy, glowR)
     glow.addColorStop(0, `rgba(147, 64, 42, ${glowAlpha})`)
     glow.addColorStop(1, 'rgba(147, 64, 42, 0)')
@@ -585,7 +587,7 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
 
   // --- Cadre photo ---
   ctx.save()
-  ctx.globalAlpha = nodeProgress
+  ctx.globalAlpha = nodeProgress * dim
   ctx.translate(cx, cy)
   ctx.scale(personScale, personScale)
   ctx.rotate(frameRot)
@@ -608,7 +610,7 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
   const labelRot = rd?.labelRotation || 0
   const labelOffsetY = (PERSON_R + 24) * personScale
   ctx.save()
-  ctx.globalAlpha = nodeProgress * labelAlpha
+  ctx.globalAlpha = nodeProgress * labelAlpha * dim
   ctx.translate(cx, cy + labelOffsetY)
   ctx.rotate(labelRot)
   // Libellés du petit portrait : un peu réduits, pas autant que le portrait pour rester lisibles
