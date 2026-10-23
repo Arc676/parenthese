@@ -132,8 +132,9 @@ function generateSecurePassword() {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
+// Sans compte (visiteur par mot de passe), le choix reste dans ce navigateur pour cet arbre
 function getAccountSelfPersonStorageKey(userEmail, treeId) {
-  return `account_self_person_${userEmail || 'unknown'}_${treeId || 'none'}`
+  return `account_self_person_${userEmail || 'visiteur'}_${treeId || 'none'}`
 }
 
 function buildContributionChangesFromDraft(draft = {}) {
@@ -805,7 +806,7 @@ function App() {
 
   useEffect(() => {
     const treeId = tree.treeContext.treeId
-    if (!treeId || !accountEmail) {
+    if (!treeId) {
       setLinkedSelfPersonId('')
       return
     }
@@ -819,7 +820,7 @@ function App() {
   }, [accountEmail, tree.treeContext.treeId])
 
   useEffect(() => {
-    if (!linkedSelfPersonId || !tree.treeContext.treeId || !accountEmail) {
+    if (!linkedSelfPersonId || !tree.treeContext.treeId) {
       return
     }
 
@@ -834,11 +835,27 @@ function App() {
     }
   }, [accountEmail, linkedSelfPersonId, tree.graphRevision, tree.treeContext.treeId])
 
-  // Annotations canvas (dessin, stickers, texte)
+  // Annotations canvas (dessin, stickers, texte). La galaxie remplit annotationViewRef à chaque image :
+  // centres des portraits de l'onglet affiché et annotations dessinées, pour poser et toucher au bon endroit
+  const annotationViewRef = useRef(null)
   const annot = useAnnotations({
     editModeActive: editMode.isActive,
     updateDraft: editMode.updateDraft,
+    viewRef: annotationViewRef,
   })
+
+  // Anciennes annotations rattachées à leur personne par la galaxie : enregistrées une fois, style seul
+  // (les autres champs ne sont pas envoyés). Sans droit d'administration, l'ancre reste calculée à chaque ouverture.
+  const persistAnnotationAnchors = useCallback((anchored) => {
+    const token = auth.userAuth.token
+    const treeId = tree.treeContext.treeId
+    if (isDemoMode || !userRole.isAdmin || !token || !treeId) return
+    const update = anchored
+      .filter((ann) => !String(ann.id).startsWith('local-'))
+      .map((ann) => ({ id: ann.id, style: ann.style }))
+    if (!update.length) return
+    batchAnnotations(treeId, { update }, token).catch((err) => console.error('Failed to save annotation anchors:', err))
+  }, [isDemoMode, userRole.isAdmin, auth.userAuth.token, tree.treeContext.treeId])
 
   // Quitter la fiche (changer de personne, la fermer, sortir du mode modification, envoyer, ouvrir un
   // souvenir) : ses changements sont enregistrés d'abord. Faux si ça échoue : la fiche reste ouverte
@@ -2926,7 +2943,7 @@ function App() {
 
   const handleSelectSelfPerson = (personId) => {
     const treeId = tree.treeContext.treeId
-    if (!treeId || !accountEmail) {
+    if (!treeId) {
       return
     }
 
@@ -3206,6 +3223,9 @@ function App() {
         reorderEnabled={canReorderSiblings}
         onReorderSiblings={handleReorderSiblings}
         familyTabs={familyTabs}
+        annotationViewRef={annotationViewRef}
+        onAnnotationsAnchored={persistAnnotationAnchors}
+        selfPersonId={linkedSelfPersonId || null}
       />
       <ZoomControl zoomApiRef={galaxyZoomApiRef} />
       {tree.selectedPerson && (
@@ -3319,7 +3339,7 @@ function App() {
         selectedPersonId={linkedSelfPersonId}
         people={persons}
         onSelectPerson={handleSelectSelfPerson}
-        onManageAccount={() => handleUseAccount('login')}
+        onManageAccount={accountEmail ? () => handleUseAccount('login') : undefined}
         onClose={() => setAccountPanelVisible(false)}
       />
       <AdminPanel

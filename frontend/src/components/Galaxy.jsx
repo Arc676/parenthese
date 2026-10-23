@@ -3,14 +3,15 @@ import { getPersonMedias, getParents, getChildren, getPersonUnions, persons as g
 import { PERSON_R, FLOAT_SPEED, FLOAT_AMPLITUDE, REPULSION_RADIUS, REPULSION_STRENGTH, MAX_ORBIT_MEDIAS, ENTRANCE_GEN_DELAY, ENTRANCE_NODE_DURATION, ENTRANCE_NODE_STAGGER, ENTRANCE_MAX_GEN_SPAN, ENTRANCE_MAX_NODE_SPAN, ENTRANCE_LINE_DELAY, ENTRANCE_LINE_DURATION, ENTRANCE_ORBIT_DELAY, ENTRANCE_ORBIT_DURATION, ENTRANCE_ORBIT_STAGGER } from './galaxy/constants'
 import { easeOutCubic } from './galaxy/utils'
 import { computeLayout, generateNodeRandomData, coupleBarMeta } from './galaxy/elkLayout'
-import { computeBlockLayout, familyTabsOf, subgraphOf } from './galaxy/blockLayout'
+import { computeBlockLayout, familyTabsOf, lineToFamily, subgraphOf } from './galaxy/blockLayout'
 
 // Placement par blocs familiaux par défaut (mesures : tools/layout-bench). ?layout=sugiyama = placement Sugiyama.
 const USE_BLOCK_LAYOUT = typeof window === 'undefined' || new URLSearchParams(window.location.search).get('layout') !== 'sugiyama'
 import { findPathBFS } from './galaxy/pathfinding'
 import { drawBackground, drawCoupleLinks, drawFiliations, drawAnnotations, drawPathHighlight, drawNodes, drawRenvoiPills, nodeRadius } from './galaxy/renderers'
 import { buildSiblingGroups, moveInOrder, pickSlot, rubberBand, springStep, isSettled, buildOrderPayload, filiationsWithOrder } from './galaxy/siblingReorder'
-import { annotations as annotationData } from '../data/mockData'
+import { annotations as annotationData, updateAnnotation as updateAnnotationInStore } from '../data/mockData'
+import { anchorLegacy, layoutCenters, placeAnnotations, readAnchor } from './annotations/anchor'
 import { useImageCache } from './galaxy/useImageCache'
 import { useGalaxyInteractions } from './galaxy/useGalaxyInteractions'
 import { t as tr } from '../i18n/index.js'
@@ -42,7 +43,7 @@ const DROP_SPRING = { stiffness: 480, dampingRatio: 0.72 }
 const centerX = (node) => node.x + node.width / 2
 const prefersReducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, reorderEnabled = false, onReorderSiblings = null, familyTabs = true }) => {
+const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, reorderEnabled = false, onReorderSiblings = null, familyTabs = true, annotationViewRef = null, onAnnotationsAnchored = null, selfPersonId = null }) => {
   const canvasRef = useRef(null)
   const layoutDataRef = useRef(null)
   // Onglets de familles (réglage `familyTabs`) : la liste des familles de l'arbre, calculée une fois par
@@ -55,6 +56,8 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   const activeTabRef = useRef(null)
   const familyTabsRef = useRef(familyTabs)
   useEffect(() => { familyTabsRef.current = familyTabs }, [familyTabs])
+  const onAnnotationsAnchoredRef = useRef(onAnnotationsAnchored)
+  useEffect(() => { onAnnotationsAnchoredRef.current = onAnnotationsAnchored }, [onAnnotationsAnchored])
   const startRefRef = useRef(focusPersonId)
   useEffect(() => { startRefRef.current = focusPersonId; setActiveKey(focusPersonId != null ? String(focusPersonId) : null) }, [focusPersonId])
   // Lu au calcul du cadrage et par le réordonnancement : la référence de l'arbre affiché
@@ -479,13 +482,26 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     activeTabRef.current = tab
     // La personne de départ (ou la charnière de l'onglet) sert de référence aux rangées
     focusPersonIdRef.current = tab ? tab.referenceId : startRefRef.current
-    const graph = tab?.personIds ? subgraphOf(tab.personIds) : null
+    // Dans l'onglet d'une autre famille, la personne commune (« C'est moi », sinon la personne de départ) reste
+    // là, reliée par sa ligne directe (Patch, 21/10 : « je veux me voir tout le temps »)
+    const line = tab?.personIds ? lineToFamily(selfPersonId ?? startRefRef.current ?? tabsCacheRef.current.tabs[0]?.resolvedRef, tab.personIds) : new Set()
+    const graph = tab?.personIds ? subgraphOf(new Set([...tab.personIds, ...line])) : null
+    // Annotations d'avant l'ancrage (x, y seuls) : rattachées une fois à la personne la plus proche dans le
+    // placement de l'onglet de départ, puis enregistrées. Calculé avant l'arbre affiché (coupleBarMeta, voir plus haut)
+    const legacy = annotationData.some((a) => !readAnchor(a))
+    const departure = legacy && USE_BLOCK_LAYOUT && graph ? computeBlockLayout(null, startRefRef.current, { familyTabs }) : null
     const result = USE_BLOCK_LAYOUT ? computeBlockLayout(graph, focusPersonIdRef.current, { familyTabs }) : computeLayout(null, focusPersonIdRef.current)
+    if (legacy) {
+      const anchored = anchorLegacy(annotationData, layoutCenters(departure || result))
+      for (const ann of anchored) updateAnnotationInStore(ann.id, { style: ann.style })
+      if (anchored.length) onAnnotationsAnchoredRef.current?.(anchored)
+    }
     // Les pastilles portent le nom de l'onglet où elles mènent (prénoms ajoutés aux homonymes)
     for (const n of result.children) {
       const target = n._familyTab && tabsCacheRef.current.tabs.find((tb) => tb.key === n._familyTab.tabKey)
       if (target) n._familyTab = { ...n._familyTab, label: target.label, count: target.count }
     }
+    for (const n of result.children) if (n._type === 'person' && line.has(n.id.replace(/^p-/, ''))) n._line = true
     // Dans l'onglet d'une belle-famille, chaque charnière (conjoint marié dans la famille d'où l'on vient)
     // porte le badge de retour
     if (tab?.parentKey) {
@@ -630,7 +646,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       pendingFocusRef.current = null
       requestAnimationFrame(() => zoomApiRef?.current?.focusPerson?.(id))
     }
-  }, [graphRevision, activeKey, familyTabs])
+  }, [graphRevision, activeKey, familyTabs, selfPersonId])
 
   // Sync selectedPersonId
   useEffect(() => {
@@ -908,51 +924,14 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
         liftScales: liftScalesRef.current,
       })
       drawRenvoiPills(ctx)
-      // Annotations dessinées APRES les noeuds pour que stickers/texte soient au-dessus
-      // Annotations : ancrer aux personnes proches pour qu'elles suivent le layout
-      const personPosMap = new Map()
-      layoutData.children.forEach(node => {
-        if (node._type === 'person') {
-          const pos = posMap.get(node.id)
-          if (pos) personPosMap.set(node._data.id, pos)
-        }
-      })
-      const anchoredAnnotations = annotationData.map((ann) => {
-        let anchorId = ann.anchorId || null
-        let offsetX = ann.offsetX ?? 0
-        let offsetY = ann.offsetY ?? 0
-
-        if (!anchorId) {
-          // Trouver la personne la plus proche et stocker l'offset
-          let nearestId = null
-          let nearestD2 = Infinity
-          for (const [pid, pos] of personPosMap.entries()) {
-            const dx = ann.x - pos.cx
-            const dy = ann.y - pos.cy
-            const d2 = dx * dx + dy * dy
-            if (d2 < nearestD2) {
-              nearestD2 = d2
-              nearestId = pid
-              offsetX = dx
-              offsetY = dy
-            }
-          }
-          if (nearestId) {
-            anchorId = nearestId
-            ann.anchorId = nearestId
-            ann.offsetX = offsetX
-            ann.offsetY = offsetY
-          }
-        }
-
-        const base = anchorId ? personPosMap.get(anchorId) : null
-        const drawX = base ? base.cx + offsetX : ann.x
-        const drawY = base ? base.cy + offsetY : ann.y
-        // Keep underlying data in sync so hitTest/drag use the drawn position
-        ann.x = drawX
-        ann.y = drawY
-        return { ...ann, x: drawX, y: drawY }
-      })
+      // Annotations dessinées APRES les noeuds pour que stickers/texte soient au-dessus.
+      // Chacune suit le portrait de sa personne dans le placement affiché, absente si la personne n'y est pas.
+      // Les centres et les positions servent aussi à poser, toucher et déplacer (useAnnotations)
+      // Un texte rouvert pour être modifié n'est pas dessiné sous sa saisie (editingId, posé par useAnnotations)
+      const annotationCenters = layoutCenters(layoutData, offsetsRef.current)
+      const editingId = annotationViewRef?.current?.editingId ?? null
+      const anchoredAnnotations = placeAnnotations(annotationData, annotationCenters)
+      if (annotationViewRef) annotationViewRef.current = { editingId, centers: annotationCenters, shown: anchoredAnnotations }
 
       // Afficher les annotations en dernier, après l'animation d'entrée
       const stickerPreview = annotationHandlers?.activeTool === 'sticker' && annotationHandlers?.selectedSticker
@@ -963,7 +942,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       if (entranceAlpha > 0) {
         drawAnnotations(
           ctx,
-          anchoredAnnotations,
+          editingId ? anchoredAnnotations.filter((a) => a.id !== editingId) : anchoredAnnotations,
           annotationHandlers?.selectedAnnotationId ?? null,
           annotationHandlers?.drawingPathRef?.current ?? null,
           stickerPreview,

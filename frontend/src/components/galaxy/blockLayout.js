@@ -844,6 +844,61 @@ export function subgraphOf(personIds, graphData = null) {
   return { persons, unions, filiations }
 }
 
+// La ligne directe d'une personne vers une famille (Patch, 21/10 : « je veux me voir tout le temps ») : le plus
+// court chemin de parenté (parents, enfants, conjoints) de `selfId` jusqu'au premier membre de `memberIds`,
+// sans fratries autour. Chaque pas d'un enfant à un parent garde ses deux parents (le fil part de leur union,
+// et sans l'autre parent le placement dessine un conjoint « Inconnu »).
+// Rend les personnes à ajouter (ni `selfId` déjà membre, ni chemin : ensemble vide).
+export function lineToFamily(selfId, memberIds, graphData = null) {
+  const members = new Set([...memberIds].map(String))
+  const self = selfId != null ? String(selfId) : null
+  if (self == null || members.has(self)) return new Set()
+  const persons = graphData?.persons || globalPersons
+  if (!persons.some(p => String(p.id) === self)) return new Set()
+  const unions = graphData?.unions || globalUnions
+  const filiations = graphData?.filiations || globalFiliations
+  const unionById = new Map(unions.map(u => [String(u.id), u]))
+  // Voisins : [voisin, personnes que ce pas fait dessiner en plus]
+  const next = new Map()
+  const link = (a, b, extra = []) => { if (!next.has(a)) next.set(a, []); next.get(a).push([b, extra]) }
+  for (const u of unions) {
+    const a = String(u.partner1Id), b = String(u.partner2Id)
+    link(a, b); link(b, a)
+  }
+  const parentsOf = new Map()
+  for (const f of filiations) {
+    const child = String(f.childId)
+    const u = f.unionId ? unionById.get(String(f.unionId)) : null
+    const parents = u ? [String(u.partner1Id), String(u.partner2Id)] : f.parentId != null ? [String(f.parentId)] : []
+    if (!parentsOf.has(child)) parentsOf.set(child, new Set())
+    for (const p of parents) parentsOf.get(child).add(p)
+  }
+  for (const [child, parents] of parentsOf) {
+    for (const p of parents) {
+      const couple = [...parents].filter(q => q !== p)
+      link(child, p, couple); link(p, child, couple)
+    }
+  }
+  const from = new Map([[self, null]])
+  const queue = [self]
+  let hit = null
+  for (let i = 0; i < queue.length && hit == null; i++) {
+    for (const [nb, extra] of next.get(queue[i]) || []) {
+      if (from.has(nb)) continue
+      from.set(nb, { prev: queue[i], extra })
+      if (members.has(nb)) { hit = nb; break }
+      queue.push(nb)
+    }
+  }
+  const line = new Set()
+  for (let id = hit; id != null && from.get(id); id = from.get(id).prev) {
+    for (const e of from.get(id).extra) if (!members.has(e)) line.add(e)
+    const prev = from.get(id).prev
+    if (!members.has(prev)) line.add(prev)
+  }
+  return line
+}
+
 // Toutes les familles d'un arbre, de proche en proche : l'arbre de la personne de départ, puis chaque grande
 // belle-famille qu'il cache (un onglet = ce bloc caché plus le conjoint charnière, posé avec lui comme
 // référence), puis celles que ces onglets cachent à leur tour. Chaque personne est dans un seul onglet, sauf
@@ -858,6 +913,8 @@ export function familyTabsOf(graphData = null, referenceId = null) {
     const result = computeBlockLayout(graph, tab.referenceId, { familyTabs: true })
     const fams = result.families || []
     if (fams[0]) { tab.label = fams[0].label; tab.count = fams[0].count }
+    // La personne de départ réellement retenue (l'arbre sans personne de départ en choisit une)
+    if (tab === root) root.resolvedRef = result.referenceId != null ? String(result.referenceId).replace(/^p-/, '') : null
     for (const f of fams.slice(1)) {
       if (f.drawn) continue
       const key = String(f.anchorId).replace(/^p-/, '')

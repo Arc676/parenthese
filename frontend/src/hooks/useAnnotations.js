@@ -5,6 +5,7 @@ import {
   updateAnnotation as updateAnnotationInStore,
   removeAnnotation as removeAnnotationFromStore,
 } from '../data/mockData'
+import { withAnchor } from '../components/annotations/anchor'
 
 /**
  * Hook pour gerer les annotations canvas (dessin, stickers, texte).
@@ -12,13 +13,14 @@ import {
  * @param {Object} options
  * @param {boolean} options.editModeActive
  * @param {Function} options.updateDraft - merge data into edit draft
+ * @param {Object} options.viewRef - rempli par la galaxie : centres des portraits et annotations affichées
  * @returns {Object} API annotations
  */
-export function useAnnotations({ editModeActive, updateDraft }) {
+export function useAnnotations({ editModeActive, updateDraft, viewRef = null }) {
   const [activeTool, setActiveTool] = useState('pointer')
   const [selectedAnnotationId, setSelectedAnnotationId] = useState(null)
   const [selectedSticker, setSelectedSticker] = useState(null)
-  const [textInputState, setTextInputState] = useState(null) // { x, y, screenX, screenY }
+  const [textInputState, setTextInputState] = useState(null) // { x, y, screenX, screenY, editingId?, text?, style? }
   const [revision, setRevision] = useState(0)
 
   const [currentStyle, setCurrentStyle] = useState({
@@ -38,6 +40,19 @@ export function useAnnotations({ editModeActive, updateDraft }) {
   const [isOverTrash, setIsOverTrash] = useState(false)
   const dragStartPos = useRef(null)
   const dragAnnotationOrigPos = useRef(null)
+  // Vrai si l'annotation touchée était déjà sélectionnée avant l'appui : un texte se rouvre alors pour être modifié
+  const pressedSelectedRef = useRef(false)
+
+  // Style rattaché à la personne la plus proche dans l'onglet affiché (voir annotations/anchor.js)
+  const anchoredStyle = useCallback((style, x, y) => withAnchor(style, x, y, viewRef?.current?.centers), [viewRef])
+  // Annotation telle que dessinée dans l'onglet affiché (position comprise)
+  const shownOf = useCallback((id) => (viewRef?.current?.shown || annotationData).find((a) => a.id === id) || null, [viewRef])
+
+  // Texte rouvert : la galaxie ne le dessine pas sous sa saisie
+  useEffect(() => {
+    if (viewRef?.current) viewRef.current.editingId = textInputState?.editingId ?? null
+    else if (viewRef) viewRef.current = { editingId: textInputState?.editingId ?? null }
+  }, [viewRef, textInputState])
 
   // Track added/modified/deleted for draft
   const addedIdsRef = useRef(new Set())
@@ -133,15 +148,16 @@ export function useAnnotations({ editModeActive, updateDraft }) {
       x: worldX,
       y: worldY,
       content: JSON.stringify({ photoPath, url, w: naturalW, h: naturalH }),
-      style: { size },
+      style: anchoredStyle({ size }, worldX, worldY),
       zIndex: 5,
     })
-  }, [addAnnotation])
+  }, [addAnnotation, anchoredStyle])
 
   // ---- Hit detection ----
+  // Seules les annotations dessinées dans l'onglet affiché se touchent, à leur position dessinée
   const hitTest = useCallback((worldX, worldY) => {
     // Iterate in reverse z-order (top first)
-    const sorted = [...annotationData].sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0))
+    const sorted = [...(viewRef?.current?.shown || annotationData)].sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0))
     for (const ann of sorted) {
       if (ann.type === 'text') {
         const fontSize = ann.style?.fontSize || 18
@@ -187,7 +203,7 @@ export function useAnnotations({ editModeActive, updateDraft }) {
       }
     }
     return null
-  }, [])
+  }, [viewRef])
 
   // ---- Canvas event handlers (called from useGalaxyInteractions) ----
 
@@ -211,16 +227,11 @@ export function useAnnotations({ editModeActive, updateDraft }) {
       const dx = worldX - dragStartPos.current.x
       const dy = worldY - dragStartPos.current.y
       const ann = annotationData.find((a) => a.id === draggingIdRef.current)
-      if (ann && ann.anchorId) {
-        updateAnnotation(draggingIdRef.current, {
-          offsetX: (dragAnnotationOrigPos.current.offsetX ?? 0) + dx,
-          offsetY: (dragAnnotationOrigPos.current.offsetY ?? 0) + dy,
-        })
-      } else {
-        updateAnnotation(draggingIdRef.current, {
-          x: (dragAnnotationOrigPos.current.x ?? 0) + dx,
-          y: (dragAnnotationOrigPos.current.y ?? 0) + dy,
-        })
+      if (ann) {
+        // Déplacer recalcule l'ancre : la personne la plus proche du nouvel endroit
+        const x = (dragAnnotationOrigPos.current.x ?? 0) + dx
+        const y = (dragAnnotationOrigPos.current.y ?? 0) + dy
+        updateAnnotation(draggingIdRef.current, { x, y, style: anchoredStyle(ann.style, x, y) })
       }
       // Check if over trash button in toolbar
       let overTrash = false
@@ -239,7 +250,7 @@ export function useAnnotations({ editModeActive, updateDraft }) {
       isOverTrashRef.current = overTrash
       setIsOverTrash(overTrash)
     }
-  }, [activeTool, updateAnnotation])
+  }, [activeTool, updateAnnotation, anchoredStyle])
 
   const onCanvasMouseUp = useCallback((_worldX, _worldY) => {
     // Finalize drawing
@@ -253,7 +264,7 @@ export function useAnnotations({ editModeActive, updateDraft }) {
 
       // If a drawing annotation is already active, append this stroke to it
       if (currentDrawingAnnId.current) {
-        const existing = annotationData.find((a) => a.id === currentDrawingAnnId.current)
+        const existing = shownOf(currentDrawingAnnId.current)
         if (existing) {
           const anchorX = existing.x
           const anchorY = existing.y
@@ -292,10 +303,10 @@ export function useAnnotations({ editModeActive, updateDraft }) {
               width: drawingPathRef.current.width,
             }],
           }),
-          style: {
+          style: anchoredStyle({
             color: drawingPathRef.current.color,
             brushWidth: drawingPathRef.current.width,
-          },
+          }, firstPt.x, firstPt.y),
           zIndex: 0,
         })
         currentDrawingAnnId.current = created.id
@@ -317,7 +328,7 @@ export function useAnnotations({ editModeActive, updateDraft }) {
       dragStartPos.current = null
       dragAnnotationOrigPos.current = null
     }
-  }, [activeTool, addAnnotation, deleteAnnotation])
+  }, [activeTool, addAnnotation, deleteAnnotation, anchoredStyle, shownOf])
 
   const onCanvasClick = useCallback((worldX, worldY, transformRef) => {
     if (activeTool === 'text') {
@@ -340,10 +351,10 @@ export function useAnnotations({ editModeActive, updateDraft }) {
         x: worldX,
         y: worldY,
         content: selectedSticker,
-        style: {
+        style: anchoredStyle({
           fontSize: 40,
           rotation: (Math.random() - 0.5) * 0.25,
-        },
+        }, worldX, worldY),
         zIndex: 10,
       })
       return true
@@ -352,6 +363,21 @@ export function useAnnotations({ editModeActive, updateDraft }) {
     if (activeTool === 'pointer') {
       const hit = hitTest(worldX, worldY)
       if (hit) {
+        // Un texte déjà sélectionné se rouvre au clic pour être modifié (double clic sur ordinateur)
+        if (hit.type === 'text' && pressedSelectedRef.current && transformRef) {
+          pressedSelectedRef.current = false
+          const t = transformRef.current
+          setTextInputState({
+            x: hit.x,
+            y: hit.y,
+            screenX: hit.x * t.scale + t.x,
+            screenY: hit.y * t.scale + t.y,
+            editingId: hit.id,
+            text: hit.content,
+            style: hit.style,
+          })
+          return true
+        }
         setSelectedAnnotationId(hit.id)
         // Prepare for potential drag
         isDraggingAnnotation.current = false
@@ -363,14 +389,15 @@ export function useAnnotations({ editModeActive, updateDraft }) {
     }
 
     return false
-  }, [activeTool, selectedSticker, currentStyle, addAnnotation, hitTest])
+  }, [activeTool, selectedSticker, addAnnotation, hitTest, anchoredStyle])
 
   // Start drag — accepts annotationId so we can drag without prior selection
   const onAnnotationDragStart = useCallback((worldX, worldY, annotationId) => {
     const targetId = annotationId || selectedAnnotationId
     if (activeTool === 'pointer' && targetId) {
-      const ann = annotationData.find((a) => a.id === targetId)
+      const ann = shownOf(targetId)
       if (ann) {
+        pressedSelectedRef.current = targetId === selectedAnnotationId
         setSelectedAnnotationId(targetId)
         draggingIdRef.current = targetId
         isDraggingAnnotation.current = true
@@ -378,21 +405,23 @@ export function useAnnotations({ editModeActive, updateDraft }) {
         setIsDragging(true)
         setIsOverTrash(false)
         dragStartPos.current = { x: worldX, y: worldY }
-        dragAnnotationOrigPos.current = {
-          x: ann.x,
-          y: ann.y,
-          offsetX: ann.offsetX ?? 0,
-          offsetY: ann.offsetY ?? 0,
-        }
+        dragAnnotationOrigPos.current = { x: ann.x, y: ann.y }
         return true
       }
     }
     return false
-  }, [activeTool, selectedAnnotationId])
+  }, [activeTool, selectedAnnotationId, shownOf])
 
   // Commit text from overlay input
   const commitTextInput = useCallback((text) => {
     if (!textInputState || !text.trim()) {
+      setTextInputState(null)
+      return
+    }
+
+    // Texte rouvert : seul son contenu change, il garde sa place et son style
+    if (textInputState.editingId) {
+      if (text.trim() !== textInputState.text) updateAnnotation(textInputState.editingId, { content: text.trim() })
       setTextInputState(null)
       return
     }
@@ -402,16 +431,16 @@ export function useAnnotations({ editModeActive, updateDraft }) {
       x: textInputState.x,
       y: textInputState.y,
       content: text.trim(),
-      style: {
+      style: anchoredStyle({
         color: currentStyle.color,
         fontSize: currentStyle.fontSize,
         stabilo: currentStyle.stabilo,
-      },
+      }, textInputState.x, textInputState.y),
       zIndex: 0,
     })
 
     setTextInputState(null)
-  }, [textInputState, currentStyle, addAnnotation])
+  }, [textInputState, currentStyle, addAnnotation, updateAnnotation, anchoredStyle])
 
   const cancelTextInput = useCallback(() => {
     setTextInputState(null)

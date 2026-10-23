@@ -1,4 +1,4 @@
-import { Check, ChevronRight, Globe, HelpCircle, LogIn, LogOut, Plus, Settings, Share2, TreeDeciduous, UserPlus } from 'lucide-react'
+import { Check, ChevronRight, Globe, HelpCircle, LogIn, LogOut, Plus, Settings, Share2, TreeDeciduous, User, UserPlus } from 'lucide-react'
 import { t } from '../../i18n/index.js'
 import LanguageSwitch from './LanguageSwitch'
 import { NavMenu, NavMenuGroup, NavMenuItem, NavMenuSep } from './NavMenu'
@@ -60,6 +60,18 @@ function AvatarMenu({
     <>
       <NavMenuItem icon={<LogIn {...ICON} />} label={t('Se connecter')} onSelect={() => { onClose(); onLogin?.() }} />
       {onRegister && <NavMenuItem icon={<UserPlus {...ICON} />} label={t('Créer mon arbre')} onSelect={() => { onClose(); onRegister() }} />}
+      {/* Visiteur d'un arbre partagé : il dit qui il est, cette personne le suit dans chaque onglet de famille */}
+      {activeTreeId && onAccountClick && (
+        <>
+          <NavMenuSep />
+          <NavMenuItem
+            icon={<User {...ICON} />}
+            label={linkedPersonName || t('Qui êtes-vous dans cet arbre ?')}
+            onSelect={() => { onClose(); onAccountClick() }}
+            right={<ChevronRight size={16} aria-hidden="true" className="navm-chevron" />}
+          />
+        </>
+      )}
       <NavMenuSep />
       {helpRow}
     </>
