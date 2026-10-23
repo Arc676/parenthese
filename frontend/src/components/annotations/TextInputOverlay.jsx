@@ -18,6 +18,9 @@ export default function TextInputOverlay({
 
   if (!textInputState) return null
 
+  // Texte déjà posé et rouvert : sa saisie et son style à lui
+  const style = textInputState.style || currentStyle
+
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -46,14 +49,16 @@ export default function TextInputOverlay({
       }}
     >
       <input
+        key={textInputState.editingId || 'new'}
         ref={inputRef}
         className="text-input-overlay__input"
         type="text"
+        defaultValue={textInputState.text || ''}
         placeholder={t('Saisir du texte...')}
         style={{
-          color: currentStyle.color,
-          fontSize: currentStyle.fontSize,
-          background: currentStyle.stabilo
+          color: style.color,
+          fontSize: style.fontSize,
+          background: style.stabilo
             ? 'rgba(237, 182, 164, 0.5)'
             : 'rgba(255, 255, 255, 0.85)',
         }}
