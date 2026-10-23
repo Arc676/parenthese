@@ -316,6 +316,7 @@ function buildContributionChangesFromDraft(draft = {}) {
       if (source.isAlive === true) after.deathDate = null
       after.isDeceased = source.isAlive === false
     }
+    if (Object.prototype.hasOwnProperty.call(source, 'toVerify')) after.toVerify = Boolean(source.toVerify)
 
     if (Object.keys(after).length > 0) {
       changes.push({
@@ -1332,6 +1333,7 @@ function App() {
             if (rawChanges.isAlive === true) payload.deathDate = null
             payload.isDeceased = rawChanges.isAlive === false
           }
+          if (Object.prototype.hasOwnProperty.call(rawChanges, 'toVerify')) payload.toVerify = Boolean(rawChanges.toVerify)
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'note')) payload.notes = rawChanges.note || null
 
           if (Object.keys(payload).length > 0) {
@@ -1622,6 +1624,7 @@ function App() {
           localPerson.isAlive = changes.isAlive === true
           localPerson.isDeceased = changes.isAlive === false && !localPerson.deathYear
         }
+        if (Object.prototype.hasOwnProperty.call(changes, 'toVerify')) localPerson.toVerify = Boolean(changes.toVerify)
         tree.setSelectedPerson({ ...localPerson })
       }
       return
@@ -1648,6 +1651,7 @@ function App() {
       if (changes.isAlive === true) payload.deathDate = null
       payload.isDeceased = changes.isAlive === false
     }
+    if (Object.prototype.hasOwnProperty.call(changes, 'toVerify')) payload.toVerify = Boolean(changes.toVerify)
     if (Object.prototype.hasOwnProperty.call(changes, 'note')) payload.notes = changes.note || null
 
     if (Object.keys(payload).length > 0) {

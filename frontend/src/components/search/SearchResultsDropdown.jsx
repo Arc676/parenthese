@@ -9,6 +9,7 @@ const REASON_LABELS = {
   Lieu: t('Lieu'),
   Date: t('Date'),
   Contenu: t('Contenu'),
+  'À vérifier': t('À vérifier'),
 }
 
 /**

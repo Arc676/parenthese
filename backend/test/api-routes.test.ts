@@ -1211,6 +1211,28 @@ describe('Surnom (nickname) en écriture directe', () => {
   })
 })
 
+describe('« À vérifier » en écriture directe (retour d’Anaïs, 23/10)', () => {
+  it('POST et PATCH posent et retirent le drapeau, absent = inchangé', async () => {
+    const app = createApp()
+    const token = await createUserToken(app)
+    const headers = { authorization: `Bearer ${token}` }
+
+    const created = await app.inject({ method: 'POST', url: '/trees/tree-1/persons', headers, payload: { firstName: 'Jeanne', lastName: 'Martin', toVerify: true } })
+    expect(created.statusCode).toBe(201)
+    expect(prismaMock.person.create.mock.calls.at(-1)[0].data).toMatchObject({ toVerify: true })
+
+    const patch = (payload: object) => app.inject({ method: 'PATCH', url: '/trees/tree-1/persons/person-1', headers, payload })
+    expect((await patch({ toVerify: true })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ toVerify: true })
+    expect((await patch({ toVerify: false })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).toMatchObject({ toVerify: false })
+    expect((await patch({ nickname: 'Loulou' })).statusCode).toBe(200)
+    expect(prismaMock.person.updateMany.mock.calls.at(-1)[0].data).not.toHaveProperty('toVerify')
+    expect((await patch({ toVerify: 'oui' })).statusCode).toBe(400)
+    await app.close()
+  })
+})
+
 describe('Sexe d’une personne en écriture directe (issue #114)', () => {
   it('PATCH ramène le sexe à male / female / other, null = non précisé, refuse une valeur inconnue', async () => {
     const app = createApp()

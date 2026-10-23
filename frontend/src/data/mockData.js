@@ -113,6 +113,8 @@ function mapRemotePersonToLocal(person, current = null) {
     // Décédé(e) sans date connue (issue #77)
     isDeceased: Boolean(person?.isDeceased) && !deathYear,
     isAlive: !deathYear && !person?.isDeceased,
+    // « À vérifier » : la famille n'est pas sûre de cette personne
+    toVerify: person ? Boolean(person.toVerify) : Boolean(current?.toVerify),
     frameType: current?.frameType || pickFrameType(person?.id),
     note: person?.notes || null,
     birthPlace: person?.birthPlace || null,

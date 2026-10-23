@@ -29,6 +29,12 @@ const SCORE_WEIGHTS = {
   NOTE_CONTAINS: 20,
 }
 
+// Taper « à vérifier » (avec ou sans accents, même en partie) liste les personnes marquées à vérifier
+const asksToVerify = (q) => {
+  const plain = q.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ')
+  return plain.length >= 5 && 'a verifier'.startsWith(plain)
+}
+
 /**
  * Seuil minimum de score pour afficher un résultat
  */
@@ -45,6 +51,7 @@ function calculateScore(query, person) {
   const q = query.toLowerCase().trim()
 
   if (!q || q.length < 2) return 0
+  if (person.toVerify && asksToVerify(q)) return SCORE_WEIGHTS.NAME_EXACT
 
   // Normaliser les données de la personne
   const firstName = (person.firstName || '').toLowerCase()
@@ -154,6 +161,10 @@ function getMatchReason(query, person) {
   const profession = (person.profession || '').toLowerCase()
   const birthPlace = (person.birthPlace || '').toLowerCase()
   const birthYear = person.birthYear?.toString() || ''
+
+  if (person.toVerify && asksToVerify(q)) {
+    return 'À vérifier'
+  }
 
   if (fullName === q || firstName === q || lastName === q) {
     return 'Nom'
