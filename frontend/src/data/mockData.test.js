@@ -130,3 +130,13 @@ describe('personnes identifiées sur un souvenir', () => {
     ])
   })
 })
+describe('« À vérifier » au chargement du graphe', () => {
+  it('garde le drapeau, absent = faux', () => {
+    loadGraphData({ persons: [
+      { id: 'a', firstName: 'Jeanne', lastName: 'Martin', toVerify: true },
+      { id: 'b', firstName: 'Paul', lastName: 'Martin' },
+    ] })
+    expect(getPersonById('a').toVerify).toBe(true)
+    expect(getPersonById('b').toVerify).toBe(false)
+  })
+})

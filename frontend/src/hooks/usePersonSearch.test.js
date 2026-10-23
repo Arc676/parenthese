@@ -18,3 +18,19 @@ describe('recherche par surnom', () => {
     expect(getMatchReason('dupont', robert)).toBe('Nom')
   })
 })
+
+describe('recherche « à vérifier »', () => {
+  const doute = { firstName: 'Jeanne', lastName: 'Martin', toVerify: true }
+  const sure = { firstName: 'Paul', lastName: 'Martin', toVerify: false }
+
+  it('trouve les personnes marquées, avec ou sans accents, même en partie', () => {
+    for (const q of ['à vérifier', 'a verifier', 'À VÉRIF', 'a ver']) {
+      expect(calculateScore(q.toLowerCase(), doute)).toBeGreaterThanOrEqual(MIN_SCORE_THRESHOLD)
+    }
+    expect(getMatchReason('a verifier', doute)).toBe('À vérifier')
+  })
+
+  it('ne remonte pas les personnes non marquées', () => {
+    expect(calculateScore('a verifier', sure)).toBeLessThan(MIN_SCORE_THRESHOLD)
+  })
+})

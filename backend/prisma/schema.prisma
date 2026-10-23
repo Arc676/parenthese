@@ -237,6 +237,8 @@ model Person {
   deathDate          DateTime?
   // Décédé(e) sans date connue (issue #77) : vrai seulement quand deathDate est vide
   isDeceased         Boolean   @default(false)
+  // « À vérifier » : la famille n'est pas sûre de cette personne et le signale (retour d'Anaïs, 23/10)
+  toVerify           Boolean   @default(false)
   birthPlace         String?
   // Précision d'une date importée (« vers », « avant », « entre »…) et sa borne de fin pour « entre … et … »
   birthDatePrecision String?

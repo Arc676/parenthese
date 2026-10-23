@@ -49,6 +49,7 @@ export default {
   'Surnom': 'Nickname',
   'Loulou': 'Lulu',
   'Statut': 'Status',
+  'Vérification': 'Check',
   'En vie': 'Living',
   'Décédé(e)': 'Deceased',
   'Décédé': 'Deceased',

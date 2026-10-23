@@ -15,6 +15,7 @@ export type GraphPayload = {
     birthDate: string | null
     deathDate: string | null
     isDeceased: boolean
+    toVerify: boolean
     birthPlace: string | null
     deathPlace: string | null
     profession: string | null
@@ -105,6 +106,7 @@ export function buildGraphPayload(
         birthDate: formatDate(person.birthDate),
         deathDate: formatDate(person.deathDate),
         isDeceased: Boolean(person.isDeceased) && !person.deathDate,
+        toVerify: Boolean(person.toVerify),
         birthPlace: person.birthPlace,
         deathPlace: person.deathPlace,
         profession: person.profession,

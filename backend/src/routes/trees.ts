@@ -93,6 +93,7 @@ const createPersonSchema = z.object({
   birthDate: z.string().regex(isoDateRegex).optional().nullable(),
   deathDate: z.string().regex(isoDateRegex).optional().nullable(),
   isDeceased: z.boolean().optional(),
+  toVerify: z.boolean().optional(),
   birthPlace: z.string().max(200).optional().nullable(),
   deathPlace: z.string().max(200).optional().nullable(),
   profession: z.string().max(200).optional().nullable(),
@@ -111,6 +112,8 @@ const patchPersonSchema = z
     birthDate: z.string().regex(isoDateRegex).optional().nullable(),
     deathDate: z.string().regex(isoDateRegex).optional().nullable(),
     isDeceased: z.boolean().optional(),
+    // « À vérifier » : la famille n'est pas sûre de cette personne (retour d'Anaïs, 23/10)
+    toVerify: z.boolean().optional(),
     birthPlace: z.string().max(200).optional().nullable(),
     deathPlace: z.string().max(200).optional().nullable(),
     profession: z.string().max(200).optional().nullable(),
@@ -1321,6 +1324,7 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
         deathDate: toDateOrNull(payload.data.deathDate),
         // Une date de décès dit déjà que la personne est décédée : le drapeau ne sert que sans date
         isDeceased: !payload.data.deathDate && Boolean(payload.data.isDeceased),
+        toVerify: Boolean(payload.data.toVerify),
         birthPlace: toTrimmedStringOrNull(payload.data.birthPlace),
         deathPlace: toTrimmedStringOrNull(payload.data.deathPlace),
         profession: toTrimmedStringOrNull(payload.data.profession),
@@ -1391,6 +1395,7 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
       birthDate?: Date | null
       deathDate?: Date | null
       isDeceased?: boolean
+      toVerify?: boolean
       birthPlace?: string | null
       deathPlace?: string | null
       profession?: string | null
@@ -1431,6 +1436,10 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
     // Avec une date de décès, le drapeau « sans date » n'a plus lieu d'être
     if (data.deathDate) {
       data.isDeceased = false
+    }
+
+    if (payload.data.toVerify !== undefined) {
+      data.toVerify = payload.data.toVerify
     }
 
     if (payload.data.birthPlace !== undefined) {

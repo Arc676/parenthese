@@ -603,6 +603,8 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
   }
 
   drawFrame(ctx, frameType, person, img)
+  // « À vérifier » : petit rond terracotta avec un « ? » en haut à droite du cadre, absent au dézoom
+  if (person.toVerify && withDetail) drawToVerifyMark(ctx)
   ctx.restore()
 
   // --- Labels (estompés puis absents en dézoom) ---
@@ -926,6 +928,25 @@ function drawMediaContent(ctx, media, ms, imageCache) {
 function resolveFrameType(person, img) {
   const ratio = img?.naturalWidth && img?.naturalHeight ? img.naturalWidth / img.naturalHeight : 1
   return resolveFrameKind(person.frameType || 'round', ratio, cropShape(person.avatarCrop))
+}
+
+function drawToVerifyMark(ctx) {
+  const r = 9
+  const x = PERSON_R * 0.74, y = -PERSON_R * 0.74
+  ctx.shadowColor = 'transparent'
+  ctx.fillStyle = '#FFFFFF'
+  ctx.beginPath()
+  ctx.arc(x, y, r + 1.5, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#D2694A'
+  ctx.beginPath()
+  ctx.arc(x, y, r, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#FFFFFF'
+  ctx.font = '600 12px "DM Sans", system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('?', x, y + 0.5)
 }
 
 function drawFrame(ctx, frameType, person, img) {

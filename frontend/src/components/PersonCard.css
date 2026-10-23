@@ -199,6 +199,8 @@
 }
 .pc-alive-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--pz-faint); }
 .pc-alive.is-alive .pc-alive-dot { background: var(--pz-success); }
+.pc-verify.is-on { background: var(--pz-a100); color: var(--pz-a700); border-color: transparent; }
+.pc-verify.is-on .pc-alive-dot { background: var(--pz-a500); }
 
 /* Liens (relations) */
 .pc-rel-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 0; }

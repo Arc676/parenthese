@@ -752,6 +752,7 @@ const PersonCard = ({
                 </button>
               </span>
             )}
+            {!editMode && person.toVerify && <span className="pz-tag pz-tag--accent pz-tag--dot">{t('À vérifier')}</span>}
             {!editMode && person.profession && <span className="pz-tag">{person.profession}</span>}
           </div>
         </div>
@@ -946,6 +947,21 @@ const PersonCard = ({
                     >
                       <span className="pc-alive-dot" />
                       {getEditValue('isAlive', person.isAlive) ? t('En vie') : editSex === 'male' ? t('Décédé') : editSex === 'female' ? t('Décédée') : t('Décédé(e)')}
+                    </button>
+                  </div>
+                )}
+                {editMode && (
+                  // La famille n'est pas sûre de cette personne : marquée sur l'arbre et dans la fiche (retour d'Anaïs, 23/10)
+                  <div className="pc-row">
+                    <span className="pc-label">{t('Vérification')}</span>
+                    <button
+                      type="button"
+                      aria-pressed={Boolean(getEditValue('toVerify', person.toVerify))}
+                      className={`pc-alive pc-verify ${getEditValue('toVerify', person.toVerify) ? 'is-on' : ''}`}
+                      onClick={() => handleFieldChange('toVerify', !getEditValue('toVerify', person.toVerify))}
+                    >
+                      <span className="pc-alive-dot" />
+                      {t('À vérifier')}
                     </button>
                   </div>
                 )}

@@ -96,11 +96,13 @@ const PERSON_FIELD_LABELS = {
   nationality: t('Nationalité'),
   region: t('Région'),
   notes: t('Notes'),
+  toVerify: t('À vérifier'),
 }
 
 function displayVal(v, key) {
   // Sexe : « Non précisé » plutôt que « vide »
   if (key === 'sex') return sexLabel(v)
+  if (key === 'toVerify') return v ? t('Oui') : t('Non')
   if (v === null || v === undefined || v === '') return null
   return String(v)
 }
