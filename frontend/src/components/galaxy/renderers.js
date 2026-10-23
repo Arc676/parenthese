@@ -829,7 +829,8 @@ function drawMediaContent(ctx, media, ms, imageCache) {
     ctx.beginPath()
     ctx.roundRect(-ms, -ms, ms * 2, ms * 2, 1)
     ctx.clip()
-    ctx.drawImage(mImg, -ms, -ms, ms * 2, ms * 2)
+    // Recadrée au centre comme les portraits : un souvenir horizontal ou vertical n'est plus tassé dans le carré
+    drawImageCover(ctx, mImg, -ms, -ms, ms * 2, ms * 2)
     ctx.restore()
   } else if (media.type === 'video') {
     ctx.fillStyle = '#3D3731'
