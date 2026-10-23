@@ -132,8 +132,9 @@ function generateSecurePassword() {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
+// Sans compte (visiteur par mot de passe), le choix reste dans ce navigateur pour cet arbre
 function getAccountSelfPersonStorageKey(userEmail, treeId) {
-  return `account_self_person_${userEmail || 'unknown'}_${treeId || 'none'}`
+  return `account_self_person_${userEmail || 'visiteur'}_${treeId || 'none'}`
 }
 
 function buildContributionChangesFromDraft(draft = {}) {
@@ -804,7 +805,7 @@ function App() {
 
   useEffect(() => {
     const treeId = tree.treeContext.treeId
-    if (!treeId || !accountEmail) {
+    if (!treeId) {
       setLinkedSelfPersonId('')
       return
     }
@@ -818,7 +819,7 @@ function App() {
   }, [accountEmail, tree.treeContext.treeId])
 
   useEffect(() => {
-    if (!linkedSelfPersonId || !tree.treeContext.treeId || !accountEmail) {
+    if (!linkedSelfPersonId || !tree.treeContext.treeId) {
       return
     }
 
@@ -2922,7 +2923,7 @@ function App() {
 
   const handleSelectSelfPerson = (personId) => {
     const treeId = tree.treeContext.treeId
-    if (!treeId || !accountEmail) {
+    if (!treeId) {
       return
     }
 
@@ -3202,6 +3203,7 @@ function App() {
         reorderEnabled={canReorderSiblings}
         onReorderSiblings={handleReorderSiblings}
         familyTabs={familyTabs}
+        selfPersonId={linkedSelfPersonId || null}
       />
       <ZoomControl zoomApiRef={galaxyZoomApiRef} />
       {tree.selectedPerson && (
@@ -3315,7 +3317,7 @@ function App() {
         selectedPersonId={linkedSelfPersonId}
         people={persons}
         onSelectPerson={handleSelectSelfPerson}
-        onManageAccount={() => handleUseAccount('login')}
+        onManageAccount={accountEmail ? () => handleUseAccount('login') : undefined}
         onClose={() => setAccountPanelVisible(false)}
       />
       <AdminPanel

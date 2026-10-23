@@ -14,6 +14,9 @@ export const UNKNOWN_R = 18
 // Il ne prend pas un emplacement de nœud : union de largeur nulle, écart négatif vers le partenaire.
 export const COMPACT_SCALE = 0.6
 export const COMPACT_R = PERSON_R * COMPACT_SCALE
+// Ligne directe vers la personne commune, dans l'onglet d'une autre famille : en retrait
+export const LINE_SCALE = 0.82
+export const LINE_ALPHA = 0.55
 export const COMPACT_W = 40
 export const COMPACT_JOIN_GAP = -18
 export const MAX_ORBIT_MEDIAS = 3

@@ -77,6 +77,8 @@ export default {
   "Supprimer définitivement": "Delete permanently",
   // Panneau « Mon compte » (AccountPanel)
   "Mon compte": "My account",
+  "Dans cet arbre": "In this tree",
+  "Qui êtes-vous dans cet arbre ?": "Who are you in this tree?",
   "Vous apparaissez dans cet arbre sous ce nom et avec cette photo.": "This is the name and photo you appear with in this tree.",
   "Dites-nous qui vous êtes dans cet arbre, votre nom et votre photo viendront de votre fiche.": "Tell us who you are in this tree. Your name and photo will come from your profile.",
   "Je suis cette personne": "I'm this person",
