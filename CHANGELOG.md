@@ -2,6 +2,28 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
+## 1.4.0 (2026-10-23)
+
+### Family tabs
+
+- In another family's tab, the person you marked as "That's me" stays on screen, linked to that family by their direct line (the shortest kinship path, both parents at each step, no siblings around), drawn faded. Without a choice, the tree's starting person is used (#138).
+- Visitors without an account can say who they are in the tree from their menu. The choice is kept in their browser for that tree (#138).
+
+### Notes on the tree
+
+- A note is attached to the nearest person when it is placed. It only shows in the tabs where that person is drawn, and stays next to them when the layout changes. Notes placed before this version are attached the first time the tree opens (#141).
+- A placed text can be edited again. With the select tool, click it twice (#141).
+
+### People
+
+- A person can be marked as needing checking, for a date or a link you are not sure of. A "?" shows on the portrait and a pill on the profile, the family can propose it like any other field, and searching for "à vérifier" lists them (French only for now) (#140).
+
+### Fixes and maintenance
+
+- Memory thumbnails around a portrait are cropped instead of stretched to a square (#142).
+- DOMPurify 3.4.17, pulled in by posthog-js, for a critical advisory published on 2026-10-23 (GHSA-cg2g-xh64-v4q7) (#139).
+- Minor dependency updates for the app, the API and the landing page (#133, #134, #136).
+
 ## 1.3.0 (2026-10-21)
 
 ### Memories from Immich
