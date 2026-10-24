@@ -46,7 +46,7 @@ api:
 
 web:
   hostname: null
-  httproute:
+  httpRoute:
     enabled: false
     parentRefs: []
   ingress:

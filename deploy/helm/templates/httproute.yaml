@@ -1,0 +1,20 @@
+{{- if .Values.web.httpRoute.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: parenthese
+  namespace: "{{ .Release.Namespace }}"
+spec:
+  hostnames:
+  - "{{ .Values.web.hostname }}"
+  parentRefs:
+  {{- .Values.web.httpRoute.parentRefs | toYaml | nindent 2 }}
+  rules:
+  - backendRefs:
+    - name: web
+      port: 80
+    matches:
+    - path:
+        type: PathPrefix
+        value: /
+{{- end }}
