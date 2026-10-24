@@ -15,6 +15,18 @@ database:
     size: 2Gi
 
 api:
+  auth:
+    allowPasswords: true
+    oidc:
+      enabled: false
+      requireVerifiedEmail: false
+      secret:
+        name: null
+        idKey: clientID
+        secretKey: clientSecret
+        issuerKey: issuer
+        nameKey: provider
+        redirectKey: redirect
   dbUrl: db
   hostnames: []
   image:

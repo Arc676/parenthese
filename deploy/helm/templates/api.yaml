@@ -35,12 +35,47 @@ spec:
                   key: "{{ .Values.database.secret.databaseKey }}"
             - name: DATABASE_URL
               value: postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ .Values.api.dbUrl }}:5432/$(POSTGRES_DB)
+
+            # {{- if .Values.api.auth.oidc.enabled }}
+            - name: OIDC_ISSUER
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.api.auth.oidc.secret.name }}"
+                  key: "{{ .Values.api.auth.oidc.secret.issuerKey }}"
+            - name: OIDC_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.api.auth.oidc.secret.name }}"
+                  key: "{{ .Values.api.auth.oidc.secret.idKey }}"
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.api.auth.oidc.secret.name }}"
+                  key: "{{ .Values.api.auth.oidc.secret.secretKey }}"
+            - name: OIDC_REDIRECT_URI
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.api.auth.oidc.secret.name }}"
+                  key: "{{ .Values.api.auth.oidc.secret.redirectKey }}"
+            - name: OIDC_PROVIDER_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.api.auth.oidc.secret.name }}"
+                  key: "{{ .Values.api.auth.oidc.secret.nameKey }}"
+            - name: OIDC_REQUIRE_VERIFIED_EMAIL
+              value: "{{ .Values.api.auth.oidc.requireVerifiedEmail }}"
+            # {{- end }}
+
+            - name: PASSWORD_LOGIN
+              value: "{{ .Values.api.auth.allowPasswords }}"
+
             - name: NODE_ENV
               value: production
             - name: PORT
-              value: 4000
+              value: "4000"
             - name: MEDIA_STORAGE_PATH
               value: /app/storage/media
+
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
