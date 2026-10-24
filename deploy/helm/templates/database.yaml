@@ -1,5 +1,17 @@
 {{- if .Values.database.enabled }}
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  namespace: "{{ .Release.Namespace }}"
+spec:
+  selector:
+    app: parenthese-db
+  ports:
+    - protocol: TCP
+      port: 5432
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
