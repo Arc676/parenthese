@@ -15,6 +15,6 @@ spec:
     spec:
       containers:
         - name: web
-          image: "{{ .Values.database.image.name }}:{{ .Values.database.image.tag }}"
+          image: "{{ .Values.web.image.name }}:{{ .Values.web.image.tag }}"
           ports:
             - containerPort: 80

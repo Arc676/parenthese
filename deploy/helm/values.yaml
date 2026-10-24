@@ -1,5 +1,5 @@
 database:
-  enabled: false
+  enabled: true
   image:
     name: postgres
     tag: 16-alpine
@@ -30,7 +30,7 @@ api:
   dbUrl: db
   hostnames: []
   image:
-    name: ghcr.io/iliesallali/parenthese-web
+    name: ghcr.io/iliesallali/parenthese-api
     tag: latest
   jwt:
     expiry: 7d
@@ -53,5 +53,5 @@ web:
     enabled: false
     ingressClass: nginx
   image:
-    name: ghcr.io/iliesallali/parenthese-api
+    name: ghcr.io/iliesallali/parenthese-web
     tag: latest

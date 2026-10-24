@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: "{{ .Values.database.image.name }}:{{ .Values.database.image.tag }}"
+          image: "{{ .Values.api.image.name }}:{{ .Values.api.image.tag }}"
           env:
             - name: POSTGRES_USER
               valueFrom:
@@ -80,7 +80,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: "{{ .Values.api.jwt.secret.name }}"
-                  key: "{{ .Values.api.jwt.secret.databaseKey }}"
+                  key: "{{ .Values.api.jwt.secret.secretKey }}"
           volumeMounts:
             - name: data
               mountPath: /app/storage/media
