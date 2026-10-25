@@ -1104,6 +1104,22 @@ function App() {
   const [addPersonLoading, setAddPersonLoading] = useState(false)
   const [addPersonError, setAddPersonError] = useState('')
 
+  // Ajouter un proche depuis une fiche (1.5.1) : le panneau s'ouvre avec le lien déjà posé, le nom tapé dans la
+  // recherche, et le nom de famille proposé pour un enfant ou un frère ou une sœur
+  const [addPersonPrefill, setAddPersonPrefill] = useState(null)
+  const handleCreateRelative = useCallback(async (type, query = '') => {
+    const person = tree.selectedPerson
+    if (!person) return
+    const [first = '', ...rest] = String(query).trim().split(/\s+/)
+    const inheritsName = type === 'child' || type === 'sibling'
+    const lastName = rest.join(' ') || (inheritsName ? person.lastName || '' : '')
+    const personName = [person.firstName, person.lastName].filter(Boolean).join(' ')
+    if (!(await leaveSelectedPerson())) return
+    await chooseSelectedPerson(null)
+    setAddPersonPrefill({ nonce: Date.now(), firstName: first, lastName, relation: { type, personId: person.id, personName } })
+    handleOpenAddPerson()
+  }, [tree.selectedPerson]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleOpenAddPerson = useCallback(() => {
     setAddPersonError('')
     // Le panneau d'ajout vit dans le mode édition : la famille y entre sans passer par le crayon
@@ -3257,6 +3273,8 @@ function App() {
         error={addPersonError}
         onSubmit={handleAddPersonSubmit}
         onClose={handleCloseAddPerson}
+        prefill={addPersonPrefill}
+        onOpenPerson={(person) => { setAddPersonPanelVisible(false); handlePersonSelect(person) }}
       />
       {/* Modal Session Contribution (contributeurs) */}
       <ContributionSessionModal
@@ -3390,6 +3408,7 @@ function App() {
           onRemoveRelation={handleRemoveRelation}
           onSetParentage={handleSetParentage}
           pendingParentage={pendingParentage[String(tree.selectedPerson.id)] ?? null}
+          onCreateRelative={tree.canEditCurrentTree || tree.canSubmitContribution || isDemoMode ? handleCreateRelative : null}
           proposal={ghosts?.patches.get(String(tree.selectedPerson.id)) || null}
           proposalReview={userRole.isAdmin && ghosts?.patches.get(String(tree.selectedPerson.id))?.ghost?.source === 'pending'
             ? reviewFromTree(ghosts.patches.get(String(tree.selectedPerson.id)).ghost.sessionId)
