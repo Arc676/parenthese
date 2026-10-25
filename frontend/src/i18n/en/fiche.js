@@ -1,6 +1,7 @@
 // Traductions anglaises, clé = texte français exact passé à t().
 export default {
   // Fiche d'une personne (PersonCard)
+  'Modifier': 'Edit',
   'Photo': 'Photo',
   'Vidéo': 'Video',
   'Audio': 'Audio',

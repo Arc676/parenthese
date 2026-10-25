@@ -447,24 +447,31 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     }
   }, [isZooming, targetTransformRef, zoomTimeoutRef])
 
-  // Resize canvas to device pixel ratio
+  // Resize canvas to device pixel ratio. Le CSS donne au canvas toute la page (.galaxy-canvas) ; on lit sa taille
+  // réelle. Avec window.innerHeight, Safari sur iPad gardait une hauteur prise clavier ou barre ouverte, sans
+  // événement resize ensuite : l'arbre s'arrêtait net au-dessus du bas de l'écran.
   useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return undefined
     const resize = () => {
-      const canvas = canvasRef.current
-      if (!canvas) return
-      const cssW = window.innerWidth
-      const cssH = window.innerHeight
+      const cssW = canvas.clientWidth || window.innerWidth
+      const cssH = canvas.clientHeight || window.innerHeight
       const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      const w = Math.floor(cssW * dpr), h = Math.floor(cssH * dpr)
+      if (canvas.width === w && canvas.height === h && dprRef.current === dpr) return
       dprRef.current = dpr
-      canvas.width = Math.floor(cssW * dpr)
-      canvas.height = Math.floor(cssH * dpr)
-      canvas.style.width = `${cssW}px`
-      canvas.style.height = `${cssH}px`
+      canvas.width = w
+      canvas.height = h
       needsRedrawRef.current = true
     }
     resize()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resize)
+    observer?.observe(canvas)
     window.addEventListener('resize', resize)
-    return () => window.removeEventListener('resize', resize)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', resize)
+    }
   }, [])
 
   // Layout

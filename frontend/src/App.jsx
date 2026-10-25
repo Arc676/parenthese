@@ -3259,6 +3259,7 @@ function App() {
           onMoveSibling={(delta) => galaxyZoomApiRef.current?.moveSibling?.(tree.selectedPerson.id, delta)}
           onUploadMomentFile={tree.canEditCurrentTree || tree.canSubmitContribution ? media.uploadMomentFile : undefined}
           onMomentSaved={media.refreshMomentMedia}
+          onQuickEdit={tree.canEditCurrentTree && userRole.isAdmin && !isDemoMode ? handleEditToggle : undefined}
         />
       )}
       {/* Crayon de modification masqué en démo : rien n'y est enregistré */}

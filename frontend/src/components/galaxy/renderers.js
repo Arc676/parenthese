@@ -602,7 +602,11 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
     ctx.shadowOffsetY = shadowY
   }
 
+  // Le cadre découpe le canvas à sa forme : save/restore autour, sinon la marque ci-dessous est rognée
+  // (sur un cadre rond, elle tombe presque entière hors du cercle)
+  ctx.save()
   drawFrame(ctx, frameType, person, img)
+  ctx.restore()
   // « À vérifier » : petit rond terracotta avec un « ? » en haut à droite du cadre, absent au dézoom
   if (person.toVerify && withDetail) drawToVerifyMark(ctx)
   ctx.restore()
