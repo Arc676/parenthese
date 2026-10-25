@@ -86,6 +86,12 @@ const envSchema = z.object({
   OIDC_REQUIRE_VERIFIED_EMAIL: z.string().default('true').transform(parseBooleanFlag('OIDC_REQUIRE_VERIFIED_EMAIL')),
   // À false, plus de mot de passe Parenthèse : connexion par le fournisseur OIDC seulement
   PASSWORD_LOGIN: z.string().default('true').transform(parseBooleanFlag('PASSWORD_LOGIN')),
+  // Sources publiques que le panneau « Chercher quelqu'un » interroge depuis le serveur, séparées par des
+  // virgules : deces (décès en France depuis 1970, INSEE par matchID), wikitree. Vide : aucun nom ne quitte
+  // l'instance, le panneau ne propose que des liens vers les sites, ouverts par le navigateur.
+  SEARCH_SOURCES: z.string().default(''),
+  // Facultatif : jeton matchID (gratuit, après inscription) au-delà d'une centaine de recherches
+  MATCHID_TOKEN: z.string().trim().default(''),
 })
 
 export const env = envSchema.parse(process.env)

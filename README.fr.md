@@ -59,6 +59,22 @@ Pour ouvrir l'instance à la famille depuis Internet, placez un reverse proxy HT
 
 Pour qu'une personne qui tombe sur l'adresse ne puisse pas s'inscrire et y créer ses arbres, mettez `ALLOW_REGISTRATION=false` dans `.env`, puis lancez `docker compose up -d`. Les comptes existants se connectent et créent leurs arbres comme avant, la famille ouvre toujours les arbres partagés avec le lien et le mot de passe, et l'application ne propose plus de créer de compte. Une instance sans aucun compte accepte quand même le premier, la variable peut donc être posée avant le tout premier démarrage : créez votre compte tout de suite, avant de donner l'adresse.
 
+#### Chercher quelqu'un dans des sources publiques
+
+Le menu « + » propose « Quelqu'un ailleurs » : un panneau à droite de l'arbre où l'on tape un nom pour voir ce que les sources publiques disent de cette personne. Les liens vers des sites sans recherche interrogeable d'ici (presse ancienne sur Gallica, registres matricules sur FranceArchives, Geneanet, FamilySearch et quelques autres, la France d'abord) marchent toujours : votre navigateur ouvre le site avec le nom déjà tapé, et rien ne passe par le serveur.
+
+Le serveur peut aussi interroger lui-même deux sources et afficher leurs résultats dans le panneau. Elles restent éteintes tant que vous ne les nommez pas dans `.env` :
+
+```
+# deces : décès en France depuis 1970 (fichier de l'INSEE, cherché par matchID)
+# wikitree : profils publics de WikiTree
+SEARCH_SOURCES=deces,wikitree
+# Facultatif, gratuit sur deces.matchid.io : sans clé, les recherches s'arrêtent après une centaine
+MATCHID_TOKEN=
+```
+
+Seuls le prénom, le nom et l'année de naissance quittent le serveur, et le panneau l'écrit à côté de chaque source. Un résultat ajouté à l'arbre ne remplit que les champs vides, passe la personne « à vérifier » et garde le lien de la source dans sa note. Le propriétaire de l'arbre ajoute directement ; la famille voit les résultats et les liens. Une clé matchID vaut 30 jours : renouvelez-la depuis votre compte matchID.
+
 #### Connexion par votre fournisseur d'identité (OIDC)
 
 *Expérimental dans la 1.2.0 : testé contre un fournisseur OpenID certifié, vos retours sur de vraies installations sont les bienvenus dans les issues.*

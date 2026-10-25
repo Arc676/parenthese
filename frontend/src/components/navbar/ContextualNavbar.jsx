@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import {
-  Brush, ImagePlus, Plus, UserPlus, User, X, MousePointer2, Pencil, Type, Star, Trash2, Image, ArrowLeft,
+  Brush, ImagePlus, Plus, UserPlus, User, X, MousePointer2, Pencil, Type, Star, Trash2, Image, ArrowLeft, Search,
 } from 'lucide-react'
 import { NavMenu, NavMenuGroup, NavMenuItem } from './NavMenu'
 import AvatarMenu from './AvatarMenu'
@@ -46,6 +46,7 @@ function ContextualNavbar({
   onEditClick,
   onAddPersonClick,
   onAddSouvenirClick,
+  onSearchClick,
   helpUrl = '',
   onShareClick,
   onTreeSelect,
@@ -216,6 +217,10 @@ function ContextualNavbar({
     }
     if (addItems.length) addGroups.push({ label: t('Ajouter'), items: addItems })
     if (fixItems.length) addGroups.push({ label: t('Corriger'), items: fixItems })
+    // Chercher quelqu'un dans des sources publiques (décès INSEE, archives, presse) : panneau à droite de l'arbre
+    if (onSearchClick) {
+      addGroups.push({ label: t('Chercher'), items: [{ key: 'search', icon: <Search {...ICON} />, label: t("Quelqu'un ailleurs"), sub: t('décès depuis 1970, archives, presse'), onSelect: onSearchClick }] })
+    }
   }
   const hasAddMenu = addGroups.length > 0
 
