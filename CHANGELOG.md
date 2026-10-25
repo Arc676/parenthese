@@ -9,6 +9,7 @@ Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 - A suggestion waiting for review now shows on the tree, where it will go: a suggested person is drawn faded, with a dotted circle and a "Suggested" tag, and their links are dotted. Words, drawings and photos placed on the tree show see-through. A person with a suggested change gets a small dot.
 - Whoever manages the tree opens a suggested person to see who suggested it and what else the suggestion holds, and accepts or rejects it right there. A person with a suggested change shows the fields in their profile, with the same buttons. "See details" opens the review panel to sort change by change.
 - The family sees what they are adding as a "Draft" before sending it, then as "Waiting" until it is reviewed. This is kept in their browser only, and cleared once the suggestion is reviewed.
+- After adding a person, the send window no longer opens by itself. The family can add several people, then send once with Send.
 
 ### Photos placed on the tree by the family
 

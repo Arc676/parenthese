@@ -14,7 +14,7 @@ export default {
   // App.jsx : ajout de personnes et contributions
   "Ajoutez d'abord un parent à {name} pour pouvoir lui rattacher un frère ou une sœur.": 'Add a parent to {name} first, so you can link a sibling to them.',
   "Ajoutez d'abord un parent à cette personne pour pouvoir lui rattacher un frère ou une sœur.": 'Add a parent to this person first, so you can link a sibling to them.',
-  '{name} est dans vos modifications. Envoyez-les quand vous avez fini.': '{name} is in your changes. Send them when you are done.',
+  "{name} est sur l'arbre, en brouillon. Envoyez quand vous avez fini.": "{name} is on the tree as a draft. Send when you're done.",
   "Erreur lors de l'ajout de la personne": 'Could not add this person',
   'Aucune modification à soumettre.': 'No changes to send.',
   'Contribution de {name} · {date}': 'Contribution from {name} · {date}',

@@ -1283,13 +1283,11 @@ function App() {
         ]
         editMode.updateDraft({ addedPersons })
         trackAppEvent('person_added', { via: addPersonViaRef.current, role: 'family', relations: (formData.relations || []).length, tree_id: opaqueTreeId })
-        // La personne apparaît en fantôme « Brouillon » ; on passe tout de suite à l'envoi
-        // (prénom, un mot), la famille n'a pas à chercher le bouton
+        // La personne apparaît en fantôme « Brouillon » : la famille peut en ajouter d'autres, puis envoyer une
+        // fois avec le bouton « Envoyer » de la barre (Patch, 25/10). Avant, la fenêtre d'envoi s'ouvrait d'office,
+        // seule façon de montrer qu'un ajout invisible comptait.
         setAddPersonPanelVisible(false)
-        setDraftNotice(t('{name} est dans vos modifications. Envoyez-les quand vous avez fini.', { name: [formData.firstName, formData.lastName].filter(Boolean).join(' ') || t('Nouvelle personne') }))
-        setContribSubmitError('')
-        setContribChanges(buildContribChangesList(editMode.restoreDraft()))
-        setShowContribModal(true)
+        setDraftNotice(t("{name} est sur l'arbre, en brouillon. Envoyez quand vous avez fini.", { name: [formData.firstName, formData.lastName].filter(Boolean).join(' ') || t('Nouvelle personne') }))
         return
       }
 
