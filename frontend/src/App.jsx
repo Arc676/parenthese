@@ -1025,8 +1025,9 @@ function App() {
       }
       img.onerror = () => URL.revokeObjectURL(img.src)
       img.src = URL.createObjectURL(file)
-    } catch {
-      // silent — user can retry
+    } catch (error) {
+      // Avant la 1.5.1, l'échec passait sous silence : la photo n'apparaissait pas et rien ne disait pourquoi
+      setDraftNotice(getAccountErrorMessage(error) || t("La photo n'a pas pu être envoyée. Réessayez."))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tree.treeContext.treeId, tree.treeContext.accessToken, auth.userAuth.token])
@@ -1412,8 +1413,10 @@ function App() {
       const draft = editMode.restoreDraft()
 
       if (token && treeId) {
-        // Appliquer les modifications de personnes depuis le draft
-        const modifiedPersons = draft.modifiedPersons || {}
+        // Appliquer les modifications de personnes depuis le draft. Ce qui échoue reste dans le brouillon, avec un
+        // message : avant la 1.5.1, l'échec allait à la console et le brouillon était effacé quand même.
+        const failures = []
+        const modifiedPersons = { ...(draft.modifiedPersons || {}) }
         for (const [personId, rawChanges] of Object.entries(modifiedPersons)) {
           const payload = {}
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'firstName')) payload.firstName = rawChanges.firstName || ''
@@ -1438,8 +1441,9 @@ function App() {
           if (Object.keys(payload).length > 0) {
             try {
               await updatePerson(treeId, personId, payload, token)
+              delete modifiedPersons[personId]
             } catch (err) {
-              console.error('Failed to update person:', personId, err)
+              failures.push(getAccountErrorMessage(err))
             }
           }
         }
@@ -1476,12 +1480,25 @@ function App() {
 
         const hasAnnotationChanges = batchPayload.create.length > 0 || batchPayload.update.length > 0 || batchPayload.delete.length > 0
 
+        let annotationsFailed = false
         if (hasAnnotationChanges) {
           try {
             await batchAnnotations(treeId, batchPayload, token)
           } catch (err) {
-            console.error('Failed to submit annotations:', err)
+            annotationsFailed = true
+            failures.push(getAccountErrorMessage(err))
           }
+        }
+
+        if (failures.length > 0) {
+          editMode.updateDraft({
+            modifiedPersons,
+            ...(annotationsFailed ? {} : { addedAnnotations: [], modifiedAnnotations: [], deletedAnnotations: [] }),
+          })
+          editMode.saveDraft()
+          await tree.refreshCurrentTreeGraph({ relayout: false })
+          setDraftNotice(t("Une partie n'a pas été enregistrée ({error}). Elle reste dans vos modifications : réessayez.", { error: failures[0] }))
+          return
         }
       }
 

@@ -224,4 +224,9 @@ export default {
   "{n} ajouts sur l'arbre": '{n} additions on the tree',
   '{n} autre changement': '{n} other change',
   '{n} autres changements': '{n} other changes',
+  "La photo n'a pas pu être envoyée. Réessayez.": "The photo couldn't be sent. Try again.",
+  "Une partie n'a pas été enregistrée ({error}). Elle reste dans vos modifications : réessayez.": "Some changes weren't saved ({error}). They're still in your edits: try again.",
+  'Cette photo est trop lourde. Essayez une photo plus petite.': 'This photo is too large. Try a smaller one.',
+  'Beaucoup de photos attendent déjà la relecture sur cet arbre. Réessayez quand la personne qui le gère les aura vues.': "Many photos are already waiting for review on this tree. Try again once the person who manages it has seen them.",
+  'Ce fichier n’est pas une photo que Parenthèse sait afficher (JPEG, PNG, WebP ou GIF).': "This file isn't a photo Parenthèse can show (JPEG, PNG, WebP or GIF).",
 }
