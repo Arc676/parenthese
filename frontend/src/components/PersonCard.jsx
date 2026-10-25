@@ -20,6 +20,7 @@ import { isYearOnly } from '../utils/dateInput.js'
 import DateField from './DateField.jsx'
 import { runOnce } from '../utils/saveOnLeave.js'
 import { normalizeSex, SEX_CHOICES } from '../utils/personSex.js'
+import { ProposalBanner } from './ProposalCard.jsx'
 
 // Aucune modification en cours (référence stable)
 const NO_EDITS = Object.freeze({})
@@ -66,6 +67,9 @@ const PersonCard = ({
   onRemoveRelation,
   onSetParentage,
   pendingParentage = null,
+  // Modification proposée et pas encore relue (fantôme, 1.5.1) : { fields, deleted, ghost }, et sa relecture
+  proposal = null,
+  proposalReview = null,
   relationActionLoading = false,
   relationActionSuccess = '',
   relationActionError = '',
@@ -785,6 +789,7 @@ const PersonCard = ({
           </label>
         )}
       </header>
+      {!editMode && proposal && <ProposalBanner patch={proposal} review={proposalReview} />}
 
       {avatarActionError && <div className="pz-error pc-inline-msg">{avatarActionError}</div>}
 

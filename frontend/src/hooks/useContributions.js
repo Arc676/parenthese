@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
+  fetchContributionStatus,
   listContributionSessions,
   submitContributionSession,
   reviewContributionSession,
-  batchAnnotations,
 } from '../api/treeApi'
+import { forgetSentProposal, readSentProposals, rememberSentProposal } from '../utils/sentProposals'
 import { getAccountErrorMessage } from '../utils/errorMessages'
 import { t } from '../i18n/index.js'
 
@@ -40,6 +41,34 @@ export function useContributions({ canEditCurrentTree, canSubmitContribution, tr
     document.addEventListener('visibilitychange', onVisible)
     return () => { cancelled = true; document.removeEventListener('visibilitychange', onVisible) }
   }, [canEditCurrentTree, treeId, accessToken])
+
+  // Ce que la famille a envoyé, gardé dans son navigateur jusqu'à la relecture : dessiné en fantôme « En attente »
+  // (utils/ghosts.js). Chaque proposition est revérifiée au chargement et au retour sur l'onglet.
+  const [sentProposals, setSentProposals] = useState([])
+  const refreshSentProposals = useCallback(async () => {
+    if (!treeId || !accessToken || canEditCurrentTree) { setSentProposals([]); return }
+    const stored = readSentProposals(treeId)
+    setSentProposals(stored)
+    const stillPending = []
+    for (const proposal of stored) {
+      try {
+        const status = await fetchContributionStatus(treeId, proposal.sessionId, accessToken)
+        if (status === 'pending') stillPending.push(proposal)
+        else forgetSentProposal(treeId, proposal.sessionId)
+      } catch (error) {
+        // Introuvable : relue puis effacée, ou d'un autre arbre. Hors ligne : on la garde
+        if (error?.status === 404) forgetSentProposal(treeId, proposal.sessionId)
+        else stillPending.push(proposal)
+      }
+    }
+    setSentProposals(stillPending)
+  }, [treeId, accessToken, canEditCurrentTree])
+  useEffect(() => {
+    refreshSentProposals()
+    const onVisible = () => { if (document.visibilityState === 'visible') refreshSentProposals() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [refreshSentProposals])
 
   const resetContribState = () => {
     setContribState({ ...EMPTY_CONTRIB_STATE })
@@ -121,6 +150,14 @@ export function useContributions({ canEditCurrentTree, canSubmitContribution, tr
 
       if (result?.session?.status === 'approved') {
         await refreshCurrentTreeGraph()
+      } else if (result?.session?.id && !canEditCurrentTree) {
+        rememberSentProposal(treeContext.treeId, {
+          sessionId: result.session.id,
+          label: payload.submittedByLabel || null,
+          createdAt: result.session.createdAt || new Date().toISOString(),
+          changes: payload.changes,
+        })
+        setSentProposals(readSentProposals(treeContext.treeId))
       }
 
       setContribState((current) => ({
@@ -211,38 +248,7 @@ export function useContributions({ canEditCurrentTree, canSubmitContribution, tr
         treeContext.accessToken,
       )
 
-      // Appliquer côté frontend les annotations approuvées (le backend ne les gère pas)
-      const session = contribState.sessions.find((s) => s.id === sessionId)
-      if (session) {
-        const isAllApproved = reviewPayload.decision === 'approved'
-        const approvedIds = new Set(
-          (reviewPayload.changeDecisions || [])
-            .filter((d) => d.decision === 'approved')
-            .map((d) => d.changeId),
-        )
-        const approvedAnnotations = (session.changes || []).filter((c) =>
-          c.entityType === 'annotation' && (isAllApproved || approvedIds.has(c.id)),
-        )
-        if (approvedAnnotations.length > 0) {
-          const batchPayload = {
-            create: approvedAnnotations
-              .filter((c) => c.action === 'create')
-              .map((c) => c.afterJson || c.after),
-            update: approvedAnnotations
-              .filter((c) => c.action === 'update')
-              .map((c) => ({ id: c.entityId, ...(c.afterJson || c.after) })),
-            delete: approvedAnnotations
-              .filter((c) => c.action === 'delete')
-              .map((c) => c.entityId),
-          }
-          try {
-            await batchAnnotations(treeContext.treeId, batchPayload, treeContext.accessToken)
-          } catch (annErr) {
-            console.error('Failed to apply approved annotations:', annErr)
-          }
-        }
-      }
-
+      // Les annotations acceptées sont posées par le serveur, dans la même transaction (1.5.1)
       await refreshCurrentTreeGraph()
 
       await refreshContributionSessions()
@@ -271,5 +277,7 @@ export function useContributions({ canEditCurrentTree, canSubmitContribution, tr
     handleSubmitContributionUpdatePerson,
     handleSubmitContributionDeletePerson,
     handleReviewContributionSession,
+    sentProposals,
+    refreshSentProposals,
   }
 }

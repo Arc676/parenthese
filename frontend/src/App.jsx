@@ -86,6 +86,9 @@ import './App.css'
 import './styles/pz.css'
 import { setBooting } from './bootSignal.js'
 import { saveContributorName } from './utils/contributorName'
+import { ghostsFromChanges, hasGhosts, mergeGhosts } from './utils/ghosts'
+import ProposalCard from './components/ProposalCard'
+import { summarizeChanges } from './utils/proposalSummary'
 
 function yearToIsoDate(value) {
   if (value === null || value === undefined || value === '') {
@@ -688,6 +691,7 @@ function App() {
   }, [auth.accountTrees, tree.treeContext.treeId, tree.treeContext.treeName])
 
   const isDemoMode = tree.treeContext.accessMode === 'demo'
+
   const canEditInCurrentMode = tree.canSubmitContribution || isDemoMode
 
   // Recherche de personnes avec scoring
@@ -698,6 +702,56 @@ function App() {
     treeId: tree.treeContext.treeId,
     canEdit: canEditInCurrentMode,
   })
+
+  // Fantômes (1.5.1) : ce qui est proposé et pas encore dans l'arbre, dessiné en transparence à sa place.
+  // Qui gère l'arbre voit les propositions en attente ; la famille voit son brouillon et ce qu'elle a envoyé.
+  const ghostTreeId = tree.treeContext.treeId
+  const ghosts = useMemo(() => {
+    if (!ghostTreeId || isDemoMode) return null
+    const graph = { unions }
+    const list = []
+    if (userRole.isAdmin) {
+      for (const session of contrib.contribState.sessions || []) {
+        if (session.status !== 'pending') continue
+        list.push(ghostsFromChanges(session.changes, {
+          source: 'pending', sessionId: session.id, label: session.submittedByLabel, createdAt: session.createdAt,
+          summary: summarizeChanges(session.changes),
+        }, graph))
+      }
+    } else if (tree.canSubmitContribution) {
+      for (const proposal of contrib.sentProposals || []) {
+        list.push(ghostsFromChanges(proposal.changes, {
+          source: 'sent', sessionId: proposal.sessionId, label: proposal.label, createdAt: proposal.createdAt,
+          summary: summarizeChanges(proposal.changes),
+        }, graph))
+      }
+      if (editMode.hasDraft) {
+        const draftChanges = buildContributionChangesFromDraft(editMode.restoreDraft())
+        list.push(ghostsFromChanges(draftChanges, { source: 'draft', key: 'brouillon', summary: summarizeChanges(draftChanges) }, graph))
+      }
+    }
+    const merged = mergeGhosts(list)
+    // Photo posée sur l'arbre : l'adresse se refait depuis son chemin, seulement pour une photo de cet arbre
+    const photoPrefix = `/trees/${ghostTreeId}/annotation-photos/`
+    merged.annotations = merged.annotations.map((ann) => {
+      if (ann.type !== 'photo') return ann
+      try {
+        const parsed = JSON.parse(ann.content)
+        const ownPhoto = typeof parsed.photoPath === 'string' && parsed.photoPath.startsWith(photoPrefix)
+          && /^[A-Za-z0-9-]+$/.test(parsed.photoPath.slice(photoPrefix.length))
+        if (!ownPhoto) return null
+        return { ...ann, content: JSON.stringify({ ...parsed, url: buildMediaUrl(parsed.photoPath, import.meta.env.VITE_API_BASE_URL || '/api') }) }
+      } catch {
+        return null
+      }
+    }).filter(Boolean)
+    return hasGhosts(merged) ? merged : null
+  }, [ghostTreeId, isDemoMode, userRole.isAdmin, tree.canSubmitContribution, contrib.contribState.sessions, contrib.sentProposals, editMode.hasDraft, editMode.draftRevision, tree.graphRevision]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [selectedGhost, setSelectedGhost] = useState(null)
+  // Une proposition relue (ou un brouillon envoyé) emporte son fantôme : la carte ouverte se ferme
+  useEffect(() => {
+    if (selectedGhost && !ghosts?.persons.some((p) => p.id === selectedGhost.id)) setSelectedGhost(null)
+  }, [ghosts, selectedGhost])
 
   const localEntityCounterRef = useRef(0)
   const makeLocalId = useCallback((prefix) => {
@@ -895,9 +949,18 @@ function App() {
   const handlePersonSelect = useCallback(async (personLike) => {
     const personId = personLike && typeof personLike === 'object' ? personLike.id : personLike
     if (personId === null || personId === undefined) {
+      setSelectedGhost(null)
       await chooseSelectedPerson(null)
       return
     }
+    // Personne proposée : sa carte de proposition, pas une fiche (elle n'existe pas encore dans l'arbre)
+    if (personLike && typeof personLike === 'object' && personLike.ghost) {
+      if (!(await leaveSelectedPerson())) return
+      await chooseSelectedPerson(null)
+      setSelectedGhost(personLike)
+      return
+    }
+    setSelectedGhost(null)
 
     const freshPerson = persons.find((candidate) => String(candidate.id) === String(personId)) || personLike || null
     if (!(await leaveSelectedPerson())) return
@@ -1533,6 +1596,16 @@ function App() {
     }))
     await contrib.handleOpenContributionPanel()
   }, [contrib, resolveContributionShareUrl, tree.treeContext.treeId, tree.canEditCurrentTree, tree.treeContext.accessToken, auth.userAuth.token]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Accepter ou refuser une proposition depuis son fantôme. Une proposition se relit en entier ; « Voir le
+  // détail » ouvre le panneau pour trier changement par changement.
+  const reviewFromTree = (sessionId) => ({
+    busy: contrib.contribState.reviewingSessionId === sessionId,
+    error: contrib.contribState.error,
+    onAccept: () => contrib.handleReviewContributionSession(sessionId, { decision: 'approved' }),
+    onReject: () => contrib.handleReviewContributionSession(sessionId, { decision: 'rejected' }),
+    onOpenDetails: () => { setSelectedGhost(null); handleOpenContributionPanel() },
+  })
 
   const handleContributionPasswordRemember = useCallback(async ({ password }) => {
     const accessToken = auth.userAuth.token || tree.treeContext.accessToken
@@ -3265,8 +3338,17 @@ function App() {
         annotationViewRef={annotationViewRef}
         onAnnotationsAnchored={persistAnnotationAnchors}
         selfPersonId={linkedSelfPersonId || null}
+        ghosts={ghosts}
       />
       <ZoomControl zoomApiRef={galaxyZoomApiRef} />
+      {selectedGhost && !tree.selectedPerson && (
+        <ProposalCard
+          person={selectedGhost}
+          summary={selectedGhost.ghost?.summary || ''}
+          review={userRole.isAdmin && selectedGhost.ghost?.source === 'pending' ? reviewFromTree(selectedGhost.ghost.sessionId) : null}
+          onClose={() => setSelectedGhost(null)}
+        />
+      )}
       {tree.selectedPerson && (
         <PersonCard
           person={tree.selectedPerson}
@@ -3291,6 +3373,10 @@ function App() {
           onRemoveRelation={handleRemoveRelation}
           onSetParentage={handleSetParentage}
           pendingParentage={pendingParentage[String(tree.selectedPerson.id)] ?? null}
+          proposal={ghosts?.patches.get(String(tree.selectedPerson.id)) || null}
+          proposalReview={userRole.isAdmin && ghosts?.patches.get(String(tree.selectedPerson.id))?.ghost?.source === 'pending'
+            ? reviewFromTree(ghosts.patches.get(String(tree.selectedPerson.id)).ghost.sessionId)
+            : null}
           relationActionLoading={relationFeedback.loading}
           relationActionSuccess={relationFeedback.success}
           relationActionError={relationFeedback.error}

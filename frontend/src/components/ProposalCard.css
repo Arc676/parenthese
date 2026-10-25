@@ -1,0 +1,87 @@
+/* Proposition pas encore relue (1.5.1) : même place et même cadre que la fiche, bordure en pointillés */
+.proposal-card {
+  border-style: dashed;
+  border-color: var(--pz-a300);
+}
+
+.proposal-photo {
+  background: var(--pz-a50);
+  outline: 1.5px dashed var(--pz-a500);
+  outline-offset: 3px;
+}
+
+.proposal-eyebrow {
+  color: var(--pz-a700);
+}
+
+.proposal-years {
+  margin: 2px 0 0;
+  color: var(--pz-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.proposal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.proposal-who,
+.proposal-summary,
+.proposal-change {
+  margin: 0;
+  color: var(--pz-ink-2);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.proposal-summary {
+  color: var(--pz-muted);
+}
+
+.proposal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.proposal-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.proposal-details {
+  margin-left: auto;
+}
+
+.proposal-error {
+  margin: 0;
+}
+
+/* Fiche existante dont une modification est proposée */
+.proposal-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px dashed var(--pz-a300);
+  border-radius: 12px;
+  background: var(--pz-a50);
+}
+
+.proposal-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+  color: var(--pz-ink);
+}
+
+.proposal-field {
+  color: var(--pz-muted);
+  margin-right: 4px;
+}

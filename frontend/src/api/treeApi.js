@@ -404,6 +404,18 @@ export async function reviewContributionSession(treeId, sessionId, payload, toke
   return data
 }
 
+// État d'une proposition envoyée (en attente, acceptée, refusée) : la famille retire ses fantômes une fois relue
+export async function fetchContributionStatus(treeId, sessionId, token) {
+  const data = await apiRequest(`/trees/${encodeURIComponent(treeId)}/contributions/sessions/${encodeURIComponent(sessionId)}/status`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  return data?.status || null
+}
+
 export async function uploadAnnotationPhoto(treeId, payload, token) {
   const data = await apiRequest(`/trees/${encodeURIComponent(treeId)}/annotation-photos`, {
     method: 'POST',

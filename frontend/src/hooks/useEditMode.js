@@ -21,6 +21,8 @@ export function useEditMode({ treeId, canEdit }) {
   const [isActive, setIsActive] = useState(false)
   const [hasDraft, setHasDraft] = useState(false)
   const [draftTimestamp, setDraftTimestamp] = useState(null)
+  // Monte à chaque changement du brouillon : ses fantômes se redessinent (utils/ghosts.js)
+  const [draftRevision, setDraftRevision] = useState(0)
   const autoSaveTimerRef = useRef(null)
   const draftDataRef = useRef({})
 
@@ -151,6 +153,7 @@ export function useEditMode({ treeId, canEdit }) {
     }
     // Considérer qu'il y a désormais un draft actif (permet le bouton "Mettre à jour l'arbre")
     setHasDraft(true)
+    setDraftRevision((r) => r + 1)
   }, [])
 
   /**
@@ -164,6 +167,7 @@ export function useEditMode({ treeId, canEdit }) {
       draftDataRef.current = {}
       setHasDraft(false)
       setDraftTimestamp(null)
+      setDraftRevision((r) => r + 1)
     } catch (err) {
       console.error('Failed to clear draft:', err)
     }
@@ -180,6 +184,7 @@ export function useEditMode({ treeId, canEdit }) {
     // État
     isActive,
     hasDraft,
+    draftRevision,
     draftTimestamp,
 
     // Actions
