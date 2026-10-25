@@ -16,7 +16,9 @@ import {
 
 // Co-gestion d'un arbre (issue #145). Un co-gestionnaire est un membre « admin » : il fait tout ce que fait le
 // propriétaire, sauf inviter ou retirer un co-gestionnaire et supprimer l'arbre (DELETE /trees/:id, réservé au
-// propriétaire). Les droits sont relus en base à chaque requête : un co-gestionnaire retiré perd la main aussitôt.
+// propriétaire), ni Immich, qui passe par la clé du propriétaire (routes/immich.ts). Les droits sont relus en base à
+// chaque requête : un co-gestionnaire retiré perd la main aussitôt. Il a pu voir le mot de passe de partage :
+// l'écran de retrait propose de le changer.
 
 const treeIdParamSchema = z.object({ id: z.string().min(1) })
 const invitationParamsSchema = z.object({ id: z.string().min(1), invitationId: z.string().min(1) })
@@ -175,8 +177,16 @@ export const managerRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(403).send({ error: 'forbidden' })
     }
 
-    const removed = await app.prisma.treeMembership.deleteMany({
-      where: { treeId: params.data.id, userId: params.data.userId, role: 'admin' },
+    // Un accès retenu par le mot de passe de partage (user_tree_accesses) part aussi : sinon le compte retiré
+    // lirait encore l'arbre
+    const removed = await app.prisma.$transaction(async (tx) => {
+      const deleted = await tx.treeMembership.deleteMany({
+        where: { treeId: params.data.id, userId: params.data.userId, role: 'admin' },
+      })
+      if (deleted.count === 1) {
+        await tx.userTreeAccess.deleteMany({ where: { treeId: params.data.id, userId: params.data.userId } })
+      }
+      return deleted
     })
     if (removed.count !== 1) return reply.code(404).send({ error: 'manager_not_found' })
     await audit(app, params.data.id, user.userId, leaving ? 'manager_left' : 'manager_removed', { userId: params.data.userId })

@@ -177,6 +177,32 @@ describe.skipIf(!TEST_DB)('co-gestion, vraie base', () => {
     await call('DELETE', `/trees/${treeId}/managers/${created.body.user.id}`, owner.token)
   })
 
+  it("un co-gestionnaire n'utilise jamais Immich, qui passe par la clé du propriétaire", async () => {
+    const co = await account('immich')
+    const { token } = await invite(co.email)
+    expect((await call('POST', `/invitations/${token}/accept`, co.token)).status).toBe(200)
+    const config = await call('GET', `/trees/${treeId}/immich/config`, co.token)
+    expect(config.status).toBe(200)
+    expect(config.body).toEqual({ config: null, instances: [], ownerOnly: true })
+    for (const url of ['/immich/assets?page=1&q=plage', '/immich/people', '/immich/status', '/immich/assets/3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b/thumbnail', '/immich/thumbnail/3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b']) {
+      expect((await call('GET', `/trees/${treeId}${url}`, co.token)).status).toBe(403)
+    }
+    expect((await call('PUT', `/trees/${treeId}/immich/config`, co.token, { instanceId: '0123456789abcdef', apiKey: 'y' })).status).toBe(403)
+    expect((await call('DELETE', `/trees/${treeId}/immich/config`, co.token)).status).toBe(403)
+    await call('DELETE', `/trees/${treeId}/managers/${co.id}`, owner.token)
+  })
+
+  it("retiré, un co-gestionnaire qui avait ouvert l'arbre par le mot de passe de partage ne le lit plus", async () => {
+    const co = await account('partage')
+    const unlocked = await call('POST', `/trees/${treeId}/access/unlock`, co.token, { password: 'partage-demo-1' })
+    expect(unlocked.status).toBe(200)
+    expect((await call('GET', `/trees/${treeId}/graph`, co.token)).status).toBe(200)
+    const { token } = await invite(co.email)
+    expect((await call('POST', `/invitations/${token}/accept`, co.token)).status).toBe(200)
+    expect((await call('DELETE', `/trees/${treeId}/managers/${co.id}`, owner.token)).status).toBe(200)
+    expect((await call('GET', `/trees/${treeId}/graph`, co.token)).status).toBe(403)
+  })
+
   describe('OIDC', () => {
     let address = 0
     async function oidcLogin(identity: { subject: string; email: string; emailVerified: boolean }) {
@@ -210,6 +236,16 @@ describe.skipIf(!TEST_DB)('co-gestion, vraie base', () => {
       const fragment = await oidcLogin({ subject: `sub-nv-${run}`, email, emailVerified: false })
       expect(fragment.get('oidc_error')).toBe('oidc_email_unverified')
       expect(await prisma.user.findUnique({ where: { email } })).toBeNull()
+    })
+
+    it("identité déjà reliée dont l'email a changé chez le fournisseur : pas d'invitation prise sans le lien", async () => {
+      const subject = `sub-change-${run}`
+      expect((await oidcLogin({ subject, email: mail('avant'), emailVerified: true })).get('oidc')).toBeTruthy()
+      const target = mail('cible')
+      await invite(target)
+      expect((await oidcLogin({ subject, email: target, emailVerified: true })).get('oidc')).toBeTruthy()
+      const user = await prisma.user.findUnique({ where: { email: mail('avant') }, select: { id: true } })
+      expect(await prisma.treeMembership.findUnique({ where: { treeId_userId: { treeId, userId: user!.id } } })).toBeNull()
     })
 
     it("email non vérifié sur un compte déjà relié : l'invitation reste en attente", async () => {

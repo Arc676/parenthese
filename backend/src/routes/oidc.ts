@@ -181,7 +181,8 @@ export const oidcRoutes: FastifyPluginAsync = async (app) => {
       if ('error' in result) {
         return redirectToApp(reply, returnTo, `oidc_error=${result.error}`)
       }
-      // Invitations à co-gérer un arbre : acceptées sans le lien, l'adresse étant garantie par le fournisseur
+      // Invitations à co-gérer un arbre : acceptées sans le lien, l'adresse étant garantie par le fournisseur (et
+      // devant être celle du compte, voir claimInvitationsForVerifiedEmail)
       if (identity.email && identity.emailVerified) {
         await claimInvitationsForVerifiedEmail(app.prisma, result.userId, identity.email)
       }

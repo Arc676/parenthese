@@ -96,10 +96,15 @@ export async function acceptInvitation(prisma: PrismaClient, invitationId: strin
 }
 
 // Connexion OIDC avec un email vérifié par le fournisseur : les invitations en attente à cette adresse sont
-// acceptées sans le lien. Jamais pour un email non vérifié, jamais pour une connexion par mot de passe.
+// acceptées sans le lien. Jamais pour un email non vérifié, jamais pour une connexion par mot de passe, et
+// seulement si c'est l'adresse du compte : une identité déjà reliée dont l'email a changé chez le fournisseur
+// ne prend pas les invitations faites à sa nouvelle adresse (elle passe par le lien).
 export async function claimInvitationsForVerifiedEmail(prisma: PrismaClient, userId: string, verifiedEmail: string): Promise<string[]> {
   const email = normalizeEmail(verifiedEmail)
   const invitations = await prisma.treeInvitation.findMany({ where: { email, ...pendingInvitationWhere() }, select: { id: true } })
+  if (!invitations.length) return []
+  const account = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } })
+  if (!account || normalizeEmail(account.email) !== email) return []
   const joined: string[] = []
   for (const invitation of invitations) {
     const result = await acceptInvitation(prisma, invitation.id, userId, email)

@@ -178,7 +178,13 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       let joinedTreeId: string | null = null
       if (invitation) {
         const accepted = await acceptInvitation(app.prisma, invitation.id, user.id, user.email)
-        if (accepted.ok) joinedTreeId = accepted.treeId
+        if (accepted.ok) {
+          joinedTreeId = accepted.treeId
+        } else if (!(await isRegistrationOpen(app.prisma))) {
+          // Invitation annulée ou servie entre-temps, sur une instance fermée : pas de compte sans arbre
+          await app.prisma.user.delete({ where: { id: user.id } })
+          return reply.code(410).send({ error: 'invitation_invalid' })
+        }
       }
 
       return reply.code(201).send({ token: signUserSession(app, user), user: { ...user, hasPassword: true }, joinedTreeId })
