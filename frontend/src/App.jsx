@@ -1117,10 +1117,13 @@ function App() {
     if (!(await leaveSelectedPerson())) return
     await chooseSelectedPerson(null)
     setAddPersonPrefill({ nonce: Date.now(), firstName: first, lastName, relation: { type, personId: person.id, personName } })
-    handleOpenAddPerson()
+    handleOpenAddPerson(query ? 'fiche_recherche' : 'fiche')
   }, [tree.selectedPerson]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleOpenAddPerson = useCallback(() => {
+  // Par où l'on ajoute une personne, pour les compteurs d'édition (aucun contenu de l'arbre ne part)
+  const addPersonViaRef = useRef('menu')
+  const handleOpenAddPerson = useCallback((via) => {
+    addPersonViaRef.current = typeof via === 'string' ? via : 'menu'
     setAddPersonError('')
     // Le panneau d'ajout vit dans le mode édition : la famille y entre sans passer par le crayon
     if (!editMode.isActive) editMode.activate()
@@ -1279,7 +1282,8 @@ function App() {
           },
         ]
         editMode.updateDraft({ addedPersons })
-        // La personne n'apparaît dans l'arbre qu'après envoi : on passe tout de suite à l'envoi
+        trackAppEvent('person_added', { via: addPersonViaRef.current, role: 'family', relations: (formData.relations || []).length, tree_id: opaqueTreeId })
+        // La personne apparaît en fantôme « Brouillon » ; on passe tout de suite à l'envoi
         // (prénom, un mot), la famille n'a pas à chercher le bouton
         setAddPersonPanelVisible(false)
         setDraftNotice(t('{name} est dans vos modifications. Envoyez-les quand vous avez fini.', { name: [formData.firstName, formData.lastName].filter(Boolean).join(' ') || t('Nouvelle personne') }))
@@ -1358,6 +1362,7 @@ function App() {
       })
 
       await tree.refreshCurrentTreeGraph()
+      trackAppEvent('person_added', { via: addPersonViaRef.current, role: 'manager', relations: (formData.relations || []).length, tree_id: opaqueTreeId })
       return newPerson
     } catch (err) {
       setAddPersonError(err.message || t("Erreur lors de l'ajout de la personne"))
@@ -1519,6 +1524,7 @@ function App() {
       }
 
       await tree.refreshCurrentTreeGraph({ relayout: false })
+      trackAppEvent('tree_edits_saved', { persons: Object.keys(draft.modifiedPersons || {}).length, annotations: (draft.addedAnnotations || []).length, tree_id: opaqueTreeId })
       editMode.clearDraft()
       editMode.deactivate()
     } else {
@@ -1567,6 +1573,7 @@ function App() {
       setShowContribModal(false)
       setContribSubmitError('')
       setContribSuccess(true)
+      trackAppEvent('proposal_sent', { changes: changes.length, tree_id: opaqueTreeId })
       setDraftNotice('')
       setTimeout(() => setContribSuccess(false), 6000)
     } catch (err) {
@@ -1635,8 +1642,8 @@ function App() {
   const reviewFromTree = (sessionId) => ({
     busy: contrib.contribState.reviewingSessionId === sessionId,
     error: contrib.contribState.error,
-    onAccept: () => contrib.handleReviewContributionSession(sessionId, { decision: 'approved' }),
-    onReject: () => contrib.handleReviewContributionSession(sessionId, { decision: 'rejected' }),
+    onAccept: () => contrib.handleReviewContributionSession(sessionId, { decision: 'approved' }, 'tree'),
+    onReject: () => contrib.handleReviewContributionSession(sessionId, { decision: 'rejected' }, 'tree'),
     onOpenDetails: () => { setSelectedGhost(null); handleOpenContributionPanel() },
   })
 
@@ -3274,7 +3281,11 @@ function App() {
         onSubmit={handleAddPersonSubmit}
         onClose={handleCloseAddPerson}
         prefill={addPersonPrefill}
-        onOpenPerson={(person) => { setAddPersonPanelVisible(false); handlePersonSelect(person) }}
+        onOpenPerson={(person) => {
+          trackAppEvent('duplicate_opened', { tree_id: opaqueTreeId })
+          setAddPersonPanelVisible(false)
+          handlePersonSelect(person)
+        }}
       />
       {/* Modal Session Contribution (contributeurs) */}
       <ContributionSessionModal

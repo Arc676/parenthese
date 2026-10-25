@@ -7,6 +7,7 @@ import {
 } from '../api/treeApi'
 import { forgetSentProposal, readSentProposals, rememberSentProposal } from '../utils/sentProposals'
 import { getAccountErrorMessage } from '../utils/errorMessages'
+import { toOpaqueTreeId, trackAppEvent } from '../utils/analytics'
 import { t } from '../i18n/index.js'
 
 const EMPTY_CONTRIB_STATE = {
@@ -229,7 +230,8 @@ export function useContributions({ canEditCurrentTree, canSubmitContribution, tr
     })
   }
 
-  const handleReviewContributionSession = async (sessionId, reviewPayload) => {
+  // from : « tree » (depuis le fantôme) ou « panel », pour les compteurs d'édition
+  const handleReviewContributionSession = async (sessionId, reviewPayload, from = 'panel') => {
     if (!canEditCurrentTree || !treeContext.treeId || !treeContext.accessToken) {
       return
     }
@@ -249,6 +251,7 @@ export function useContributions({ canEditCurrentTree, canSubmitContribution, tr
       )
 
       // Les annotations acceptées sont posées par le serveur, dans la même transaction (1.5.1)
+      trackAppEvent('proposal_reviewed', { decision: reviewPayload.decision, from, partial: Boolean(reviewPayload.changeDecisions?.length), tree_id: toOpaqueTreeId(treeContext.treeId) })
       await refreshCurrentTreeGraph()
 
       await refreshContributionSessions()
