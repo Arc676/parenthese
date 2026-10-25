@@ -3404,6 +3404,7 @@ function App() {
         onTreeDeleted={handleTreeDeleted}
         onLeftTree={handleTreeDeleted}
         onOpenShare={() => { setAdminPanelVisible(false); handleOpenContributionPanel() }}
+        onTreeUpdated={() => { if (auth.userAuth.token) auth.loadAccountTrees(auth.userAuth.token).catch(() => {}) }}
         onGedcomImported={handleGedcomImported}
         onOpenPhotoStart={() => { setAdminPanelVisible(false); openPhotoStart() }}
         onClose={() => setAdminPanelVisible(false)}

@@ -40,6 +40,8 @@ const patchTreeSchema = z
     slug: z.string().min(1).max(128).optional(),
     description: z.string().max(500).optional().nullable(),
     rootPersonId: z.string().min(1).optional().nullable(),
+    // Un emoji (graphème composé compris), ou null pour revenir à la première lettre
+    icon: z.string().trim().max(16).regex(/^\p{Extended_Pictographic}/u).optional().nullable(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: 'at_least_one_field_required',
@@ -392,6 +394,7 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
               slug: true,
               name: true,
               description: true,
+              icon: true,
               rootPersonId: true,
               createdAt: true,
               updatedAt: true,
@@ -413,6 +416,7 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
               slug: true,
               name: true,
               description: true,
+              icon: true,
               rootPersonId: true,
               createdAt: true,
               updatedAt: true,
@@ -442,6 +446,7 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
       slug: string
       name: string
       description: string | null
+      icon: string | null
       rootPersonId: string | null
       createdAt: Date
       updatedAt: Date
@@ -665,6 +670,7 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
         name?: string
         slug?: string
         description?: string | null
+        icon?: string | null
         rootPersonId?: string | null
       } = {}
 
@@ -691,6 +697,10 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
 
       if (payload.data.description !== undefined) {
         updateData.description = payload.data.description
+      }
+
+      if (payload.data.icon !== undefined) {
+        updateData.icon = payload.data.icon
       }
 
       if (payload.data.rootPersonId !== undefined) {

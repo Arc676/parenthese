@@ -85,6 +85,7 @@ const InvitationScreen = ({
   } else {
     const head = (
       <div className="pz-auth-head">
+        {invitation.treeIcon && <span className="invite-tree-icon" aria-hidden="true">{invitation.treeIcon}</span>}
         <h1 className="pz-title">{t('Gérer « {name} »', { name: invitation.treeName })}</h1>
         <p className="pz-sub">
           {invitation.invitedBy

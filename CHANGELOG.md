@@ -17,8 +17,14 @@ Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
 ### Search for someone elsewhere
 
-- "Someone elsewhere" in the "+" menu opens a panel on the right of the tree: type a name, birth year and place, and search public records. Links to Gallica (old newspapers), FranceArchives (military registers), Mémoire des hommes, Léonore, Geneanet, Open Archives, WikiTree, FreeBMD and FamilySearch open in the browser with the name typed in when the site allows it.
+- "Someone elsewhere" in the bottom-right menu opens a panel on the right of the tree: type a name, birth year and place, and search public records. Links to Gallica (old newspapers), FranceArchives (military registers), Mémoire des hommes, Léonore, Geneanet, Open Archives, WikiTree, FreeBMD and FamilySearch open in the browser with the name typed in when the site allows it.
 - The server can query deaths in France since 1970 (INSEE records via matchID) and WikiTree, once listed in `SEARCH_SOURCES`. Each source says what it covers and what is sent. The owner adds a result to a person in the tree: empty fields only, marked as needing checking, source kept in the note.
+
+### Trees
+
+- A tree can have an icon, picked from fifteen emoji in Settings > Your tree. It replaces the first letter in the tree menu, on the account page and on the invitation page.
+- For whoever manages the tree, the button at the bottom right now reads Edit, with a pencil. The family keeps Add.
+- A tree name starting with an emoji no longer shows a broken letter in the menus.
 
 ### Fixes
 

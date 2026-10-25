@@ -362,10 +362,13 @@ function ContextualNavbar({
                 onClick={() => setOpenMenu((v) => (v === 'add' ? null : 'add'))}
                 aria-expanded={openMenu === 'add'}
                 aria-haspopup="menu"
-                aria-label={t('Ajouter ou corriger')}
+                aria-label={isOwner || isDemo ? t('Modifier') : t('Ajouter ou corriger')}
               >
-                <Plus size={20} strokeWidth={2.2} aria-hidden="true" />
-                {!isPhone && <span className="nav-add-label">{t('Ajouter')}</span>}
+                {/* Qui gère l'arbre (et la démo) : « Modifier » ; la famille garde « Ajouter », son geste est d'ajouter un souvenir */}
+                {isOwner || isDemo
+                  ? <Pencil size={18} strokeWidth={2.2} aria-hidden="true" />
+                  : <Plus size={20} strokeWidth={2.2} aria-hidden="true" />}
+                {!isPhone && <span className="nav-add-label">{isOwner || isDemo ? t('Modifier') : t('Ajouter')}</span>}
               </button>
             )}
             {hasAddMenu && openMenu === 'add' && renderAddMenu()}

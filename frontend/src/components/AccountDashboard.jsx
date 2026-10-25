@@ -279,7 +279,7 @@ const AccountDashboard = ({
                     className={`tree-item pz-tree-item ${isActive ? 'active' : ''}`}
                     onClick={() => onOpenTree(tree.id)}
                   >
-                    <span className="pz-tree-mono" aria-hidden="true">{initialOf(tree.name)}</span>
+                    <span className={`pz-tree-mono${tree.icon ? ' pz-tree-mono--emoji' : ''}`} aria-hidden="true">{tree.icon || initialOf(tree.name)}</span>
                     <span className="tree-name pz-tree-name">{tree.name}</span>
                     {isActive && <span className="pz-tag pz-tag--accent">{t('Ouvert')}</span>}
                     <ChevronRight size={18} aria-hidden="true" className="pz-tree-chevron" />
