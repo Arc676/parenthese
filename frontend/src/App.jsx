@@ -20,6 +20,7 @@ import EditModeOverlay from './components/EditSessionBar.jsx'
 import EditConfirmModal from './components/EditConfirmModal'
 import DraftRestoreBanner from './components/DraftRestoreBanner'
 import AddPersonPanel from './components/AddPersonPanel'
+import SearchSourcesPanel from './components/SearchSourcesPanel.jsx'
 import ContributionSessionModal from './components/ContributionSessionModal'
 import { ContextualNavbar } from './components/navbar'
 import ZoomControl from './components/ZoomControl'
@@ -535,6 +536,8 @@ function App() {
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [showDraftBanner, setShowDraftBanner] = useState(false)
   const [accountPanelVisible, setAccountPanelVisible] = useState(false)
+  // Chercher quelqu'un dans des sources publiques (menu « + », groupe Chercher)
+  const [searchPanelVisible, setSearchPanelVisible] = useState(false)
   const [linkedSelfPersonId, setLinkedSelfPersonId] = useState('')
   const [relationFeedback, setRelationFeedback] = useState({
     loading: false,
@@ -3181,6 +3184,7 @@ function App() {
         onEditClick={handleEditToggle}
         onAddPersonClick={handleOpenAddPerson}
         onAddSouvenirClick={isFamilyVisitor || userRole.isAdmin ? handleOpenSouvenirPicker : undefined}
+        onSearchClick={isFamilyVisitor || userRole.isAdmin ? () => setSearchPanelVisible(true) : undefined}
         helpUrl={HELP_URL}
         onShareClick={userRole.isAdmin ? handleOpenContributionPanel : undefined}
         onTreeSelect={handleOpenTreeFromAccount}
@@ -3330,6 +3334,15 @@ function App() {
         onRotatePasswords={handleContributionPasswordRotate}
         onRememberPassword={handleContributionPasswordRemember}
         onReviewSession={contrib.handleReviewContributionSession}
+      />
+      <SearchSourcesPanel
+        visible={searchPanelVisible}
+        treeId={tree.treeContext.treeId}
+        token={tree.treeContext.accessToken || auth.userAuth.token}
+        persons={persons}
+        canApply={tree.canEditCurrentTree}
+        onApply={handlePersonSave}
+        onClose={() => setSearchPanelVisible(false)}
       />
       <AccountPanel
         visible={accountPanelVisible}
