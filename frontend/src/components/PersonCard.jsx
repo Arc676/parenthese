@@ -20,6 +20,7 @@ import { isYearOnly } from '../utils/dateInput.js'
 import DateField from './DateField.jsx'
 import { runOnce } from '../utils/saveOnLeave.js'
 import { normalizeSex, SEX_CHOICES } from '../utils/personSex.js'
+import { ProposalBanner } from './ProposalCard.jsx'
 
 // Aucune modification en cours (référence stable)
 const NO_EDITS = Object.freeze({})
@@ -66,6 +67,11 @@ const PersonCard = ({
   onRemoveRelation,
   onSetParentage,
   pendingParentage = null,
+  // Modification proposée et pas encore relue (fantôme, 1.5.1) : { fields, deleted, ghost }, et sa relecture
+  proposal = null,
+  proposalReview = null,
+  // Créer un proche qui n'est pas encore dans l'arbre (1.5.1) : (type, nom tapé) ouvre l'ajout déjà rempli
+  onCreateRelative = null,
   relationActionLoading = false,
   relationActionSuccess = '',
   relationActionError = '',
@@ -613,14 +619,15 @@ const PersonCard = ({
     ageLabel && { key: 'age', node: ageLabel, nowrap: true },
   ].filter(Boolean)
 
-  const renderRelationRow = (target, relationType, meta) => (
+  // removable : un frère ou une sœur passe par ses parents, il ne se retire pas d'ici
+  const renderRelationRow = (target, relationType, meta, removable = true) => (
     <div key={`${relationType}-${target?.id}`} className="pc-rel-row">
       <span className="pc-rel-avatar" aria-hidden="true">
         {target?.photo ? <img src={target.photo} alt="" /> : <span>{target?.firstName?.[0] || '?'}</span>}
       </span>
       <span className="pc-rel-name">{target ? fullNameLabel(target) : ''}</span>
       {meta && <span className="pc-rel-meta">{meta}</span>}
-      <button
+      {removable && <button
         type="button"
         className="pz-btn pz-btn--ghost pz-btn--icon pc-rel-remove"
         aria-label={t('Retirer {name}', { name: target ? fullNameLabel(target) : '' })}
@@ -628,7 +635,7 @@ const PersonCard = ({
         disabled={relationActionLoading}
       >
         <X size={15} strokeWidth={2} />
-      </button>
+      </button>}
     </div>
   )
 
@@ -642,6 +649,9 @@ const PersonCard = ({
         onSelect={(p) => handleRelationAdd(p, relationType)}
         onClose={() => { setActiveRelationSearch(null); setRelationSearchQuery('') }}
         placeholder={placeholder}
+        // La recherche ne trouvait que les personnes déjà dans l'arbre : sans résultat, on s'arrêtait là
+        onCreate={onCreateRelative ? (query) => { setActiveRelationSearch(null); setRelationSearchQuery(''); onCreateRelative(relationType, query) } : null}
+        createLabel={relationType === 'parent' ? t('comme parent') : relationType === 'child' ? t('comme enfant') : t('comme conjoint·e')}
       />
     ) : (
       <button type="button" className="pc-rel-add" onClick={() => setActiveRelationSearch(relationType)} disabled={relationActionLoading}>
@@ -785,6 +795,7 @@ const PersonCard = ({
           </label>
         )}
       </header>
+      {!editMode && proposal && <ProposalBanner patch={proposal} review={proposalReview} />}
 
       {avatarActionError && <div className="pz-error pc-inline-msg">{avatarActionError}</div>}
 
@@ -1041,6 +1052,18 @@ const PersonCard = ({
               </section>
             )}
 
+            {/* Ajouter un proche sans passer par « Modifier » puis l'onglet Relations (1.5.1) */}
+            {!editMode && onCreateRelative && (
+              <div className="pc-quick-add" role="group" aria-label={t('Ajouter un proche')}>
+                <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => onCreateRelative('parent', '')}><Plus size={14} strokeWidth={2} />{t('Parent')}</button>
+                <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => onCreateRelative('spouse', '')}><Plus size={14} strokeWidth={2} />{t('Conjoint·e')}</button>
+                <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => onCreateRelative('child', '')}><Plus size={14} strokeWidth={2} />{t('Enfant')}</button>
+                {parentsList.length > 0 && (
+                  <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => onCreateRelative('sibling', '')}><Plus size={14} strokeWidth={2} />{t('Frère ou sœur')}</button>
+                )}
+              </div>
+            )}
+
             {(editMode ? notesShown : person.note) && (
               <section className="pc-section" data-pc-field="note">
                 <h3 className="pz-eyebrow">{t('Notes')}</h3>
@@ -1102,6 +1125,24 @@ const PersonCard = ({
               {childrenList.length > 0 ? childrenList.map(c => renderRelationRow(c, 'child', adoptedChildLabel(c))) : <p className="pc-rel-empty">{t('Aucun enfant')}</p>}
               {renderRelationAdd('child', t('Ajouter un enfant'), t('Rechercher un enfant'))}
             </section>
+
+            {onCreateRelative && (
+              <section className="pc-section">
+                <h3 className="pz-eyebrow">{t('Frères et sœurs')}</h3>
+                {siblingsList.length > 0
+                  ? siblingsList.map(c => renderRelationRow(c, 'sibling', null, false))
+                  : <p className="pc-rel-empty">{t('Aucun frère ni sœur')}</p>}
+                {/* Un frère ou une sœur reçoit les mêmes parents : sans parent, on le dit avant d'ouvrir l'ajout */}
+                {parentsList.length > 0 ? (
+                  <button type="button" className="pc-rel-add" onClick={() => onCreateRelative('sibling', '')}>
+                    <Plus size={15} strokeWidth={2} />
+                    {t('Ajouter un frère ou une sœur')}
+                  </button>
+                ) : (
+                  <p className="pc-rel-empty">{t("Ajoutez d'abord un parent pour lui rattacher un frère ou une sœur.")}</p>
+                )}
+              </section>
+            )}
           </div>
         )}
       </div>
@@ -1239,7 +1280,7 @@ const PersonCard = ({
  * Recherche en ligne pour ajouter un lien (parent, conjoint·e, enfant)
  */
 const RelationSearchInline = forwardRef(function RelationSearchInline(
-  { query, onQueryChange, results, onSelect, onClose, placeholder },
+  { query, onQueryChange, results, onSelect, onClose, placeholder, onCreate = null, createLabel = '' },
   ref
 ) {
   const filtered = results.slice(0, 6)
@@ -1281,9 +1322,15 @@ const RelationSearchInline = forwardRef(function RelationSearchInline(
             </li>
           ))}
         </ul>
-      ) : query ? (
+      ) : query && !onCreate ? (
         <p className="pc-rel-empty">{t('Aucune personne ne correspond')}</p>
       ) : null}
+      {onCreate && query.trim() && (
+        <button type="button" className="pc-search-item pc-search-create" onClick={() => onCreate(query.trim())}>
+          <span className="pc-rel-avatar" aria-hidden="true"><Plus size={14} strokeWidth={2.2} /></span>
+          <span className="pc-rel-name">{t('Créer « {name} »', { name: query.trim() })} <em>{createLabel}</em></span>
+        </button>
+      )}
     </div>
   )
 })

@@ -86,6 +86,9 @@ import './App.css'
 import './styles/pz.css'
 import { setBooting } from './bootSignal.js'
 import { saveContributorName } from './utils/contributorName'
+import { ghostsFromChanges, hasGhosts, mergeGhosts } from './utils/ghosts'
+import ProposalCard from './components/ProposalCard'
+import { summarizeChanges } from './utils/proposalSummary'
 
 function yearToIsoDate(value) {
   if (value === null || value === undefined || value === '') {
@@ -693,6 +696,7 @@ function App() {
   }, [auth.accountTrees, tree.treeContext.treeId, tree.treeContext.treeName])
 
   const isDemoMode = tree.treeContext.accessMode === 'demo'
+
   const canEditInCurrentMode = tree.canSubmitContribution || isDemoMode
 
   // Recherche de personnes avec scoring
@@ -703,6 +707,56 @@ function App() {
     treeId: tree.treeContext.treeId,
     canEdit: canEditInCurrentMode,
   })
+
+  // Fantômes (1.5.1) : ce qui est proposé et pas encore dans l'arbre, dessiné en transparence à sa place.
+  // Qui gère l'arbre voit les propositions en attente ; la famille voit son brouillon et ce qu'elle a envoyé.
+  const ghostTreeId = tree.treeContext.treeId
+  const ghosts = useMemo(() => {
+    if (!ghostTreeId || isDemoMode) return null
+    const graph = { unions }
+    const list = []
+    if (userRole.isAdmin) {
+      for (const session of contrib.contribState.sessions || []) {
+        if (session.status !== 'pending') continue
+        list.push(ghostsFromChanges(session.changes, {
+          source: 'pending', sessionId: session.id, label: session.submittedByLabel, createdAt: session.createdAt,
+          summary: summarizeChanges(session.changes),
+        }, graph))
+      }
+    } else if (tree.canSubmitContribution) {
+      for (const proposal of contrib.sentProposals || []) {
+        list.push(ghostsFromChanges(proposal.changes, {
+          source: 'sent', sessionId: proposal.sessionId, label: proposal.label, createdAt: proposal.createdAt,
+          summary: summarizeChanges(proposal.changes),
+        }, graph))
+      }
+      if (editMode.hasDraft) {
+        const draftChanges = buildContributionChangesFromDraft(editMode.restoreDraft())
+        list.push(ghostsFromChanges(draftChanges, { source: 'draft', key: 'brouillon', summary: summarizeChanges(draftChanges) }, graph))
+      }
+    }
+    const merged = mergeGhosts(list)
+    // Photo posée sur l'arbre : l'adresse se refait depuis son chemin, seulement pour une photo de cet arbre
+    const photoPrefix = `/trees/${ghostTreeId}/annotation-photos/`
+    merged.annotations = merged.annotations.map((ann) => {
+      if (ann.type !== 'photo') return ann
+      try {
+        const parsed = JSON.parse(ann.content)
+        const ownPhoto = typeof parsed.photoPath === 'string' && parsed.photoPath.startsWith(photoPrefix)
+          && /^[A-Za-z0-9-]+$/.test(parsed.photoPath.slice(photoPrefix.length))
+        if (!ownPhoto) return null
+        return { ...ann, content: JSON.stringify({ ...parsed, url: buildMediaUrl(parsed.photoPath, import.meta.env.VITE_API_BASE_URL || '/api') }) }
+      } catch {
+        return null
+      }
+    }).filter(Boolean)
+    return hasGhosts(merged) ? merged : null
+  }, [ghostTreeId, isDemoMode, userRole.isAdmin, tree.canSubmitContribution, contrib.contribState.sessions, contrib.sentProposals, editMode.hasDraft, editMode.draftRevision, tree.graphRevision]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [selectedGhost, setSelectedGhost] = useState(null)
+  // Une proposition relue (ou un brouillon envoyé) emporte son fantôme : la carte ouverte se ferme
+  useEffect(() => {
+    if (selectedGhost && !ghosts?.persons.some((p) => p.id === selectedGhost.id)) setSelectedGhost(null)
+  }, [ghosts, selectedGhost])
 
   const localEntityCounterRef = useRef(0)
   const makeLocalId = useCallback((prefix) => {
@@ -900,9 +954,18 @@ function App() {
   const handlePersonSelect = useCallback(async (personLike) => {
     const personId = personLike && typeof personLike === 'object' ? personLike.id : personLike
     if (personId === null || personId === undefined) {
+      setSelectedGhost(null)
       await chooseSelectedPerson(null)
       return
     }
+    // Personne proposée : sa carte de proposition, pas une fiche (elle n'existe pas encore dans l'arbre)
+    if (personLike && typeof personLike === 'object' && personLike.ghost) {
+      if (!(await leaveSelectedPerson())) return
+      await chooseSelectedPerson(null)
+      setSelectedGhost(personLike)
+      return
+    }
+    setSelectedGhost(null)
 
     const freshPerson = persons.find((candidate) => String(candidate.id) === String(personId)) || personLike || null
     if (!(await leaveSelectedPerson())) return
@@ -967,8 +1030,9 @@ function App() {
       }
       img.onerror = () => URL.revokeObjectURL(img.src)
       img.src = URL.createObjectURL(file)
-    } catch {
-      // silent — user can retry
+    } catch (error) {
+      // Avant la 1.5.1, l'échec passait sous silence : la photo n'apparaissait pas et rien ne disait pourquoi
+      setDraftNotice(getAccountErrorMessage(error) || t("La photo n'a pas pu être envoyée. Réessayez."))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tree.treeContext.treeId, tree.treeContext.accessToken, auth.userAuth.token])
@@ -1045,7 +1109,26 @@ function App() {
   const [addPersonLoading, setAddPersonLoading] = useState(false)
   const [addPersonError, setAddPersonError] = useState('')
 
-  const handleOpenAddPerson = useCallback(() => {
+  // Ajouter un proche depuis une fiche (1.5.1) : le panneau s'ouvre avec le lien déjà posé, le nom tapé dans la
+  // recherche, et le nom de famille proposé pour un enfant ou un frère ou une sœur
+  const [addPersonPrefill, setAddPersonPrefill] = useState(null)
+  const handleCreateRelative = useCallback(async (type, query = '') => {
+    const person = tree.selectedPerson
+    if (!person) return
+    const [first = '', ...rest] = String(query).trim().split(/\s+/)
+    const inheritsName = type === 'child' || type === 'sibling'
+    const lastName = rest.join(' ') || (inheritsName ? person.lastName || '' : '')
+    const personName = [person.firstName, person.lastName].filter(Boolean).join(' ')
+    if (!(await leaveSelectedPerson())) return
+    await chooseSelectedPerson(null)
+    setAddPersonPrefill({ nonce: Date.now(), firstName: first, lastName, relation: { type, personId: person.id, personName } })
+    handleOpenAddPerson(query ? 'fiche_recherche' : 'fiche')
+  }, [tree.selectedPerson]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Par où l'on ajoute une personne, pour les compteurs d'édition (aucun contenu de l'arbre ne part)
+  const addPersonViaRef = useRef('menu')
+  const handleOpenAddPerson = useCallback((via) => {
+    addPersonViaRef.current = typeof via === 'string' ? via : 'menu'
     setAddPersonError('')
     // Le panneau d'ajout vit dans le mode édition : la famille y entre sans passer par le crayon
     if (!editMode.isActive) editMode.activate()
@@ -1208,13 +1291,12 @@ function App() {
           },
         ]
         editMode.updateDraft({ addedPersons })
-        // La personne n'apparaît dans l'arbre qu'après envoi : on passe tout de suite à l'envoi
-        // (prénom, un mot), la famille n'a pas à chercher le bouton
+        trackAppEvent('person_added', { via: addPersonViaRef.current, role: 'family', relations: (formData.relations || []).length, tree_id: opaqueTreeId })
+        // La personne apparaît en fantôme « Brouillon » : la famille peut en ajouter d'autres, puis envoyer une
+        // fois avec le bouton « Envoyer » de la barre (Patch, 25/10). Avant, la fenêtre d'envoi s'ouvrait d'office,
+        // seule façon de montrer qu'un ajout invisible comptait.
         setAddPersonPanelVisible(false)
-        setDraftNotice(t('{name} est dans vos modifications. Envoyez-les quand vous avez fini.', { name: [formData.firstName, formData.lastName].filter(Boolean).join(' ') || t('Nouvelle personne') }))
-        setContribSubmitError('')
-        setContribChanges(buildContribChangesList(editMode.restoreDraft()))
-        setShowContribModal(true)
+        setDraftNotice(t("{name} est sur l'arbre, en brouillon. Envoyez quand vous avez fini.", { name: [formData.firstName, formData.lastName].filter(Boolean).join(' ') || t('Nouvelle personne') }))
         return { proposed: true }
       }
 
@@ -1287,6 +1369,7 @@ function App() {
       })
 
       await tree.refreshCurrentTreeGraph()
+      trackAppEvent('person_added', { via: addPersonViaRef.current, role: 'manager', relations: (formData.relations || []).length, tree_id: opaqueTreeId })
       return newPerson
     } catch (err) {
       setAddPersonError(err.message || t("Erreur lors de l'ajout de la personne"))
@@ -1358,8 +1441,10 @@ function App() {
       const draft = editMode.restoreDraft()
 
       if (token && treeId) {
-        // Appliquer les modifications de personnes depuis le draft
-        const modifiedPersons = draft.modifiedPersons || {}
+        // Appliquer les modifications de personnes depuis le draft. Ce qui échoue reste dans le brouillon, avec un
+        // message : avant la 1.5.1, l'échec allait à la console et le brouillon était effacé quand même.
+        const failures = []
+        const modifiedPersons = { ...(draft.modifiedPersons || {}) }
         for (const [personId, rawChanges] of Object.entries(modifiedPersons)) {
           const payload = {}
           if (Object.prototype.hasOwnProperty.call(rawChanges, 'firstName')) payload.firstName = rawChanges.firstName || ''
@@ -1384,8 +1469,9 @@ function App() {
           if (Object.keys(payload).length > 0) {
             try {
               await updatePerson(treeId, personId, payload, token)
+              delete modifiedPersons[personId]
             } catch (err) {
-              console.error('Failed to update person:', personId, err)
+              failures.push(getAccountErrorMessage(err))
             }
           }
         }
@@ -1422,16 +1508,30 @@ function App() {
 
         const hasAnnotationChanges = batchPayload.create.length > 0 || batchPayload.update.length > 0 || batchPayload.delete.length > 0
 
+        let annotationsFailed = false
         if (hasAnnotationChanges) {
           try {
             await batchAnnotations(treeId, batchPayload, token)
           } catch (err) {
-            console.error('Failed to submit annotations:', err)
+            annotationsFailed = true
+            failures.push(getAccountErrorMessage(err))
           }
+        }
+
+        if (failures.length > 0) {
+          editMode.updateDraft({
+            modifiedPersons,
+            ...(annotationsFailed ? {} : { addedAnnotations: [], modifiedAnnotations: [], deletedAnnotations: [] }),
+          })
+          editMode.saveDraft()
+          await tree.refreshCurrentTreeGraph({ relayout: false })
+          setDraftNotice(t("Une partie n'a pas été enregistrée ({error}). Elle reste dans vos modifications : réessayez.", { error: failures[0] }))
+          return
         }
       }
 
       await tree.refreshCurrentTreeGraph({ relayout: false })
+      trackAppEvent('tree_edits_saved', { persons: Object.keys(draft.modifiedPersons || {}).length, annotations: (draft.addedAnnotations || []).length, tree_id: opaqueTreeId })
       editMode.clearDraft()
       editMode.deactivate()
     } else {
@@ -1477,9 +1577,13 @@ function App() {
 
       editMode.clearDraft()
       editMode.deactivate()
+      // Les ajouts du brouillon (dessins, photos) restaient affichés comme acceptés : l'arbre est relu, et ce qui
+      // vient d'être envoyé revient en fantôme « En attente »
+      await tree.refreshCurrentTreeGraph({ relayout: false }).catch(() => {})
       setShowContribModal(false)
       setContribSubmitError('')
       setContribSuccess(true)
+      trackAppEvent('proposal_sent', { changes: changes.length, tree_id: opaqueTreeId })
       setDraftNotice('')
       setTimeout(() => setContribSuccess(false), 6000)
     } catch (err) {
@@ -1542,6 +1646,16 @@ function App() {
     }))
     await contrib.handleOpenContributionPanel()
   }, [contrib, resolveContributionShareUrl, tree.treeContext.treeId, tree.canEditCurrentTree, tree.treeContext.accessToken, auth.userAuth.token]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Accepter ou refuser une proposition depuis son fantôme. Une proposition se relit en entier ; « Voir le
+  // détail » ouvre le panneau pour trier changement par changement.
+  const reviewFromTree = (sessionId) => ({
+    busy: contrib.contribState.reviewingSessionId === sessionId,
+    error: contrib.contribState.error,
+    onAccept: () => contrib.handleReviewContributionSession(sessionId, { decision: 'approved' }, 'tree'),
+    onReject: () => contrib.handleReviewContributionSession(sessionId, { decision: 'rejected' }, 'tree'),
+    onOpenDetails: () => { setSelectedGhost(null); handleOpenContributionPanel() },
+  })
 
   const handleContributionPasswordRemember = useCallback(async ({ password }) => {
     const accessToken = auth.userAuth.token || tree.treeContext.accessToken
@@ -3176,6 +3290,12 @@ function App() {
         error={addPersonError}
         onSubmit={handleAddPersonSubmit}
         onClose={handleCloseAddPerson}
+        prefill={addPersonPrefill}
+        onOpenPerson={(person) => {
+          trackAppEvent('duplicate_opened', { tree_id: opaqueTreeId })
+          setAddPersonPanelVisible(false)
+          handlePersonSelect(person)
+        }}
       />
       {/* Modal Session Contribution (contributeurs) */}
       <ContributionSessionModal
@@ -3215,7 +3335,7 @@ function App() {
       )}
       {contribSuccess && (
         <div className="contrib-success-toast" role="status">
-          {t("Merci, c'est envoyé ! Ça apparaîtra dans l'arbre une fois relu.")}
+          {t("Merci, c'est envoyé ! C'est en pointillés sur l'arbre jusqu'à la relecture.")}
         </div>
       )}
       {/* Navbar contextuelle */}
@@ -3274,8 +3394,17 @@ function App() {
         annotationViewRef={annotationViewRef}
         onAnnotationsAnchored={persistAnnotationAnchors}
         selfPersonId={linkedSelfPersonId || null}
+        ghosts={ghosts}
       />
       <ZoomControl zoomApiRef={galaxyZoomApiRef} />
+      {selectedGhost && !tree.selectedPerson && (
+        <ProposalCard
+          person={selectedGhost}
+          summary={selectedGhost.ghost?.summary || ''}
+          review={userRole.isAdmin && selectedGhost.ghost?.source === 'pending' ? reviewFromTree(selectedGhost.ghost.sessionId) : null}
+          onClose={() => setSelectedGhost(null)}
+        />
+      )}
       {tree.selectedPerson && (
         <PersonCard
           person={tree.selectedPerson}
@@ -3300,6 +3429,11 @@ function App() {
           onRemoveRelation={handleRemoveRelation}
           onSetParentage={handleSetParentage}
           pendingParentage={pendingParentage[String(tree.selectedPerson.id)] ?? null}
+          onCreateRelative={tree.canEditCurrentTree || tree.canSubmitContribution || isDemoMode ? handleCreateRelative : null}
+          proposal={ghosts?.patches.get(String(tree.selectedPerson.id)) || null}
+          proposalReview={userRole.isAdmin && ghosts?.patches.get(String(tree.selectedPerson.id))?.ghost?.source === 'pending'
+            ? reviewFromTree(ghosts.patches.get(String(tree.selectedPerson.id)).ghost.sessionId)
+            : null}
           relationActionLoading={relationFeedback.loading}
           relationActionSuccess={relationFeedback.success}
           relationActionError={relationFeedback.error}

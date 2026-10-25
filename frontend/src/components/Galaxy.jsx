@@ -4,6 +4,7 @@ import { PERSON_R, FLOAT_SPEED, FLOAT_AMPLITUDE, REPULSION_RADIUS, REPULSION_STR
 import { easeOutCubic } from './galaxy/utils'
 import { computeLayout, generateNodeRandomData, coupleBarMeta } from './galaxy/elkLayout'
 import { computeBlockLayout, familyTabsOf, lineToFamily, subgraphOf } from './galaxy/blockLayout'
+import { hasGhosts, withGhosts } from '../utils/ghosts'
 
 // Placement par blocs familiaux par défaut (mesures : tools/layout-bench). ?layout=sugiyama = placement Sugiyama.
 const USE_BLOCK_LAYOUT = typeof window === 'undefined' || new URLSearchParams(window.location.search).get('layout') !== 'sugiyama'
@@ -43,7 +44,7 @@ const DROP_SPRING = { stiffness: 480, dampingRatio: 0.72 }
 const centerX = (node) => node.x + node.width / 2
 const prefersReducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, reorderEnabled = false, onReorderSiblings = null, familyTabs = true, annotationViewRef = null, onAnnotationsAnchored = null, selfPersonId = null }) => {
+const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, reorderEnabled = false, onReorderSiblings = null, familyTabs = true, annotationViewRef = null, onAnnotationsAnchored = null, selfPersonId = null, ghosts = null }) => {
   const canvasRef = useRef(null)
   const layoutDataRef = useRef(null)
   // Onglets de familles (réglage `familyTabs`) : la liste des familles de l'arbre, calculée une fois par
@@ -56,6 +57,9 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   const activeTabRef = useRef(null)
   const familyTabsRef = useRef(familyTabs)
   useEffect(() => { familyTabsRef.current = familyTabs }, [familyTabs])
+  // Propositions pas encore relues (utils/ghosts.js) : placées et dessinées en transparence, jamais dans les données
+  const ghostsRef = useRef(ghosts)
+  useEffect(() => { ghostsRef.current = ghosts; needsRedrawRef.current = true }, [ghosts])
   const onAnnotationsAnchoredRef = useRef(onAnnotationsAnchored)
   useEffect(() => { onAnnotationsAnchoredRef.current = onAnnotationsAnchored }, [onAnnotationsAnchored])
   const startRefRef = useRef(focusPersonId)
@@ -216,7 +220,8 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   // Placement complet pour un ordre de la fratrie, recalé sur la source (les parents ne bougent pas)
   const layoutForOrder = useCallback((group, order, base) => {
     const tab = activeTabRef.current
-    const src = tab?.personIds ? subgraphOf(tab.personIds) : { persons: graphPersons, unions: graphUnions, filiations: graphFiliations }
+    const tabSrc = tab?.personIds ? subgraphOf(tab.personIds) : null
+    const src = withGhosts(tabSrc || { persons: graphPersons, unions: graphUnions, filiations: graphFiliations }, ghostsRef.current, !tabSrc)
     const graph = {
       persons: src.persons,
       unions: src.unions,
@@ -492,7 +497,10 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     // Dans l'onglet d'une autre famille, la personne commune (« C'est moi », sinon la personne de départ) reste
     // là, reliée par sa ligne directe (Patch, 21/10 : « je veux me voir tout le temps »)
     const line = tab?.personIds ? lineToFamily(selfPersonId ?? startRefRef.current ?? tabsCacheRef.current.tabs[0]?.resolvedRef, tab.personIds) : new Set()
-    const graph = tab?.personIds ? subgraphOf(new Set([...tab.personIds, ...line])) : null
+    const tabGraph = tab?.personIds ? subgraphOf(new Set([...tab.personIds, ...line])) : null
+    const graph = hasGhosts(ghosts)
+      ? withGhosts(tabGraph || { persons: graphPersons, unions: graphUnions, filiations: graphFiliations }, ghosts, !tabGraph)
+      : tabGraph
     // Annotations d'avant l'ancrage (x, y seuls) : rattachées une fois à la personne la plus proche dans le
     // placement de l'onglet de départ, puis enregistrées. Calculé avant l'arbre affiché (coupleBarMeta, voir plus haut)
     const legacy = annotationData.some((a) => !readAnchor(a))
@@ -653,7 +661,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       pendingFocusRef.current = null
       requestAnimationFrame(() => zoomApiRef?.current?.focusPerson?.(id))
     }
-  }, [graphRevision, activeKey, familyTabs, selfPersonId])
+  }, [graphRevision, activeKey, familyTabs, selfPersonId, ghosts])
 
   // Sync selectedPersonId
   useEffect(() => {
@@ -929,6 +937,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
         entrance, entranceActive, elapsed,
         view,
         liftScales: liftScalesRef.current,
+        ghostPatches: ghostsRef.current?.patches || null,
       })
       drawRenvoiPills(ctx)
       // Annotations dessinées APRES les noeuds pour que stickers/texte soient au-dessus.
@@ -949,7 +958,11 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       if (entranceAlpha > 0) {
         drawAnnotations(
           ctx,
-          editingId ? anchoredAnnotations.filter((a) => a.id !== editingId) : anchoredAnnotations,
+          [
+            ...(editingId ? anchoredAnnotations.filter((a) => a.id !== editingId) : anchoredAnnotations),
+            // Annotations proposées : dessinées, jamais touchables (hors de `shown`)
+            ...placeAnnotations(ghostsRef.current?.annotations || [], annotationCenters),
+          ],
           annotationHandlers?.selectedAnnotationId ?? null,
           annotationHandlers?.drawingPathRef?.current ?? null,
           stickerPreview,

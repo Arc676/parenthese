@@ -495,4 +495,20 @@ export default {
   'Chargement de la photo': 'Loading photo',
   'Impossible d’afficher cette photo.': 'Unable to display this photo.',
   'Les photos venues d’Immich ne se recadrent pas pour l’instant.': 'Photos from Immich cannot be cropped for now.',
+
+  // ─── Ajouter un proche depuis la fiche (1.5.1) ───
+  '{name} ({year}) est déjà dans l’arbre.': '{name} ({year}) is already in the tree.',
+  '{name} est déjà dans l’arbre.': '{name} is already in the tree.',
+  'Ouvrir sa fiche': 'Open their profile',
+  'Si c’est une autre personne, ajoutez-la quand même.': "If it's someone else, add them anyway.",
+  'comme parent': 'as a parent',
+  'comme enfant': 'as a child',
+  'comme conjoint·e': 'as a partner',
+  'Ajouter un proche': 'Add a relative',
+  'Frère ou sœur': 'Sibling',
+  'Frères et sœurs': 'Siblings',
+  'Aucun frère ni sœur': 'No siblings',
+  'Ajouter un frère ou une sœur': 'Add a sibling',
+  "Ajoutez d'abord un parent pour lui rattacher un frère ou une sœur.": 'Add a parent first to link a sibling.',
+  'Créer « {name} »': 'Create “{name}”',
 }

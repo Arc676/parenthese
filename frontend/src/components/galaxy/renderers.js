@@ -100,6 +100,9 @@ function computeCouplePoints(p1Pos, p2Pos, unionPos, p1R, p2R, nodeRandomData, s
 // Coins arrondis de rayon fixe (accolade franche, forme A).
 // ============================================================
 export const FIL = { color: '#E3A590', width: 1.1, dot: '#D2694A', dotR: 2.6 }
+// Proposé, pas encore relu (utils/ghosts.js) : pointillés terracotta, portrait délavé, étiquette au-dessus
+export const GHOST = { color: '#D2694A', dash: [5, 4], wash: 'rgba(251, 250, 247, 0.55)', annotationAlpha: 0.45 }
+const GHOST_LABELS = { draft: () => t('Brouillon'), sent: () => t('En attente'), pending: () => t('Proposé') }
 // Ligne de la fratrie : sous les prénoms et années des parents, au-dessus des enfants
 const BUS_DY = 100
 // Accolade : coins arrondis de rayon fixe (forme A, choisie par Patch). En dessous de deux rayons d'écart,
@@ -148,7 +151,7 @@ export function traceSibship(ctx, sourceId, sourcePos, items, lift = 0) {
 // Courbes de couple (Bézier)
 // ============================================================
 export function drawCoupleLinks(ctx, coupleBarMeta, posMap, nodeMap, nodeRandomData, entrance, entranceActive, elapsed, view = null) {
-  coupleBarMeta.forEach(({ elkId, p1Key, p2Key, virtual }) => {
+  coupleBarMeta.forEach(({ elkId, p1Key, p2Key, virtual, ghost }) => {
     const p1Pos = posMap.get(p1Key)
     const p2Pos = posMap.get(p2Key)
     const unionPos = posMap.get(elkId)
@@ -177,9 +180,9 @@ export function drawCoupleLinks(ctx, coupleBarMeta, posMap, nodeMap, nodeRandomD
       p1PosKeyed, p2PosKeyed, unionPos, p1R, p2R, nodeRandomData, nodeMap.get(elkId)?._compact
     )
 
-    ctx.strokeStyle = virtual ? COLORS.linkUnknown : FIL.color
+    ctx.strokeStyle = ghost ? GHOST.color : virtual ? COLORS.linkUnknown : FIL.color
     ctx.lineWidth = FIL.width
-    ctx.setLineDash(virtual ? [4, 4] : [])
+    ctx.setLineDash(ghost ? GHOST.dash : virtual ? [4, 4] : [])
     ctx.lineCap = 'round'
     ctx.globalAlpha = coupleProgress
 
@@ -307,16 +310,21 @@ export function drawFiliations(ctx, edges, posMap, nodeMap, nodeRandomData, entr
       return
     }
     // Les enfants d'une même union (même type de filiation) forment une seule fratrie, tracée d'un coup
-    const key = `${sourceId}|${pType}`
-    if (!sibships.has(key)) sibships.set(key, { sourceId, sourcePos, pType, items: [], progress: 0 })
+    // Un enfant proposé a sa propre ligne, en pointillés, par-dessus celle de ses frères et sœurs
+    const ghost = Boolean(edge._ghost || targetNode?._data?.ghost)
+    const key = `${sourceId}|${pType}|${ghost ? 'g' : ''}`
+    if (!sibships.has(key)) sibships.set(key, { sourceId, sourcePos, pType, ghost, items: [], progress: 0 })
     const sib = sibships.get(key)
     sib.items.push({ cx: targetPos.cx, cy: targetPos.cy - childR })
     sib.progress += edgeProgress
   })
 
-  for (const { sourceId, sourcePos, pType, items, progress } of sibships.values()) {
+  for (const { sourceId, sourcePos, pType, ghost, items, progress } of sibships.values()) {
     // Adoption : trait plein comme une filiation de naissance (le mode d'adoption se dit dans la fiche)
-    if (pType === 'inconnu') {
+    if (ghost) {
+      ctx.setLineDash(GHOST.dash)
+      ctx.strokeStyle = GHOST.color
+    } else if (pType === 'inconnu') {
       ctx.setLineDash([3, 3])
       ctx.strokeStyle = COLORS.linkUnknown
     } else {
@@ -1090,6 +1098,8 @@ export function drawNodes(ctx, layoutData, posMap, entrance, entranceActive, ela
 
     if (node._type === 'person') {
       drawPersonNode(ctx, node, pos, nodeProgress, renderState)
+      if (node._data?.ghost) drawGhostMark(ctx, node, pos, nodeProgress, view)
+      else if (renderState.ghostPatches?.has(String(node._data?.id))) drawPatchMark(ctx, node, pos, nodeProgress, renderState.ghostPatches.get(String(node._data.id)))
     } else if (node._type === 'union') {
       ctx.globalAlpha = nodeProgress
       ctx.fillStyle = FIL.dot
@@ -1129,6 +1139,70 @@ export function drawNodes(ctx, layoutData, posMap, entrance, entranceActive, ela
   })
 }
 
+// Personne proposée : portrait délavé, cercle en pointillés, étiquette (« Proposé », « En attente », « Brouillon »)
+function drawGhostMark(ctx, node, pos, progress, view) {
+  const r = nodeRadius(node)
+  ctx.save()
+  ctx.globalAlpha = progress
+  ctx.fillStyle = GHOST.wash
+  ctx.beginPath()
+  ctx.arc(pos.cx, pos.cy, r + 1, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.strokeStyle = GHOST.color
+  ctx.lineWidth = 1.6
+  ctx.setLineDash(GHOST.dash)
+  ctx.beginPath()
+  ctx.arc(pos.cx, pos.cy, r + 5, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.setLineDash([])
+  if ((view?.scale ?? 1) >= 0.35) drawGhostTag(ctx, (GHOST_LABELS[node._data.ghost.source] || GHOST_LABELS.pending)(), pos.cx, pos.cy - r - 14)
+  ctx.restore()
+}
+
+// Personne existante dont une modification est proposée : une pastille en haut à droite du portrait
+function drawPatchMark(ctx, node, pos, progress, patch) {
+  const r = nodeRadius(node)
+  const angle = -Math.PI / 4
+  const x = pos.cx + Math.cos(angle) * (r + 2)
+  const y = pos.cy + Math.sin(angle) * (r + 2)
+  ctx.save()
+  ctx.globalAlpha = progress
+  ctx.fillStyle = '#FBFAF7'
+  ctx.beginPath()
+  ctx.arc(x, y, 8, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = GHOST.color
+  ctx.beginPath()
+  ctx.arc(x, y, 5.5, 0, Math.PI * 2)
+  ctx.fill()
+  if (patch?.deleted) {
+    ctx.strokeStyle = '#FBFAF7'
+    ctx.lineWidth = 1.6
+    ctx.beginPath()
+    ctx.moveTo(x - 2.6, y)
+    ctx.lineTo(x + 2.6, y)
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
+function drawGhostTag(ctx, text, cx, cy) {
+  ctx.font = '500 10px "DM Sans", system-ui, sans-serif'
+  const w = ctx.measureText(text).width + 12
+  const h = 16
+  ctx.fillStyle = '#FBFAF7'
+  ctx.strokeStyle = GHOST.color
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.roundRect(cx - w / 2, cy - h / 2, w, h, h / 2)
+  ctx.fill()
+  ctx.stroke()
+  ctx.fillStyle = GHOST.color
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(text, cx, cy + 0.5)
+}
+
 // ============================================================
 // Annotations (drawing, sticker, text)
 // ============================================================
@@ -1149,7 +1223,7 @@ function drawDrawingAnnotation(ctx, ann) {
     ctx.lineWidth = path.width || ann.style?.brushWidth || 3
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
-    ctx.globalAlpha = ann.style?.opacity ?? 1
+    ctx.globalAlpha *= ann.style?.opacity ?? 1
 
     ctx.beginPath()
     ctx.moveTo(path.points[0].x, path.points[0].y)
@@ -1164,7 +1238,7 @@ function drawDrawingAnnotation(ctx, ann) {
 function drawStickerAnnotation(ctx, ann) {
   const size = ann.style?.fontSize || 40
   ctx.save()
-  ctx.globalAlpha = ann.style?.opacity ?? 1
+  ctx.globalAlpha *= ann.style?.opacity ?? 1
   ctx.font = `${size}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
@@ -1178,7 +1252,7 @@ function drawTextAnnotation(ctx, ann) {
   const stabilo = ann.style?.stabilo || false
 
   ctx.save()
-  ctx.globalAlpha = ann.style?.opacity ?? 1
+  ctx.globalAlpha *= ann.style?.opacity ?? 1
   ctx.font = `400 ${fontSize}px "Newsreader", Georgia, serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
@@ -1322,7 +1396,7 @@ export function drawAnnotations(
     const lift = isBeingDragged ? dragLiftProgress : 0
 
     ctx.save()
-    ctx.globalAlpha *= entranceAlpha
+    ctx.globalAlpha *= entranceAlpha * (ann.ghost ? GHOST.annotationAlpha : 1)
     ctx.translate(ann.x, ann.y)
 
     // Lift/fly effect when dragging: scale up + drop shadow, animated via dragLiftProgress

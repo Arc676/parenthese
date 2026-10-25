@@ -193,7 +193,8 @@ export function useGalaxyInteractions({
   }, [canvasRef, mouseWorldPosRef, hoveredNodeIdRef, hoveredMediaKeyRef])
 
   const handleWheel = useCallback((e) => {
-    if (e.cancelable) e.preventDefault()
+    // Le défilement de la page est déjà empêché par l'écouteur natif non passif (Galaxy) : ici, React écoute en
+    // passif, et un preventDefault ne faisait qu'écrire une erreur dans la console à chaque cran de molette
     const rect = canvasRef.current.getBoundingClientRect()
     const mouseX = e.clientX - rect.left
     const mouseY = e.clientY - rect.top

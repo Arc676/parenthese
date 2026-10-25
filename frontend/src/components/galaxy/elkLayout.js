@@ -397,7 +397,7 @@ export function computeLayout(graphData = null, referenceId = null) {
   // Entrées d'union unifiées (réelles + virtuelles)
   const allUnionEntries = [
     ...unions.map(u => ({
-      elkId: `u-${u.id}`, p1Key: `p-${u.partner1Id}`, p2Key: `p-${u.partner2Id}`, virtual: Boolean(u.separated),
+      elkId: `u-${u.id}`, p1Key: `p-${u.partner1Id}`, p2Key: `p-${u.partner2Id}`, virtual: Boolean(u.separated), ghost: Boolean(u.ghost),
     })),
     ...virtualUnions.map(vu => ({
       elkId: vu.elkId, p1Key: `p-${vu.parentId}`, p2Key: vu.unknownElkId, virtual: true,
@@ -592,6 +592,8 @@ export function computeLayout(graphData = null, referenceId = null) {
       id: `e-${f.id}`, sources: [sourceId], targets: [targetId],
       _parentageType: f.parentageType,
       _displayOrder: f.displayOrder,
+      // Lien proposé, pas encore relu (utils/ghosts.js) : dessiné en pointillés
+      _ghost: Boolean(f.ghost),
     })
   })
 

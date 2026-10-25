@@ -64,6 +64,22 @@ export function getAccountErrorMessage(error) {
     return t('Le format de fichier ne correspond pas au type de média choisi.')
   }
 
+  if (errorCode === 'contribution_session_already_reviewed') {
+    return t('Cette proposition a déjà été relue, peut-être par une autre personne qui gère l’arbre.')
+  }
+
+  if (errorCode === 'photo_too_large') {
+    return t('Cette photo est trop lourde. Essayez une photo plus petite.')
+  }
+
+  if (errorCode === 'too_many_pending_photos') {
+    return t("Beaucoup de photos attendent déjà la relecture sur cet arbre. Réessayez quand la personne qui le gère les aura vues.")
+  }
+
+  if (errorCode === 'invalid_annotation_photo_mime_type') {
+    return t('Ce fichier n’est pas une photo que Parenthèse sait afficher (JPEG, PNG, WebP ou GIF).')
+  }
+
   if (errorCode === 'storage_quota_exceeded') {
     return t("L'arbre n'a plus de place pour de nouveaux souvenirs. Son propriétaire peut en supprimer.")
   }
