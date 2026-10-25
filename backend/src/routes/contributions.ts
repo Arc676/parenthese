@@ -5,8 +5,10 @@ import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { env, UPLOAD_BODY_LIMIT } from '../config/env.js'
 import { sanitizeAnnotationContentForRead } from '../lib/annotation-content.js'
+import { AnnotationChangeError, applyAnnotationChange, releaseRejectedPhoto, validateAnnotationChange } from '../lib/annotation-changes.js'
 import { softDeletePersonCascade, softDeleteUnionCascade } from '../lib/entity-deletion.js'
 import { removeStoredFile } from '../lib/media-files.js'
+import { canReadTree } from '../lib/tree-access.js'
 import { syncPersonMediaOrder } from '../lib/media-order.js'
 import { mediaPeopleSchema, normalizeMediaPeople, replaceMediaPeople } from '../lib/media-people.js'
 
@@ -325,10 +327,15 @@ async function applyContributionChange(
   // Fichiers à effacer une fois la transaction validée (suppression d'une personne)
   filesToRemove: string[] = [],
 ): Promise<{ entityId: string | null }> {
-  // Les annotations sont appliquées par le client après la relecture (batchAnnotations) :
-  // rien à faire ici. Avant, elles tombaient dans la branche des liens et faisaient échouer la relecture.
+  // Annotation (dessin, texte, sticker, photo posée sur l'arbre) : posée ici, dans la transaction qui accepte
+  // la proposition. Avant la 1.5.1, le navigateur du relecteur la posait après coup, et pouvait la perdre.
   if (change.entityType === 'annotation') {
-    return { entityId: change.entityId ?? null }
+    try {
+      return await applyAnnotationChange(tx, treeId, { action: change.action, entityId: change.entityId, after: change.after }, actorUserId)
+    } catch (error) {
+      if (error instanceof AnnotationChangeError) throw new ContributionRouteError(400, error.code)
+      throw error
+    }
   }
 
   // Moment proposé par la famille : il existe déjà, on le rend visible
@@ -1214,6 +1221,17 @@ export const contributionRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: 'media_changes_not_allowed' })
     }
 
+    // Une annotation refusée à l'écriture le serait aussi à la relecture : on le dit tout de suite
+    for (const change of payload.data.changes) {
+      if (change.entityType !== 'annotation') continue
+      try {
+        validateAnnotationChange(change, params.data.id)
+      } catch (error) {
+        if (error instanceof AnnotationChangeError) return reply.code(400).send({ error: error.code })
+        throw error
+      }
+    }
+
     try {
       const context = await resolveSubmissionContext(app, request.actor, params.data.id)
       const now = new Date()
@@ -1374,6 +1392,21 @@ export const contributionRoutes: FastifyPluginAsync = async (app) => {
     }
   })
 
+  // État d'une proposition, pour la personne qui l'a envoyée : ses fantômes « en attente » s'effacent quand elle
+  // est relue. Seulement le statut, à qui lit l'arbre et connaît l'identifiant (rendu à l'envoi).
+  app.get('/trees/:id/contributions/sessions/:sessionId/status', { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (request, reply) => {
+    const params = sessionParamsSchema.safeParse(request.params)
+    if (!params.success) return reply.code(400).send({ error: 'invalid_params' })
+    if (!request.actor) return reply.code(401).send({ error: 'authentication_required' })
+    if (!(await canReadTree(app, params.data.id, request.actor))) return reply.code(403).send({ error: 'forbidden' })
+    const session = await app.prisma.contributionSession.findFirst({
+      where: { id: params.data.sessionId, treeId: params.data.id },
+      select: { status: true },
+    })
+    if (!session) return reply.code(404).send({ error: 'contribution_session_not_found' })
+    return reply.send({ status: session.status })
+  })
+
   app.post('/trees/:id/contributions/sessions/:sessionId/review', async (request, reply) => {
     const params = sessionParamsSchema.safeParse(request.params)
     if (!params.success) {
@@ -1481,6 +1514,10 @@ export const contributionRoutes: FastifyPluginAsync = async (app) => {
                 where: { id: change.entityId, treeId: params.data.id },
                 data: { status: 'rejected', deletedAt: new Date() },
               })
+            }
+            // Photo posée sur l'arbre par la famille et refusée : son fichier part avec elle
+            if (change.entityType === 'annotation') {
+              filesToRemove.push(...await releaseRejectedPhoto(tx, params.data.id, change.afterJson, session.id))
             }
             if (change.entityType === 'media' && change.entityId) {
               await tx.mediaItem.updateMany({

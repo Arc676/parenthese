@@ -121,36 +121,37 @@ model UserIdentity {
 }
 
 model Tree {
-  id                   String                @id @default(cuid())
-  ownerUserId          String
-  slug                 String                @unique
-  name                 String
-  description          String?
+  id                     String                  @id @default(cuid())
+  ownerUserId            String
+  slug                   String                  @unique
+  name                   String
+  description            String?
   // Icône choisie pour l'arbre (un emoji), à la place de la première lettre dans les menus ; null = la lettre
-  icon                 String?
-  rootPersonId         String?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  deletedAt            DateTime?
-  owner                User                  @relation("TreeOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
-  accessPasswords      TreeAccessPasswords?
-  sharePassword        TreeSharePassword?
-  memberships          TreeMembership[]
-  sharedUserAccesses   UserTreeAccess[]
-  settings             TreeSettings?
-  immichConfig         TreeImmichConfig?
-  persons              Person[]
-  unions               Union[]
-  parentChildLinks     ParentChildLink[]
-  mediaItems           MediaItem[]
-  mediaPersonTags      MediaPersonTag[]
-  contributionSessions ContributionSession[]
-  auditLogs            AuditLog[]
-  annotations          Annotation[]
-  visits               TreeVisit[]
-  lifeEvents           LifeEvent[]
-  invitations          TreeInvitation[]
-  lastOpenedByUsers    User[]                @relation("UserLastOpenedTree")
+  icon                   String?
+  rootPersonId           String?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  deletedAt              DateTime?
+  owner                  User                    @relation("TreeOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  accessPasswords        TreeAccessPasswords?
+  sharePassword          TreeSharePassword?
+  memberships            TreeMembership[]
+  sharedUserAccesses     UserTreeAccess[]
+  settings               TreeSettings?
+  immichConfig           TreeImmichConfig?
+  persons                Person[]
+  unions                 Union[]
+  parentChildLinks       ParentChildLink[]
+  mediaItems             MediaItem[]
+  mediaPersonTags        MediaPersonTag[]
+  contributionSessions   ContributionSession[]
+  auditLogs              AuditLog[]
+  annotations            Annotation[]
+  visits                 TreeVisit[]
+  lifeEvents             LifeEvent[]
+  invitations            TreeInvitation[]
+  annotationPhotoUploads AnnotationPhotoUpload[]
+  lastOpenedByUsers      User[]                  @relation("UserLastOpenedTree")
 
   @@index([ownerUserId])
   @@map("trees")
@@ -212,6 +213,20 @@ model TreeInvitation {
   @@index([treeId])
   @@index([email])
   @@map("tree_invitations")
+}
+
+// Photo posée sur l'arbre par la famille, en attente de relecture (1.5.1). La ligne vit tant que la photo n'est
+// ni acceptée (ligne retirée, fichier gardé) ni refusée (fichier et ligne effacés). Un envoi jamais proposé est
+// effacé après 7 jours, la durée d'un brouillon. Les photos des gestionnaires n'ont pas de ligne.
+model AnnotationPhotoUpload {
+  id        String   @id
+  treeId    String
+  filePath  String
+  createdAt DateTime @default(now())
+  tree      Tree     @relation(fields: [treeId], references: [id], onDelete: Cascade)
+
+  @@index([treeId, createdAt])
+  @@map("annotation_photo_uploads")
 }
 
 model UserTreeAccess {

@@ -25,6 +25,7 @@ import { resolveTreeMediaDirectory } from '../lib/tree-purge.js'
 import { canReadTree, canReadTreeWithMediaToken } from '../lib/tree-access.js'
 import type { MembershipRole } from '../types/auth.js'
 import { ContributionRouteError, resolveSubmissionContext } from './contributions.js'
+import { MAX_PENDING_PHOTOS_PER_TREE, sweepStalePendingPhotos } from '../lib/annotation-changes.js'
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const MAX_FILE_BYTES = 20 * 1024 * 1024
@@ -1123,8 +1124,10 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
     photoId: z.string().min(1),
   })
 
+  // Photo posée sur l'arbre. Un gestionnaire la pose tout de suite ; la famille (lien de partage ou membre) la
+  // propose : le fichier attend la relecture, noté dans annotation_photo_uploads (lib/annotation-changes.ts).
   app.post('/trees/:id/annotation-photos', UPLOAD_RATE_LIMIT, async (request, reply) => {
-    if (!request.actor || request.actor.kind !== 'user') {
+    if (!request.actor) {
       return reply.code(401).send({ error: 'authentication_required' })
     }
 
@@ -1138,9 +1141,19 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: 'invalid_payload', details: payload.error.flatten() })
     }
 
-    const membership = await requireAdminMembership(app, request.actor.userId, params.data.id)
-    if (!membership) {
-      return reply.code(403).send({ error: 'forbidden' })
+    const isManager = request.actor.kind === 'user' && Boolean(await requireAdminMembership(app, request.actor.userId, params.data.id))
+    if (!isManager) {
+      try {
+        await resolveSubmissionContext(app, request.actor, params.data.id)
+      } catch (error) {
+        if (error instanceof ContributionRouteError) return reply.code(error.statusCode).send({ error: error.code })
+        throw error
+      }
+      const stale = await sweepStalePendingPhotos(app.prisma, params.data.id)
+      await Promise.all(stale.map((filePath) => removeStoredFile(getStorageRoot(), filePath)))
+      if (await app.prisma.annotationPhotoUpload.count({ where: { treeId: params.data.id } }) >= MAX_PENDING_PHOTOS_PER_TREE) {
+        return reply.code(429).send({ error: 'too_many_pending_photos' })
+      }
     }
 
     const fileBuffer = Buffer.from(stripDataUrlPrefix(payload.data.dataBase64), 'base64')
@@ -1182,6 +1195,9 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
 
     await mkdir(path.dirname(absolutePath), { recursive: true })
     await writeFile(absolutePath, prepared.buffer)
+    if (!isManager) {
+      await app.prisma.annotationPhotoUpload.create({ data: { id: photoId, treeId: params.data.id, filePath: relativePath } })
+    }
 
     return reply.code(201).send({
       photoId,
