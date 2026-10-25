@@ -7,6 +7,7 @@ import compte from './compte.js'
 import photos from './photos.js'
 import souvenir from './souvenir.js'
 import gestion from './gestion.js'
+import recherche from './recherche.js'
 
 export default {
   ...app,
@@ -17,5 +18,6 @@ export default {
   ...photos,
   ...souvenir,
   ...gestion,
+  ...recherche,
 }
 

@@ -65,6 +65,22 @@ To open the instance to your family over the Internet, put an HTTPS reverse prox
 
 So that people who come across the address can't sign up and start their own trees, set `ALLOW_REGISTRATION=false` in `.env`, then run `docker compose up -d`. Existing accounts keep signing in and creating trees, relatives still open shared trees with the link and password, and the app no longer offers to create an account. An instance with no account at all still accepts the first one, so the variable can be set before the very first start: create your own account right away, before you give out the address.
 
+#### Search for someone in public records
+
+The "+" menu offers "Someone elsewhere": a panel on the right of the tree where you type a name and see what public records hold about that person. Links to sites without a search we can query from here (old newspapers on Gallica, military registers on FranceArchives, Geneanet, FamilySearch and a few others, France first) always work: your browser opens the site with the name already typed in, and nothing goes through the server.
+
+The server can also query two sources itself and show the results in the panel. They stay off until you list them in `.env`:
+
+```
+# deces: deaths in France since 1970 (INSEE death records, searched through matchID)
+# wikitree: WikiTree public profiles
+SEARCH_SOURCES=deces,wikitree
+# Optional, free from deces.matchid.io: anonymous searches stop after about a hundred
+MATCHID_TOKEN=
+```
+
+Only the first name, last name and birth year leave the server, and the panel says so next to each source. A result added to the tree only fills empty fields, marks the person as needing checking and keeps the source link in their note. The tree owner adds directly; relatives see the results and the links. A matchID key is valid for 30 days: renew it from your matchID account.
+
 #### Sign in with your identity provider (OIDC)
 
 *Experimental in 1.2.0: tested against a certified OpenID provider, feedback from real setups is welcome in the issues.*
