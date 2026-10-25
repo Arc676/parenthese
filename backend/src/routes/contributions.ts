@@ -34,6 +34,8 @@ const sessionParamsSchema = z.object({
 // remplissait la base à 12 Mo par envoi
 const MAX_CHANGE_JSON_CHARS = 64_000
 const MAX_PENDING_SESSIONS_PER_TREE = 200
+// Annotations proposées avant la 1.5.1 : écartées à la relecture si elles ne se posent pas
+const SKIPPABLE_ANNOTATION_ERRORS = new Set(['invalid_annotation_change', 'invalid_annotation_photo_path', 'unsupported_change_action_for_annotation'])
 const boundedJson = z.unknown().optional().refine(
   (value) => value === undefined || JSON.stringify(value).length <= MAX_CHANGE_JSON_CHARS,
   { message: 'change_too_large' },
@@ -1500,8 +1502,9 @@ export const contributionRoutes: FastifyPluginAsync = async (app) => {
               )
               approvedCount += 1
             } catch (error) {
-              // Lien vers une personne ajoutée mais refusée : le lien est écarté, pas la relecture
-              if (error instanceof ContributionRouteError && error.code === 'unresolved_reference') {
+              // Lien vers une personne ajoutée mais refusée, ou annotation d'avant la 1.5.1 que le serveur ne
+              // peut pas poser (contenu incomplet) : la proposition est écartée, pas la relecture
+              if (error instanceof ContributionRouteError && (error.code === 'unresolved_reference' || SKIPPABLE_ANNOTATION_ERRORS.has(error.code))) {
                 decision = 'rejected'
                 rejectedCount += 1
               } else {

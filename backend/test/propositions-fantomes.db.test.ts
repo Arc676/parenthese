@@ -116,6 +116,24 @@ describe.skipIf(!TEST_DB)('propositions de la famille sur l\'arbre, vraie base',
     expect((await annotations()).length).toBe(before + 1)
   })
 
+  it("une ancienne proposition d'annotation incomplète est écartée sans bloquer le reste de la relecture", async () => {
+    const before = (await annotations()).length
+    const session = await prisma.contributionSession.create({
+      data: {
+        treeId, submittedByLabel: 'Cousine', mode: 'tree_access', status: 'pending', title: 'Avant la 1.5.1',
+        changes: { create: [
+          { entityType: 'annotation', action: 'create', afterJson: { type: 'drawing', x: 0, y: 0 } },
+          { entityType: 'annotation', action: 'create', afterJson: { type: 'text', x: 5, y: 5, content: 'Mamie' } },
+        ] },
+      },
+    })
+    const reviewed = await review(session.id, 'approved')
+    expect(reviewed.status).toBe(200)
+    expect(reviewed.body.approvedCount).toBe(1)
+    expect(reviewed.body.rejectedCount).toBe(1)
+    expect((await annotations()).length).toBe(before + 1)
+  })
+
   it("une photo qui n'est pas de cet arbre est refusée dès l'envoi", async () => {
     const res = await propose(family, [{ entityType: 'annotation', action: 'create', after: photoAnnotation('/trees/un-autre-arbre/annotation-photos/abc') }])
     expect(res.status).toBe(400)
