@@ -2,7 +2,7 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
-## 1.5.1 (unreleased)
+## 1.5.1 (2026-10-25)
 
 ### Suggestions show on the tree
 
