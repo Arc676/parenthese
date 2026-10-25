@@ -423,7 +423,7 @@ const AdminPanel = ({
           <X size={18} aria-hidden="true" />
         </button>
 
-        <div className="pz-tabs" role="tablist">
+        <div className="pz-tabs ts-tabs" role="tablist">
           <button type="button" role="tab" aria-selected={section === 'tree'} className="pz-tab" onClick={() => setSection('tree')}>{t('Votre arbre')}</button>
           <button type="button" role="tab" aria-selected={section === 'managers'} className="pz-tab" onClick={() => setSection('managers')}>{t('Gestion')}</button>
           <button type="button" role="tab" aria-selected={section === 'visits'} className="pz-tab" onClick={() => setSection('visits')}>{t('Visites')}</button>
