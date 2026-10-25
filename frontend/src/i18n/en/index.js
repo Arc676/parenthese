@@ -6,6 +6,7 @@ import contribution from './contribution.js'
 import compte from './compte.js'
 import photos from './photos.js'
 import souvenir from './souvenir.js'
+import gestion from './gestion.js'
 import recherche from './recherche.js'
 
 export default {
@@ -16,6 +17,7 @@ export default {
   ...compte,
   ...photos,
   ...souvenir,
+  ...gestion,
   ...recherche,
 }
 

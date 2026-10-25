@@ -56,6 +56,22 @@
   .ts-row-actions { justify-content: flex-start; }
 }
 
+/* Cinq onglets : ils rétrécissent (texte sur deux lignes) au lieu de déborder du panneau sur un petit téléphone */
+.ts-tabs .pz-tab { min-width: 0; }
+@media (max-width: 420px) { .ts-tabs .pz-tab { padding: 0 4px; font-size: 12.5px; line-height: 1.2; } }
+
+/* ── Gestion : propriétaire et co-gestionnaires (issue #145) ── */
+.tm-row { padding: 12px 14px; }
+.tm-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tm-who .ts-row-text { min-width: 0; }
+.tm-avatar { width: 34px; height: 34px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--pz-a100); color: var(--pz-a700); font: 500 13px var(--pz-sans); }
+.tm-avatar--pending { background: var(--pz-bg); color: var(--pz-muted); border: 1px dashed var(--pz-a300); }
+.tm-mail { font: 400 13px var(--pz-sans); color: var(--pz-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm-invite { display: flex; gap: 8px; }
+.tm-invite .pz-input { flex: 1; min-width: 0; }
+.contrib-invite-link input.contrib-link-url { border: 0; outline: none; min-height: 32px; }
+@media (max-width: 480px) { .tm-invite { flex-direction: column; } }
+
 /* ── Contributions : invitation ── */
 .contrib-list-section { display: grid; gap: 18px; }
 .contrib-invite { display: grid; gap: 12px; padding: 16px; border-radius: var(--pz-r-m); background: var(--pz-a50); border: 1px solid var(--pz-a100); }
@@ -259,3 +275,4 @@
   .contrib-session-quick { justify-content: flex-end; }
   .contrib-field-label { width: 88px; }
 }
+.tm-share-btn { justify-self: start; }

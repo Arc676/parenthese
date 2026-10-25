@@ -9,10 +9,11 @@ export async function loginUser(email, password) {
   return data
 }
 
-export async function registerUser(firstName, email, password) {
+// invitationToken : lien d'invitation à co-gérer un arbre, qui ouvre un compte même inscription fermée
+export async function registerUser(firstName, email, password, invitationToken) {
   const data = await apiRequest('/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ firstName, email, password }),
+    body: JSON.stringify({ firstName, email, password, ...(invitationToken ? { invitationToken } : {}) }),
   })
 
   return data

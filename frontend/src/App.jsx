@@ -12,6 +12,7 @@ import AdminPanel from './components/AdminPanel'
 import AccessGate from './components/AccessGate'
 import EntryChoice from './components/EntryChoice'
 import AccountDashboard from './components/AccountDashboard'
+import InvitationScreen from './components/InvitationScreen.jsx'
 import AccountPanel from './components/AccountPanel'
 import TreeCreationWizard from './components/TreeCreationWizard'
 import PhotoStartPanel from './components/PhotoStartPanel.jsx'
@@ -488,6 +489,14 @@ function readOidcReturn() {
   return { code: params.get('oidc'), error: params.get('oidc_error') }
 }
 const OIDC_RETURN = readOidcReturn()
+
+// Lien d'invitation à co-gérer un arbre (/invitation/<jeton>, issue #145) : lu une fois au chargement, la page
+// d'invitation passe avant tout le reste jusqu'à ce que l'arbre s'ouvre
+function readInvitationToken() {
+  if (typeof window === 'undefined') return null
+  return window.location.pathname.match(/^\/invitation\/([A-Za-z0-9_-]{20,100})$/)?.[1] ?? null
+}
+const INVITATION_TOKEN = readInvitationToken()
 let oidcSignIn = null
 
 function App() {
@@ -2973,6 +2982,25 @@ function App() {
   }
 
 
+  if (INVITATION_TOKEN) {
+    return (
+      <div className="app">
+        <InvitationScreen
+          invitationToken={INVITATION_TOKEN}
+          userToken={auth.userAuth.token || ''}
+          userEmail={auth.userAuth.user?.email || ''}
+          loading={auth.accountLoading}
+          errorMessage={auth.accountError}
+          onLogin={auth.handleLogin}
+          onRegister={auth.handleRegister}
+          onOidcLogin={authOptions.oidc ? () => window.location.assign(oidcStartUrl(`/invitation/${INVITATION_TOKEN}`)) : undefined}
+          onLogout={handleLogout}
+          onOpenApp={() => window.location.assign('/')}
+        />
+      </div>
+    )
+  }
+
   if (tree.bootState === 'loading') {
     return (
       <div className="app app-loading" />
@@ -3370,7 +3398,12 @@ function App() {
         treeId={tree.treeContext.treeId}
         authToken={tree.treeContext.accessToken}
         isAdmin={userRole.isAdmin}
+        isOwner={userRole.isOwner}
+        currentUserId={auth.userAuth.user?.id || null}
+        oidcName={authOptions.oidc?.name || ''}
         onTreeDeleted={handleTreeDeleted}
+        onLeftTree={handleTreeDeleted}
+        onOpenShare={() => { setAdminPanelVisible(false); handleOpenContributionPanel() }}
         onGedcomImported={handleGedcomImported}
         onOpenPhotoStart={() => { setAdminPanelVisible(false); openPhotoStart() }}
         onClose={() => setAdminPanelVisible(false)}

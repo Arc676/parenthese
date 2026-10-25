@@ -448,7 +448,17 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
       role: string
       accessMode: 'member' | 'share'
       lastAccessedAt: Date | null
+      coManagers?: string[]
     }> = []
+
+    // Co-gestionnaires des arbres possédés : l'écran de suppression du compte les nomme (l'arbre part avec le compte)
+    const ownedIds = memberships.filter((m: { role: string }) => m.role === 'owner').map((m: { tree: { id: string } }) => m.tree.id)
+    const coManagerRows = ownedIds.length
+      ? await app.prisma.treeMembership.findMany({
+          where: { treeId: { in: ownedIds }, role: 'admin' },
+          select: { treeId: true, user: { select: { firstName: true, email: true } } },
+        })
+      : []
 
     for (const membership of memberships) {
       mergedTrees.push({
@@ -456,6 +466,11 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
         role: membership.role,
         accessMode: 'member',
         lastAccessedAt: null,
+        ...(membership.role === 'owner' ? {
+          coManagers: coManagerRows
+            .filter((row: { treeId: string }) => row.treeId === membership.tree.id)
+            .map((row: { user: { firstName: string | null; email: string } }) => row.user.firstName || row.user.email),
+        } : {}),
       })
     }
 

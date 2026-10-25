@@ -355,8 +355,13 @@ const PersonCard = ({
       setTimeout(() => setSaveSuccess(false), 2000)
       return 'saved'
     } catch (error) {
-      // Serveur injoignable (status 0, message traduit par le client) ; sinon un texte clair, jamais un message technique
-      setSaveError(error?.status === 0 ? error.message : t("L'enregistrement a échoué. Vos modifications sont gardées, réessayez."))
+      // Serveur injoignable (status 0, message traduit par le client) ; droits retirés entre-temps (un co-gestionnaire
+      // retiré, issue #145) : réessayer ne servirait à rien ; sinon un texte clair, jamais un message technique
+      setSaveError(error?.status === 0
+        ? error.message
+        : error?.status === 403
+          ? t("Vous ne pouvez plus modifier cet arbre. Rechargez la page pour voir vos droits actuels.")
+          : t("L'enregistrement a échoué. Vos modifications sont gardées, réessayez."))
       return 'blocked'
     } finally {
       setSaving(false)

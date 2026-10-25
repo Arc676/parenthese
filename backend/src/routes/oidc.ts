@@ -15,6 +15,7 @@ import {
 } from '../lib/oidc.js'
 import { confirmsWithPassword } from '../lib/auth.js'
 import { createAccountIfAllowed } from '../lib/registration.js'
+import { claimInvitationsForVerifiedEmail, hasPendingInvitationForEmail } from '../lib/tree-invitations.js'
 import { signUserSession } from '../lib/user-session.js'
 
 // Parcours : /auth/oidc/start pose un cookie signé (state, nonce, vérificateur PKCE) et part chez le fournisseur ;
@@ -86,6 +87,7 @@ async function resolveAccount(app: FastifyInstance, identity: OidcIdentity): Pro
     return { userId: existing.id }
   }
 
+  // Une invitation à co-gérer un arbre ouvre un compte même inscription fermée, si le fournisseur garantit l'adresse
   const created = await createAccountIfAllowed(app.prisma, (tx) => tx.user.create({
     data: {
       email: identity.email as string,
@@ -94,7 +96,7 @@ async function resolveAccount(app: FastifyInstance, identity: OidcIdentity): Pro
       identities: { create: { issuer: identity.issuer, subject: identity.subject } },
     },
     select: { id: true },
-  }))
+  }), { invited: identity.emailVerified && await hasPendingInvitationForEmail(app.prisma, identity.email) })
   return created ? { userId: created.id } : { error: 'registration_closed' }
 }
 
@@ -178,6 +180,11 @@ export const oidcRoutes: FastifyPluginAsync = async (app) => {
       }
       if ('error' in result) {
         return redirectToApp(reply, returnTo, `oidc_error=${result.error}`)
+      }
+      // Invitations à co-gérer un arbre : acceptées sans le lien, l'adresse étant garantie par le fournisseur (et
+      // devant être celle du compte, voir claimInvitationsForVerifiedEmail)
+      if (identity.email && identity.emailVerified) {
+        await claimInvitationsForVerifiedEmail(app.prisma, result.userId, identity.email)
       }
 
       const handoff = app.jwt.sign(

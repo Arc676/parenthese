@@ -6,6 +6,7 @@ import PzBusy from './PzBusy.jsx'
 import LanguageSwitch from './navbar/LanguageSwitch'
 import { t } from '../i18n/index.js'
 import { PRIVACY_URL } from '../utils/siteLinks.js'
+import { initialOf } from '../utils/initial.js'
 
 // Phrase traduite d'un bloc : les passages entre astérisques passent en <em>, {slot} reçoit un nœud.
 function richText(text, slotNode = null) {
@@ -278,7 +279,7 @@ const AccountDashboard = ({
                     className={`tree-item pz-tree-item ${isActive ? 'active' : ''}`}
                     onClick={() => onOpenTree(tree.id)}
                   >
-                    <span className="pz-tree-mono" aria-hidden="true">{(tree.name || '?').trim().charAt(0).toUpperCase()}</span>
+                    <span className="pz-tree-mono" aria-hidden="true">{initialOf(tree.name)}</span>
                     <span className="tree-name pz-tree-name">{tree.name}</span>
                     {isActive && <span className="pz-tag pz-tag--accent">{t('Ouvert')}</span>}
                     <ChevronRight size={18} aria-hidden="true" className="pz-tree-chevron" />
@@ -344,6 +345,19 @@ const AccountDashboard = ({
               </li>
               <li>{t("Les arbres partagés avec vous restent à leurs propriétaires. Vous n'y aurez simplement plus accès.")}</li>
             </ul>
+            {/* Arbres gérés avec d'autres : ils partent aussi pour leurs co-gestionnaires (issue #145) */}
+            {(trees || []).filter((tree) => tree.role === 'owner' && tree.coManagers?.length > 0).map((tree) => (
+              <div key={tree.id} className="ts-danger account-comanaged">
+                <div className="ts-row-text">
+                  <strong>{t('« {name} » sera supprimé pour tout le monde', { name: tree.name })}</strong>
+                  <span className="pz-small">
+                    {tree.coManagers.length > 1
+                      ? t('{names} le gèrent avec vous. Ils n’y auront plus accès, la famille non plus.', { names: tree.coManagers.join(', ') })
+                      : t('{name} le gère avec vous. Cette personne n’y aura plus accès, la famille non plus.', { name: tree.coManagers[0] })}
+                  </span>
+                </div>
+              </div>
+            ))}
 
             <form className="pz-auth-form" onSubmit={handleDeleteSubmit}>
               <div className="pz-field">

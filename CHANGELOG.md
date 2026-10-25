@@ -2,12 +2,29 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
-## Unreleased
+## 1.5.0 (unreleased)
+
+### Several managers for one tree
+
+- The owner can invite co-managers from the tree settings, in a new Managers tab. Parenthèse sends no email: the owner gets a link to pass on. The link works once, lasts 14 days, and can be cancelled. Copying it again creates a new link and the old one stops working (#145, asked by @milan616).
+- A co-manager edits the tree and reviews the family's suggestions like the owner. Only the owner invites or removes a co-manager and deletes the tree. A co-manager can leave from the Advanced tab.
+- Immich stays with the owner. Its key opens the owner's whole library, so co-managers do not see it or change it.
+- With a password account, the link is needed and the account must use the invited address. With OIDC, a co-manager whose provider marks the invited address as verified is added at sign-in, without the link. An unverified address is never matched.
+- An invitation opens an account even when `ALLOW_REGISTRATION=false`, at the invited address only.
+- Removing a co-manager takes effect on their next request, and also drops any access they had saved with the sharing password. The settings then offer to change that password, since they may have seen it.
+- Deleting your account now names the co-managers of the trees you own, which are deleted for them too.
+- In the tree menu, "Admin" is now "Co-manager".
 
 ### Search for someone elsewhere
 
 - "Someone elsewhere" in the "+" menu opens a panel on the right of the tree: type a name, birth year and place, and search public records. Links to Gallica (old newspapers), FranceArchives (military registers), Mémoire des hommes, Léonore, Geneanet, Open Archives, WikiTree, FreeBMD and FamilySearch open in the browser with the name typed in when the site allows it.
 - The server can query deaths in France since 1970 (INSEE records via matchID) and WikiTree, once listed in `SEARCH_SOURCES`. Each source says what it covers and what is sent. The owner adds a result to a person in the tree: empty fields only, marked as needing checking, source kept in the note.
+
+### Fixes
+
+- An admin can switch a person's profile to edit mode from a new Edit button on the profile.
+- The "?" of "needs checking" shows whole on round portraits. It was cut by the frame.
+- On iPad, the tree no longer stops short of the bottom of the screen. The canvas follows its real size instead of the window height read at load.
 
 ## 1.4.0 (2026-10-23)
 

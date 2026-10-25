@@ -6,6 +6,7 @@ import PzBusy from './PzBusy.jsx'
 import { t } from '../i18n/index.js'
 import { firstNameLabel } from '../utils/personName.js'
 import { SEX_CHOICES } from '../utils/personSex.js'
+import { initialOf } from '../utils/initial.js'
 
 // Titre traduit d'un bloc : le passage entre <em> et </em> garde son italique
 function withEmphasis(text) {
@@ -354,7 +355,7 @@ function AddPersonPanel({ visible, persons = [], loading = false, error = '', on
                     <li key={p.id}>
                       <button type="button" className="apn-dropdown-item" onClick={() => handleAddRelation(p)}>
                         <span className="apn-avatar" aria-hidden="true">
-                          {p.photo ? <img src={p.photo} alt="" /> : (p.firstName || '').trim().charAt(0) || '?'}
+                          {p.photo ? <img src={p.photo} alt="" /> : initialOf(p.firstName)}
                         </span>
                         <span className="apn-dropdown-name">{firstNameLabel(p)} <em>{p.lastName || ''}</em></span>
                         {(p.birthYear || p.birthDate) && (

@@ -98,6 +98,7 @@ model User {
   reviewedContributionSessions  ContributionSession[] @relation("ContributionReviewedBy")
   treeVisits                    TreeVisit[]
   identities                    UserIdentity[]
+  sentTreeInvitations           TreeInvitation[]      @relation("TreeInvitationSentBy")
   lastOpenedTree                Tree?                 @relation("UserLastOpenedTree", fields: [lastOpenedTreeId], references: [id], onDelete: SetNull)
 
   @@index([lastOpenedAt])
@@ -146,6 +147,7 @@ model Tree {
   annotations          Annotation[]
   visits               TreeVisit[]
   lifeEvents           LifeEvent[]
+  invitations          TreeInvitation[]
   lastOpenedByUsers    User[]                @relation("UserLastOpenedTree")
 
   @@index([ownerUserId])
@@ -186,6 +188,28 @@ model TreeMembership {
   @@unique([treeId, userId])
   @@index([userId])
   @@map("tree_memberships")
+}
+
+// Invitation à co-gérer un arbre (issue #145) : le propriétaire donne une adresse, Parenthèse un lien à transmettre.
+// Seule l'empreinte du jeton est gardée ; « Copier le lien » en tire un nouveau. Acceptée, elle donne le rôle admin
+// (co-gestionnaire). Le lien sert une fois, jusqu'à expiresAt.
+model TreeInvitation {
+  id              String    @id @default(cuid())
+  treeId          String
+  email           String
+  tokenHash       String    @unique
+  invitedByUserId String?
+  createdAt       DateTime  @default(now())
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  acceptedUserId  String?
+  revokedAt       DateTime?
+  tree            Tree      @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  invitedBy       User?     @relation("TreeInvitationSentBy", fields: [invitedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([treeId])
+  @@index([email])
+  @@map("tree_invitations")
 }
 
 model UserTreeAccess {

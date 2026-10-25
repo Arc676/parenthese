@@ -11,6 +11,7 @@ import { toJourneyRole, toOpaqueTreeId, trackAppEvent } from '../../utils/analyt
 import { t } from '../../i18n/index.js'
 import { PHONE_QUERY } from '../../utils/sheetDrag'
 import './ContextualNavbar.css'
+import { initialOf } from '../../utils/initial.js'
 
 const ANNOT_TOOLS = [
   { id: 'pointer', label: t('Sélection'), Icon: MousePointer2 },
@@ -241,7 +242,7 @@ function ContextualNavbar({
     </NavMenu>
   )
 
-  const avatarInitial = (linkedPersonName || userDisplayName || userEmail || 'P').trim().charAt(0).toUpperCase()
+  const avatarInitial = initialOf(linkedPersonName || userDisplayName || userEmail, 'P')
   const pendingBadge = isOwner && onShareClick && pendingContributions > 0
 
   return (
