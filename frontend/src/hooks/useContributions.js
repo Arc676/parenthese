@@ -261,6 +261,12 @@ export function useContributions({ canEditCurrentTree, canSubmitContribution, tr
         reviewingSessionId: '',
       }))
     } catch (error) {
+      // Déjà relue ailleurs (un autre onglet, un co-gestionnaire) : l'arbre et la liste se remettent à jour, le
+      // fantôme part avec elle
+      if (error?.payload?.error === 'contribution_session_already_reviewed') {
+        await refreshCurrentTreeGraph().catch(() => {})
+        await refreshContributionSessions()
+      }
       setContribState((current) => ({
         ...current,
         reviewingSessionId: '',

@@ -64,6 +64,10 @@ export function getAccountErrorMessage(error) {
     return t('Le format de fichier ne correspond pas au type de média choisi.')
   }
 
+  if (errorCode === 'contribution_session_already_reviewed') {
+    return t('Cette proposition a déjà été relue, peut-être par une autre personne qui gère l’arbre.')
+  }
+
   if (errorCode === 'photo_too_large') {
     return t('Cette photo est trop lourde. Essayez une photo plus petite.')
   }

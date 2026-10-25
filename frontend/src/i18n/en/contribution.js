@@ -229,4 +229,5 @@ export default {
   'Cette photo est trop lourde. Essayez une photo plus petite.': 'This photo is too large. Try a smaller one.',
   'Beaucoup de photos attendent déjà la relecture sur cet arbre. Réessayez quand la personne qui le gère les aura vues.': "Many photos are already waiting for review on this tree. Try again once the person who manages it has seen them.",
   'Ce fichier n’est pas une photo que Parenthèse sait afficher (JPEG, PNG, WebP ou GIF).': "This file isn't a photo Parenthèse can show (JPEG, PNG, WebP or GIF).",
+  'Cette proposition a déjà été relue, peut-être par une autre personne qui gère l’arbre.': 'This suggestion has already been reviewed, maybe by another person who manages the tree.',
 }
