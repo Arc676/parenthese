@@ -2,6 +2,40 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
+## 1.5.1 (unreleased)
+
+### Suggestions show on the tree
+
+- A suggestion waiting for review now shows on the tree, where it will go: a suggested person is drawn faded, with a dotted circle and a "Suggested" tag, and their links are dotted. Words, drawings and photos placed on the tree show see-through. A person with a suggested change gets a small dot.
+- Whoever manages the tree opens a suggested person to see who suggested it and what else the suggestion holds, and accepts or rejects it right there. A person with a suggested change shows the fields in their profile, with the same buttons. "See details" opens the review panel to sort change by change.
+- The family sees what they are adding as a "Draft" before sending it, then as "Waiting" until it is reviewed. This is kept in their browser only, and cleared once the suggestion is reviewed.
+
+### Photos placed on the tree by the family
+
+- A family member can now place a photo on the tree. Before, the upload was refused without a word and the photo never showed. The photo waits for review: it is kept if accepted, deleted if rejected, and an upload never sent is deleted after 7 days. At most 50 photos wait on a tree at once.
+- Accepted words, drawings and photos are now placed by the server when the suggestion is accepted. Before, the reviewer's browser placed them afterwards and could lose them, and none appeared when the family's changes apply directly.
+
+### Adding relatives from a profile
+
+- In a profile's Links tab, searching for a parent, child or partner who is not in the tree yet now offers "Create …", which opens the add panel already filled in.
+- Profiles have a Siblings section, with "Add a sibling".
+- The Info tab has quick buttons to add a parent, partner, child or sibling without going into edit mode first.
+- The add panel opened from a profile comes with the link already set, and suggests the family name for a child or a sibling.
+- Adding someone whose first and last name match a person already in the tree shows a warning, with a button to open that person's profile.
+
+### Fixes
+
+- "Update the tree" no longer clears your changes when part of them fails to save: what failed stays in your edits, with a message.
+- A suggestion already reviewed elsewhere (another tab, a co-manager) now says so, instead of a message about emails, and the tree updates.
+- After the family sends their changes, the tree reloads: a photo just sent no longer looks accepted.
+- Zooming with the mouse wheel no longer logs an error in the browser console.
+
+### For self-hosters
+
+- New table `annotation_photo_uploads` (migration `20261025_003`, additive).
+- New route `GET /trees/:id/contributions/sessions/:sessionId/status`, which returns only the status of a suggestion to someone who can read the tree.
+- Anonymous counters for editing (person added and from where, suggestion sent or reviewed, edits saved), with no content from the tree. As before, nothing is sent without `VITE_POSTHOG_KEY`.
+
 ## 1.5.0 (2026-10-25)
 
 ### Several managers for one tree
