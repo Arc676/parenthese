@@ -15,11 +15,13 @@ const SOURCE_INFO = {
     name: t('Décès en France depuis 1970'),
     detail: t("Fichier de l'INSEE, par matchID. Date et lieu de décès, rien avant 1970. Une femme se cherche sous son nom de naissance."),
     sent: t("Envoie le nom, le prénom et l'année de naissance à matchid.io"),
+    short: t("Fichier de l'INSEE, par matchID"),
   },
   wikitree: {
     name: 'WikiTree',
     detail: t('Un arbre mondial tenu par ses membres. Profils publics seulement.'),
     sent: t("Envoie le nom, le prénom et l'année de naissance à wikitree.com"),
+    short: t('Arbre tenu par ses membres'),
   },
 }
 
@@ -30,11 +32,50 @@ function formatDate(value) {
   if (!month) return String(year)
   const date = new Date(Date.UTC(year, month - 1, day || 1))
   const options = day ? { day: 'numeric', month: 'long', year: 'numeric' } : { month: 'long', year: 'numeric' }
-  return date.toLocaleDateString(dateLocale, { ...options, timeZone: 'UTC' })
+  const text = date.toLocaleDateString(dateLocale, { ...options, timeZone: 'UTC' })
+  // « 1er janvier », pas « 1 janvier »
+  return dateLocale === 'fr-FR' && day === 1 ? text.replace(/^1 /, '1er ') : text
 }
 
-function eventLine(event) {
-  return [formatDate(event?.date), event?.place].filter(Boolean).join(', ')
+// « Né le 24 août 1898 à Monségur (40) », accordé au sexe quand la source le donne
+const VERBS = {
+  birth: { M: (when) => t('Né {when}', { when }), F: (when) => t('Née {when}', { when }), null: (when) => t('Né(e) {when}', { when }) },
+  death: { M: (when) => t('Mort {when}', { when }), F: (when) => t('Morte {when}', { when }), null: (when) => t('Mort(e) {when}', { when }) },
+}
+
+function eventSentence(kind, event, sex) {
+  if (!event?.date && !event?.place) return null
+  const parts = []
+  if (event.date) parts.push(event.date.length === 10 ? t('le {date}', { date: formatDate(event.date) }) : t('en {date}', { date: formatDate(event.date) }))
+  if (event.place) parts.push(t('à {place}', { place: event.place }))
+  return (VERBS[kind][sex] || VERBS[kind].null)(parts.join(' '))
+}
+
+// « 1898 – 1987, 89 ans au décès » ; l'âge seulement quand les deux dates sont complètes
+function lifespan(result) {
+  const birth = result.birth?.date
+  const death = result.death?.date
+  // Une seule date : la phrase « Né le … » la donne déjà
+  if (!birth || !death) return ''
+  const years = `${birth.slice(0, 4)} – ${death.slice(0, 4)}`
+  if (birth.length !== 10 || death.length !== 10) return years
+  const age = Number(death.slice(0, 4)) - Number(birth.slice(0, 4)) - (death.slice(5) < birth.slice(5) ? 1 : 0)
+  return `${years}, ${t('{age} ans au décès', { age })}`
+}
+
+// Pourquoi « Correspond bien » ou « À comparer » : l'année et le lieu cherchés, face à ceux du résultat
+function matchReason(result, query) {
+  const reasons = []
+  const year = Number(result.birth?.date?.slice(0, 4)) || null
+  if (query.birthYear) {
+    if (!year) reasons.push(t("pas d'année de naissance"))
+    else reasons.push(Math.abs(year - query.birthYear) <= 1 ? t('même année') : t('autre année'))
+  }
+  if (query.place) {
+    if (!result.birth?.place) reasons.push(t('pas de lieu de naissance'))
+    else reasons.push(plain(result.birth.place).startsWith(plain(query.place)) ? t('même lieu') : t('autre lieu de naissance'))
+  }
+  return reasons.length ? reasons.join(', ') : t('seuls le nom et le prénom sont comparés')
 }
 
 function personYears(person) {
@@ -65,6 +106,9 @@ function SearchSourcesPanel({ visible, treeId, token, persons = [], canApply = f
   const [region, setRegion] = useState('fr')
   const [picker, setPicker] = useState(null)
   const [applied, setApplied] = useState({})
+  // Après une recherche, le formulaire se replie en une ligne : les résultats passent devant
+  const [searched, setSearched] = useState(null)
+  const [editing, setEditing] = useState(true)
 
   useEffect(() => {
     if (!visible || !treeId || !token || loadedSources.treeId === treeId) return
@@ -100,6 +144,8 @@ function SearchSourcesPanel({ visible, treeId, token, persons = [], canApply = f
     event.preventDefault()
     if (!canSearch) return
     setSearching(true)
+    setSearched(query)
+    setEditing(false)
     setPicker(null)
     setResults(Object.fromEntries(checked.map((id) => [id, { status: 'loading', items: [] }])))
     await Promise.all(checked.map(async (id) => {
@@ -168,6 +214,18 @@ function SearchSourcesPanel({ visible, treeId, token, persons = [], canApply = f
       </div>
 
       <div className="apn-scroll">
+        {!editing && searched && (
+          <div className="sp-summary">
+            <div className="sp-summary-text">
+              <p className="sp-summary-who">{searched.firstName} <em>{searched.lastName}</em></p>
+              {(searched.birthYear || searched.place) && (
+                <p className="pz-hint">{[searched.birthYear && t('né(e) vers {year}', { year: searched.birthYear }), searched.place].filter(Boolean).join(', ')}</p>
+              )}
+            </div>
+            <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => setEditing(true)}>{t('Modifier')}</button>
+          </div>
+        )}
+        {editing && (
         <form className="sp-form" onSubmit={handleSearch}>
           <div className="pz-row2">
             <div className="pz-field">
@@ -218,11 +276,15 @@ function SearchSourcesPanel({ visible, treeId, token, persons = [], canApply = f
             )}
           </div>
         </form>
+        )}
 
         {Object.entries(results).map(([sourceId, { status, items }]) => (
           <section key={sourceId} className="apn-section sp-results" aria-live="polite">
             <div className="sp-results-head">
-              <h3 className="sp-results-title">{SOURCE_INFO[sourceId].name}</h3>
+              <div>
+                <h3 className="sp-results-title">{SOURCE_INFO[sourceId].name}</h3>
+                <p className="sp-results-sub">{SOURCE_INFO[sourceId].short}</p>
+              </div>
               {status === 'done' && <span className="pz-hint">{items.length === 0 ? t('Rien trouvé') : items.length === 1 ? t('1 trouvé') : t('{n} trouvés', { n: items.length })}</span>}
             </div>
             {status === 'loading' && <p className="pz-hint">{t('Recherche…')}</p>}
@@ -236,13 +298,18 @@ function SearchSourcesPanel({ visible, treeId, token, persons = [], canApply = f
               const isPicking = picker?.key === key
               return (
                 <article key={key} className={`sp-result${applied[key] ? ' sp-result--done' : ''}`}>
-                  <div className="sp-result-name">{result.firstName} <em>{result.lastName}</em></div>
-                  {result.birth?.date || result.birth?.place ? <p className="sp-result-line">{t('Naissance')} : {eventLine(result.birth)}</p> : null}
-                  {result.death?.date || result.death?.place ? <p className="sp-result-line">{t('Décès')} : {eventLine(result.death)}</p> : null}
-                  <div className="sp-result-foot">
+                  <div className="sp-result-head">
+                    <div className="sp-result-name">{result.firstName} <em>{result.lastName}</em></div>
                     <span className={`sp-match${result.match === 'good' ? ' sp-match--good' : ''}`}>
                       {result.match === 'good' ? t('Correspond bien') : t('À comparer')}
                     </span>
+                  </div>
+                  {lifespan(result) && <p className="sp-result-years">{lifespan(result)}</p>}
+                  {[eventSentence('birth', result.birth, result.sex), eventSentence('death', result.death, result.sex)].filter(Boolean).map((line) => (
+                    <p key={line} className="sp-result-line">{line}</p>
+                  ))}
+                  <p className="sp-result-reason">{matchReason(result, searched || query)}</p>
+                  <div className="sp-result-foot">
                     <a className="pz-link sp-result-link" href={result.url} target="_blank" rel="noopener noreferrer">
                       {t('Voir la source')}<ArrowUpRight size={13} aria-hidden="true" />
                     </a>
