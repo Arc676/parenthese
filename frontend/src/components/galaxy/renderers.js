@@ -949,7 +949,8 @@ export function drawPortrait(ctx, frameType, person, img, withMark) {
 
 function drawToVerifyMark(ctx) {
   const r = 9
-  const x = PERSON_R * 0.74, y = -PERSON_R * 0.74
+  // À cheval sur le coin, à moitié dehors : la marque ne cache plus le visage (Patch, 25/10)
+  const x = PERSON_R * 0.92, y = -PERSON_R * 0.92
   ctx.shadowColor = 'transparent'
   ctx.fillStyle = '#FFFFFF'
   ctx.beginPath()

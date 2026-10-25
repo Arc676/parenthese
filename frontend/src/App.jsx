@@ -257,6 +257,11 @@ function buildContributionChangesFromDraft(draft = {}) {
         birthDate: person.birthDate || null,
         deathDate: person.deathDate || null,
         isDeceased: !person.deathDate && Boolean(person.isDeceased),
+        // Personne venue d'une source publique (panneau « Chercher quelqu'un ») : lieux, « à vérifier » et source
+        ...(person.birthPlace ? { birthPlace: person.birthPlace } : {}),
+        ...(person.deathPlace ? { deathPlace: person.deathPlace } : {}),
+        ...(person.toVerify ? { toVerify: true } : {}),
+        ...(person.notes ? { notes: person.notes } : {}),
       },
     })
 
@@ -1277,6 +1282,10 @@ function App() {
             birthDate: formData.birthDate || null,
             deathDate: formData.deathDate || null,
             isDeceased: Boolean(formData.isDeceased),
+            birthPlace: formData.birthPlace || null,
+            deathPlace: formData.deathPlace || null,
+            toVerify: Boolean(formData.toVerify),
+            notes: formData.notes || null,
             relations: (formData.relations || []).map((rel) => ({ type: rel.type, personId: rel.personId, adopted: Boolean(rel.adopted) })),
             siblingParentLinks,
           },
@@ -1288,7 +1297,7 @@ function App() {
         // seule façon de montrer qu'un ajout invisible comptait.
         setAddPersonPanelVisible(false)
         setDraftNotice(t("{name} est sur l'arbre, en brouillon. Envoyez quand vous avez fini.", { name: [formData.firstName, formData.lastName].filter(Boolean).join(' ') || t('Nouvelle personne') }))
-        return
+        return { proposed: true }
       }
 
       if (!auth.userAuth.token) return
@@ -3510,8 +3519,16 @@ function App() {
         treeId={tree.treeContext.treeId}
         token={tree.treeContext.accessToken || auth.userAuth.token}
         persons={persons}
-        canApply={tree.canEditCurrentTree}
-        onApply={handlePersonSave}
+        // La famille ajoute aussi, en proposition que le propriétaire valide (même envoi qu'« Ajouter quelqu'un »)
+        canApply={tree.canEditCurrentTree || tree.canSubmitContribution}
+        proposes={!tree.canEditCurrentTree}
+        onApply={async (personId, changes) => {
+          await handlePersonSave(personId, changes)
+          if (tree.canEditCurrentTree) return
+          setContribSubmitError('')
+          setContribChanges(buildContribChangesList(editMode.restoreDraft()))
+          setShowContribModal(true)
+        }}
         onCreate={handleAddPersonSubmit}
         createError={addPersonError}
         onClose={() => setSearchPanelVisible(false)}

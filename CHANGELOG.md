@@ -18,6 +18,7 @@ Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
 ### Adding relatives from a profile
 
+- "Someone elsewhere": relatives can add a person found in public records too. It goes into their changes and the tree manager reviews it, like any other proposal. Places, the "needs checking" mark and the source link now travel with a proposed new person.
 - In a profile's Links tab, searching for a parent, child or partner who is not in the tree yet now offers "Create …", which opens the add panel already filled in.
 - Profiles have a Siblings section, with "Add a sibling".
 - The Info tab has quick buttons to add a parent, partner, child or sibling without going into edit mode first.
@@ -26,6 +27,7 @@ Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
 ### Fixes
 
+- The "needs checking" mark sits on the corner of the portrait, half outside, so it no longer covers the face.
 - "Update the tree" no longer clears your changes when part of them fails to save: what failed stays in your edits, with a message.
 - A suggestion already reviewed elsewhere (another tab, a co-manager) now says so, instead of a message about emails, and the tree updates.
 - After the family sends their changes, the tree reloads: a photo just sent no longer looks accepted.
