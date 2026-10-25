@@ -20,3 +20,28 @@ export function changesFromResult(person, result, sourceLabel) {
   changes.note = note.includes(result.url) ? note : [note, sourceLine].filter(Boolean).join('\n')
   return changes
 }
+
+const SEX = { M: 'male', F: 'female' }
+
+// « 1898 » ou « 1898-03 » : la base garde une date complète, l'année seule s'écrit au 1er janvier (comme la fiche)
+function toStoredDate(value) {
+  if (!value) return null
+  return value.length === 10 ? value : `${value.slice(0, 4)}-01-01`
+}
+
+// Nouvelle personne créée depuis un résultat, rattachée à quelqu'un de l'arbre (même forme que « Ajouter quelqu'un »)
+export function personFromResult(result, sourceLabel, relation) {
+  return {
+    firstName: result.firstName || '',
+    lastName: result.lastName || '',
+    sex: SEX[result.sex] || null,
+    birthDate: toStoredDate(result.birth?.date),
+    deathDate: toStoredDate(result.death?.date),
+    birthPlace: result.birth?.place || null,
+    deathPlace: result.death?.place || null,
+    isDeceased: false,
+    toVerify: true,
+    notes: `${sourceLabel} : ${result.url}`,
+    relations: relation ? [{ personId: relation.personId, type: relation.type }] : [],
+  }
+}

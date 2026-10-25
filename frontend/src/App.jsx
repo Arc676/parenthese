@@ -1213,6 +1213,11 @@ function App() {
           birthDate: formData.birthDate,
           deathDate: formData.deathDate,
           isDeceased: Boolean(formData.isDeceased),
+          // Personne venue d'une source publique (panneau « Chercher quelqu'un ») : lieux, « à vérifier » et source
+          ...(formData.birthPlace ? { birthPlace: formData.birthPlace } : {}),
+          ...(formData.deathPlace ? { deathPlace: formData.deathPlace } : {}),
+          ...(formData.toVerify ? { toVerify: true } : {}),
+          ...(formData.notes ? { notes: formData.notes } : {}),
         },
         auth.userAuth.token
       )
@@ -1264,11 +1269,13 @@ function App() {
       })
 
       await tree.refreshCurrentTreeGraph()
+      return newPerson
     } catch (err) {
       setAddPersonError(err.message || t("Erreur lors de l'ajout de la personne"))
     } finally {
       setAddPersonLoading(false)
     }
+    return null
   }, [auth.userAuth.token, tree.canEditCurrentTree, tree.treeContext.treeId, isDemoMode, makeLocalId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Modal session contribution (contributeurs)
@@ -3342,6 +3349,8 @@ function App() {
         persons={persons}
         canApply={tree.canEditCurrentTree}
         onApply={handlePersonSave}
+        onCreate={handleAddPersonSubmit}
+        createError={addPersonError}
         onClose={() => setSearchPanelVisible(false)}
       />
       <AccountPanel

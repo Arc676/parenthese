@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { changesFromResult } from './searchResultChanges.js'
+import { changesFromResult, personFromResult } from './searchResultChanges.js'
 
 const RESULT = {
   id: 'abc123',
@@ -22,6 +22,23 @@ describe('changesFromResult', () => {
   it("ne touche jamais une valeur déjà saisie, et ne rend rien s'il n'y a rien de nouveau", () => {
     const complete = { birthDate: '1898-01-01', birthPlace: 'Tulle', deathDate: '1987-01-01', deathPlace: 'Limoges' }
     expect(changesFromResult(complete, RESULT, 'Décès')).toBeNull()
+  })
+
+  it('crée une nouvelle personne rattachée, à vérifier, avec sa source', () => {
+    const result = { ...RESULT, firstName: 'Jean Louis', lastName: 'Dupont', sex: 'M', birth: { date: '1898', place: 'Tulle (19)' } }
+    expect(personFromResult(result, 'Décès', { personId: 'p1', type: 'parent' })).toEqual({
+      firstName: 'Jean Louis',
+      lastName: 'Dupont',
+      sex: 'male',
+      birthDate: '1898-01-01',
+      deathDate: '1987-11-08',
+      birthPlace: 'Tulle (19)',
+      deathPlace: 'Limoges (87)',
+      isDeceased: false,
+      toVerify: true,
+      notes: 'Décès : https://deces.matchid.io/id/abc123',
+      relations: [{ personId: 'p1', type: 'parent' }],
+    })
   })
 
   it("n'ajoute pas deux fois la même source à la note", () => {
