@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { traceSibship } from './renderers'
+import { drawPortrait, traceSibship } from './renderers'
 
 // Contexte canvas minimal qui enregistre les appels de tracé
 const recorder = () => {
@@ -47,5 +47,27 @@ describe('traceSibship (accolade franche)', () => {
     expect(curve[1]).toBe(500)
     expect(curve[3]).toBe(515)
     expect(curve.slice(5)).toEqual([515, 480])
+  })
+})
+
+describe('drawPortrait, marque « À vérifier »', () => {
+  const person = { firstName: 'Marie', lastName: 'Martin', isAlive: true }
+  for (const frame of ['round', 'square', 'polaroid', 'rect']) {
+    it(`cadre ${frame} : la marque est dessinée hors de la découpe du cadre`, () => {
+      const { ctx, calls } = recorder()
+      drawPortrait(ctx, frame, person, null, true)
+      const clip = calls.findIndex(c => c[0] === 'clip')
+      const restore = calls.findIndex((c, i) => i > clip && c[0] === 'restore')
+      const markText = calls.findIndex(c => c[0] === 'fillText' && c[1] === '?')
+      expect(clip).toBeGreaterThan(-1)
+      expect(restore).toBeGreaterThan(clip)
+      expect(markText).toBeGreaterThan(restore)
+    })
+  }
+
+  it('sans « À vérifier », pas de marque', () => {
+    const { ctx, calls } = recorder()
+    drawPortrait(ctx, 'round', person, null, false)
+    expect(calls.some(c => c[0] === 'fillText' && c[1] === '?')).toBe(false)
   })
 })

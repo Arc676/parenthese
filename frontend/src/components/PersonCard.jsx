@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, forwardRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Save, Trash2, Plus, X, Search, Check, Play, ImagePlus, Camera, Crop, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Save, Trash2, Plus, X, Search, Check, Play, ImagePlus, Camera, Crop, Sparkles, ChevronLeft, ChevronRight, Pencil } from 'lucide-react'
 import { getParents, getChildren, getPersonUnions, getPersonMedias, getPersonTaggedMedias, getDemoLife, getPersonById, filiations, persons, unions } from '../data/mockData'
 import { fetchPersonLife } from '../api/treeApi.js'
 import LifeTimeline from './LifeTimeline.jsx'
@@ -74,6 +74,8 @@ const PersonCard = ({
   onUploadMomentFile,
   onMomentSaved,
   saveOnLeaveRef = null,
+  // Administrateur, hors démo : la fiche passe en modification d'un clic, sans chercher le crayon de l'arbre
+  onQuickEdit,
 }) => {
   // Souvenirs d'abord quand il y en a, ou quand on peut en ajouter : c'est là qu'est le bouton
   const [tab, setTab] = useState(() => (getPersonMedias(person.id).length > 0 || getPersonTaggedMedias(person.id).length > 0 || canManageMedia ? 'medias' : 'infos'))
@@ -754,6 +756,12 @@ const PersonCard = ({
             )}
             {!editMode && person.toVerify && <span className="pz-tag pz-tag--accent pz-tag--dot">{t('À vérifier')}</span>}
             {!editMode && person.profession && <span className="pz-tag">{person.profession}</span>}
+            {!editMode && onQuickEdit && (
+              <button type="button" className="pc-quick-edit" onClick={() => { setTab('infos'); onQuickEdit() }}>
+                <Pencil size={13} strokeWidth={2} aria-hidden="true" />
+                {t('Modifier')}
+              </button>
+            )}
           </div>
         </div>
         {editMode && ((unknownFirstName || !String(getEditValue('firstName', person.firstName) ?? '').trim())) && (

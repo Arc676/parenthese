@@ -602,9 +602,7 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
     ctx.shadowOffsetY = shadowY
   }
 
-  drawFrame(ctx, frameType, person, img)
-  // « À vérifier » : petit rond terracotta avec un « ? » en haut à droite du cadre, absent au dézoom
-  if (person.toVerify && withDetail) drawToVerifyMark(ctx)
+  drawPortrait(ctx, frameType, person, img, person.toVerify && withDetail)
   ctx.restore()
 
   // --- Labels (estompés puis absents en dézoom) ---
@@ -929,6 +927,16 @@ function drawMediaContent(ctx, media, ms, imageCache) {
 function resolveFrameType(person, img) {
   const ratio = img?.naturalWidth && img?.naturalHeight ? img.naturalWidth / img.naturalHeight : 1
   return resolveFrameKind(person.frameType || 'round', ratio, cropShape(person.avatarCrop))
+}
+
+// Cadre et portrait, puis la marque « À vérifier » (petit rond terracotta avec un « ? » en haut à droite du cadre,
+// absente au dézoom). Le cadre découpe le canvas à sa forme : save/restore autour, sinon la marque est rognée
+// (sur un cadre rond, elle tombe presque entière hors du cercle)
+export function drawPortrait(ctx, frameType, person, img, withMark) {
+  ctx.save()
+  drawFrame(ctx, frameType, person, img)
+  ctx.restore()
+  if (withMark) drawToVerifyMark(ctx)
 }
 
 function drawToVerifyMark(ctx) {
