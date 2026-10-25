@@ -1054,12 +1054,13 @@ const PersonCard = ({
 
             {/* Ajouter un proche sans passer par « Modifier » puis l'onglet Relations (1.5.1) */}
             {!editMode && onCreateRelative && (
-              <div className="pc-quick-add" role="group" aria-label={t('Ajouter un proche')}>
-                <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => onCreateRelative('parent', '')}><Plus size={14} strokeWidth={2} />{t('Parent')}</button>
-                <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => onCreateRelative('spouse', '')}><Plus size={14} strokeWidth={2} />{t('Conjoint·e')}</button>
-                <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => onCreateRelative('child', '')}><Plus size={14} strokeWidth={2} />{t('Enfant')}</button>
+              // Les mêmes pastilles que « + Surnom », « + Métier » en modification (Patch, 26/10)
+              <div className="pc-fill-chips pc-quick-add" role="group" aria-label={t('Ajouter un proche')}>
+                <button type="button" className="pc-fill-chip" onClick={() => onCreateRelative('parent', '')}>+ {t('Parent')}</button>
+                <button type="button" className="pc-fill-chip" onClick={() => onCreateRelative('spouse', '')}>+ {t('Conjoint·e')}</button>
+                <button type="button" className="pc-fill-chip" onClick={() => onCreateRelative('child', '')}>+ {t('Enfant')}</button>
                 {parentsList.length > 0 && (
-                  <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => onCreateRelative('sibling', '')}><Plus size={14} strokeWidth={2} />{t('Frère ou sœur')}</button>
+                  <button type="button" className="pc-fill-chip" onClick={() => onCreateRelative('sibling', '')}>+ {t('Frère ou sœur')}</button>
                 )}
               </div>
             )}
