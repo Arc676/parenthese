@@ -2,6 +2,11 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
+## Unreleased
+
+- "Someone elsewhere": relatives can add a person found in public records too. It goes into their changes and the tree manager reviews it, like any other proposal. Places, the "needs checking" mark and the source link now travel with a proposed new person.
+- The "needs checking" mark sits on the corner of the portrait, half outside, so it no longer covers the face.
+
 ## 1.5.0 (2026-10-25)
 
 ### Several managers for one tree

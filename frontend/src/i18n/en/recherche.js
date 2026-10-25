@@ -44,6 +44,7 @@ export default {
   'né(e) vers {year}': 'born around {year}',
   'Modifier': 'Edit',
   'Nouvelle personne': 'New person',
+  'Proposé, le propriétaire de l’arbre validera': 'Proposed, the tree owner will review it',
   "Déjà dans l'arbre": 'Already in the tree',
   "{name} est dans l'arbre, à vérifier": '{name} is in the tree, needs checking',
   'Créer {name}': 'Create {name}',

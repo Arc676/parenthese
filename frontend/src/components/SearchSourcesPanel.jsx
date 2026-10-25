@@ -106,7 +106,8 @@ const RELATION_LABELS = {
 
 const plain = (value) => String(value || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim()
 
-function SearchSourcesPanel({ visible, treeId, token, persons = [], canApply = false, onApply, onCreate, createError = '', onClose }) {
+// proposes : la famille ajoute en proposition, le propriétaire de l'arbre valide ensuite
+function SearchSourcesPanel({ visible, treeId, token, persons = [], canApply = false, proposes = false, onApply, onCreate, createError = '', onClose }) {
   const [lastName, setLastName] = useState('')
   const [firstName, setFirstName] = useState('')
   const [birthYear, setBirthYear] = useState('')
@@ -353,7 +354,9 @@ function SearchSourcesPanel({ visible, treeId, token, persons = [], canApply = f
                   </div>
                   {applied[key] && (
                     <p className="sp-result-applied">
-                      {applied[key].created ? t("{name} est dans l'arbre, à vérifier", { name: applied[key].name }) : t('Ajouté à {name}, à vérifier', { name: applied[key].name })}
+                      {proposes
+                        ? t('Proposé, le propriétaire de l’arbre validera')
+                        : applied[key].created ? t("{name} est dans l'arbre, à vérifier", { name: applied[key].name }) : t('Ajouté à {name}, à vérifier', { name: applied[key].name })}
                     </p>
                   )}
                   {isPicking && (
