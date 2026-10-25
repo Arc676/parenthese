@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { inviteManager, invitationUrl, listManagers, removeManager, renewInvitationLink, revokeInvitation } from '../api/managersApi.js'
 import PzBusy from './PzBusy.jsx'
 import { dateLocale, t } from '../i18n/index.js'
+import { initialOf } from '../utils/initial.js'
 
 // Onglet Gestion des paramètres de l'arbre (issue #145). Le propriétaire invite des co-gestionnaires par leur
 // adresse : Parenthèse n'envoie pas de mail, il donne un lien à transmettre. Les co-gestionnaires voient la liste.
@@ -12,8 +13,8 @@ const ERRORS = {
   too_many_invitations: t('Trop d’invitations en attente. Annulez-en une avant d’en envoyer une autre.'),
 }
 
-function initialOf(person) {
-  return (person.firstName || person.email || '?').trim().charAt(0).toUpperCase()
+function personInitial(person) {
+  return initialOf(person.firstName || person.email)
 }
 
 const TreeManagersSection = ({ treeId, authToken, currentUserId = null, oidcName = '', onOpenShare }) => {
@@ -114,7 +115,7 @@ const TreeManagersSection = ({ treeId, authToken, currentUserId = null, oidcName
         return (
           <div key={manager.userId} className="ts-row tm-row">
             <div className="tm-who">
-              <span className="tm-avatar" aria-hidden="true">{initialOf(manager)}</span>
+              <span className="tm-avatar" aria-hidden="true">{personInitial(manager)}</span>
               <div className="ts-row-text">
                 <strong>{isYou ? t('Vous') : (manager.firstName || manager.email)}</strong>
                 <span className="tm-mail">{manager.email}</span>
@@ -140,7 +141,7 @@ const TreeManagersSection = ({ treeId, authToken, currentUserId = null, oidcName
       {invitations.map((invitation) => (
         <div key={invitation.id} className="ts-row tm-row">
           <div className="tm-who">
-            <span className="tm-avatar tm-avatar--pending" aria-hidden="true">{initialOf(invitation)}</span>
+            <span className="tm-avatar tm-avatar--pending" aria-hidden="true">{personInitial(invitation)}</span>
             <div className="ts-row-text">
               <strong>{invitation.email}</strong>
               <span className="tm-mail">{t('Invité le {date}, en attente', { date: new Date(invitation.createdAt).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' }) })}</span>

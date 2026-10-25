@@ -3,6 +3,7 @@ import { t } from '../../i18n/index.js'
 import LanguageSwitch from './LanguageSwitch'
 import { NavMenu, NavMenuGroup, NavMenuItem, NavMenuSep } from './NavMenu'
 import './AvatarMenu.css'
+import { initialOf } from '../../utils/initial.js'
 
 const ICON = { size: 18, strokeWidth: 2, 'aria-hidden': true }
 
@@ -78,7 +79,7 @@ function AvatarMenu({
   ) : (
     <>
       <button type="button" role="menuitem" className="navm-item navm-head" onClick={() => { onClose(); onAccountClick?.() }}>
-        <span className="navm-head-mono" aria-hidden="true">{displayName.trim().charAt(0).toUpperCase()}</span>
+        <span className="navm-head-mono" aria-hidden="true">{initialOf(displayName)}</span>
         <span className="navm-text">
           <strong>{displayName}</strong>
           <small>{userEmail || t('Mon compte')}</small>
@@ -103,7 +104,7 @@ function AvatarMenu({
           return (
             <NavMenuItem
               key={tree.id}
-              icon={<span className="navm-tree-mono" aria-hidden="true">{(tree.name || '?').trim().charAt(0).toUpperCase()}</span>}
+              icon={<span className="navm-tree-mono" aria-hidden="true">{initialOf(tree.name)}</span>}
               label={tree.name}
               onSelect={isActive ? undefined : () => { onClose(); onSelectTree?.(tree.id) }}
               disabled={isActive}

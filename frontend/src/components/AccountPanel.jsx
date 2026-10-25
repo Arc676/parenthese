@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import './AccountScreens.css'
 import { t } from '../i18n/index.js'
+import { initialOf } from '../utils/initial.js'
 
 const AccountPanel = ({
   visible,
@@ -50,7 +51,7 @@ const AccountPanel = ({
 
         <div className="ap-linked">
           <span className="ap-avatar" aria-hidden="true">
-            {linkedPerson?.photo ? <img src={linkedPerson.photo} alt="" /> : (linkedPerson?.firstName || userDisplayName || 'C').charAt(0).toUpperCase()}
+            {linkedPerson?.photo ? <img src={linkedPerson.photo} alt="" /> : initialOf(linkedPerson?.firstName || userDisplayName, 'C')}
           </span>
           <p className="pz-small">
             {linkedPerson
@@ -86,7 +87,7 @@ const AccountPanel = ({
                     onClick={() => onSelectPerson?.(person.id)}
                   >
                     <span className="ap-item-avatar" aria-hidden="true">
-                      {person.photo ? <img src={person.photo} alt="" /> : (person.firstName || '?').charAt(0)}
+                      {person.photo ? <img src={person.photo} alt="" /> : initialOf(person.firstName)}
                     </span>
                     <span className="ap-item-name">{person.firstName} <em>{person.lastName || ''}</em></span>
                     {isSelected && <span className="pz-tag pz-tag--accent">{t("C'est moi")}</span>}

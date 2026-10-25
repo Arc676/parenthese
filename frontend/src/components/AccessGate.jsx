@@ -5,6 +5,7 @@ import PzBusy from './PzBusy.jsx'
 import LanguageSwitch from './navbar/LanguageSwitch'
 import { t } from '../i18n/index.js'
 import { readContributorName, saveContributorName } from '../utils/contributorName.js'
+import { initialOf } from '../utils/initial.js'
 
 // Phrase traduite d'un bloc : les passages entre astérisques passent en <em>, {slot} reçoit un nœud.
 function richText(text, slotNode = null) {
@@ -78,7 +79,7 @@ const AccessGate = ({
           {!treeNotFound && (ownerLabel || treeDescription) && (
             <div className="pz-gate-owner">
               {ownerLabel && (
-                <span className="pz-gate-mono" aria-hidden="true">{ownerLabel.trim().charAt(0).toUpperCase()}</span>
+                <span className="pz-gate-mono" aria-hidden="true">{initialOf(ownerLabel)}</span>
               )}
               <div className="pz-gate-owner-text">
                 {ownerLabel && <p className="access-gate-tree-meta pz-small">{richText(t('Partagé par {slot}'), <strong>{ownerLabel}</strong>)}</p>}

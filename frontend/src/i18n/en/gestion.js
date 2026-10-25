@@ -66,6 +66,9 @@ export default {
   '{names} le gèrent avec vous. Ils n’y auront plus accès, la famille non plus.': '{names} manage it with you. They will lose access, and so will the family.',
   '{name} le gère avec vous. Cette personne n’y aura plus accès, la famille non plus.': '{name} manages it with you. They will lose access, and so will the family.',
 
+  // Fiche : droits retirés pendant une modification (PersonCard)
+  "Vous ne pouvez plus modifier cet arbre. Rechargez la page pour voir vos droits actuels.": 'You can no longer edit this tree. Reload the page to see your current rights.',
+
   // Erreurs (errorMessages.js)
   "Cette invitation est pour une autre adresse. Utilisez l'adresse à laquelle vous avez été invité.": 'This invitation is for another address. Use the address you were invited at.',
   "Ce lien d'invitation ne marche plus. Demandez-en un nouveau à la personne qui vous a invité.": 'This invitation link no longer works. Ask the person who invited you for a new one.',

@@ -6,6 +6,7 @@ import PzBusy from './PzBusy.jsx'
 import LanguageSwitch from './navbar/LanguageSwitch'
 import { t } from '../i18n/index.js'
 import { PRIVACY_URL } from '../utils/siteLinks.js'
+import { initialOf } from '../utils/initial.js'
 
 // Phrase traduite d'un bloc : les passages entre astérisques passent en <em>, {slot} reçoit un nœud.
 function richText(text, slotNode = null) {
@@ -278,7 +279,7 @@ const AccountDashboard = ({
                     className={`tree-item pz-tree-item ${isActive ? 'active' : ''}`}
                     onClick={() => onOpenTree(tree.id)}
                   >
-                    <span className="pz-tree-mono" aria-hidden="true">{(tree.name || '?').trim().charAt(0).toUpperCase()}</span>
+                    <span className="pz-tree-mono" aria-hidden="true">{initialOf(tree.name)}</span>
                     <span className="tree-name pz-tree-name">{tree.name}</span>
                     {isActive && <span className="pz-tag pz-tag--accent">{t('Ouvert')}</span>}
                     <ChevronRight size={18} aria-hidden="true" className="pz-tree-chevron" />
