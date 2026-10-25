@@ -1570,6 +1570,9 @@ function App() {
 
       editMode.clearDraft()
       editMode.deactivate()
+      // Les ajouts du brouillon (dessins, photos) restaient affichés comme acceptés : l'arbre est relu, et ce qui
+      // vient d'être envoyé revient en fantôme « En attente »
+      await tree.refreshCurrentTreeGraph({ relayout: false }).catch(() => {})
       setShowContribModal(false)
       setContribSubmitError('')
       setContribSuccess(true)
@@ -3325,7 +3328,7 @@ function App() {
       )}
       {contribSuccess && (
         <div className="contrib-success-toast" role="status">
-          {t("Merci, c'est envoyé ! Ça apparaîtra dans l'arbre une fois relu.")}
+          {t("Merci, c'est envoyé ! C'est en pointillés sur l'arbre jusqu'à la relecture.")}
         </div>
       )}
       {/* Navbar contextuelle */}

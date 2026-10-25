@@ -20,7 +20,7 @@ export default {
   'Contribution de {name} · {date}': 'Contribution from {name} · {date}',
   'Contribution de la famille · {date}': 'Contribution from the family · {date}',
   "Erreur lors de l'envoi des contributions": 'Could not send your contributions',
-  "Merci, c'est envoyé ! Ça apparaîtra dans l'arbre une fois relu.": "Thanks, it's sent! It will show up in the tree once it's reviewed.",
+  "Merci, c'est envoyé ! C'est en pointillés sur l'arbre jusqu'à la relecture.": "Thanks, it's sent! It shows dotted on the tree until it's reviewed.",
 
   // App.jsx : mot de passe de partage
   'Session invalide.': 'Invalid session.',
