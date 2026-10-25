@@ -56,6 +56,13 @@
   .ts-row-actions { justify-content: flex-start; }
 }
 
+/* Icône de l'arbre : la lettre ou un emoji */
+.ts-icons { display: flex; flex-wrap: wrap; gap: 6px; }
+.ts-icon { width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--pz-line); background: var(--pz-surface); font-size: 19px; line-height: 1; cursor: pointer; }
+.ts-icon--letter { width: auto; padding: 0 12px; border-radius: 999px; font: 500 13px var(--pz-sans); color: var(--pz-ink-2); }
+.ts-icon[aria-checked="true"] { border-color: var(--pz-a500); background: var(--pz-a50); box-shadow: 0 0 0 3px var(--pz-a100); }
+.ts-icon:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 2px; }
+
 /* Cinq onglets : ils rétrécissent (texte sur deux lignes) au lieu de déborder du panneau sur un petit téléphone */
 .ts-tabs .pz-tab { min-width: 0; }
 @media (max-width: 420px) { .ts-tabs .pz-tab { padding: 0 4px; font-size: 12.5px; line-height: 1.2; } }

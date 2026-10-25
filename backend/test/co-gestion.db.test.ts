@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Co-gestion d'un arbre (#145), sur une vraie base : une fonction de droits se vérifie avec de vraies requêtes,
-// pas avec des mocks. Lancé seulement avec TEST_DATABASE_URL (base jetable, migrée) :
+// pas avec des mocks. Lancé seulement avec TEST_DATABASE_URL (base jetable, migrée, en UTF-8 pour les emoji) :
 //   TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/genealogy_test npx vitest run test/co-gestion.db.test.ts
 const TEST_DB = process.env.TEST_DATABASE_URL
 
@@ -204,6 +204,14 @@ describe.skipIf(!TEST_DB)('co-gestion, vraie base', () => {
     expect((await call('POST', `/invitations/${token}/accept`, co.token)).status).toBe(200)
     expect((await call('DELETE', `/trees/${treeId}/managers/${co.id}`, owner.token)).status).toBe(200)
     expect((await call('GET', `/trees/${treeId}/graph`, co.token)).status).toBe(403)
+  })
+
+  it("l'icône de l'arbre : un emoji ou rien, posée par un gestionnaire, rendue dans la liste des arbres", async () => {
+    expect((await call('PATCH', `/trees/${treeId}`, owner.token, { icon: 'abc' })).status).toBe(400)
+    expect((await call('PATCH', `/trees/${treeId}`, owner.token, { icon: '🌳' })).status).toBe(200)
+    const list = await call('GET', '/trees', owner.token)
+    expect(list.body.trees.find((t: { id: string }) => t.id === treeId).icon).toBe('🌳')
+    expect((await call('PATCH', `/trees/${treeId}`, owner.token, { icon: null })).status).toBe(200)
   })
 
   describe('OIDC', () => {

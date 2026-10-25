@@ -126,6 +126,8 @@ model Tree {
   slug                 String                @unique
   name                 String
   description          String?
+  // Icône choisie pour l'arbre (un emoji), à la place de la première lettre dans les menus ; null = la lettre
+  icon                 String?
   rootPersonId         String?
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt

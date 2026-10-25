@@ -69,6 +69,11 @@ export default {
   // Fiche : droits retirés pendant une modification (PersonCard)
   "Vous ne pouvez plus modifier cet arbre. Rechargez la page pour voir vos droits actuels.": 'You can no longer edit this tree. Reload the page to see your current rights.',
 
+  // Icône de l'arbre (AdminPanel) et bouton du bas (ContextualNavbar)
+  "Icône de l'arbre": 'Tree icon',
+  'Première lettre': 'First letter',
+  "Elle remplace la première lettre dans vos menus et sur la page d'invitation.": 'It replaces the first letter in your menus and on the invitation page.',
+
   // Erreurs (errorMessages.js)
   "Cette invitation est pour une autre adresse. Utilisez l'adresse à laquelle vous avez été invité.": 'This invitation is for another address. Use the address you were invited at.',
   "Ce lien d'invitation ne marche plus. Demandez-en un nouveau à la personne qui vous a invité.": 'This invitation link no longer works. Ask the person who invited you for a new one.',

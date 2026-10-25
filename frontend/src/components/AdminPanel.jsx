@@ -34,6 +34,9 @@ function normalizeSlug(value) {
     .replace(/^-+|-+$/g, '')
 }
 
+// Icônes proposées pour un arbre (Patch, 25/10)
+const TREE_ICONS = ['🌳', '🌿', '🌻', '🏡', '❤️', '🧡', '⭐', '📖', '🕊️', '🌊', '⛰️', '🍂', '🌸', '🐚', '☀️']
+
 const AdminPanel = ({
   familyTabs = true,
   onFamilyTabsChange = null,
@@ -49,6 +52,7 @@ const AdminPanel = ({
   onTreeDeleted,
   onLeftTree,
   onOpenShare,
+  onTreeUpdated,
   onGedcomImported,
   onOpenPhotoStart,
 }) => {
@@ -61,6 +65,7 @@ const AdminPanel = ({
   const [tree, setTree] = useState(null)
   const [treeName, setTreeName] = useState('')
   const [treeDescription, setTreeDescription] = useState('')
+  const [treeIcon, setTreeIcon] = useState(null)
   // Contributions de la famille : 'pending' = validées par l'admin, 'direct' = appliquées immédiatement
   const [contributionPolicy, setContributionPolicy] = useState('pending')
   const [savingPolicy, setSavingPolicy] = useState(false)
@@ -132,6 +137,7 @@ const AdminPanel = ({
         setTree(loadedTree)
         setTreeName(loadedTree?.name || '')
         setTreeDescription(loadedTree?.description || '')
+        setTreeIcon(loadedTree?.icon || null)
       })
       .catch(() => {
         if (!active) return
@@ -186,6 +192,7 @@ const AdminPanel = ({
       const payload = {
         name: nextName,
         description: treeDescription.trim() || null,
+        icon: treeIcon,
       }
 
       const normalized = normalizeSlug(nextName)
@@ -203,7 +210,9 @@ const AdminPanel = ({
       setTree(updated)
       setTreeName(updated?.name || nextName)
       setTreeDescription(updated?.description || '')
+      setTreeIcon(updated?.icon || null)
       setSuccessMessage(t('Modifications enregistrées.'))
+      onTreeUpdated?.(updated)
     } catch {
       setErrorMessage(t("Impossible d'enregistrer les modifications."))
     } finally {
@@ -454,6 +463,22 @@ const AdminPanel = ({
                       onChange={(event) => setTreeName(event.target.value)}
                       required
                     />
+                  </div>
+
+                  {/* Icône de l'arbre : un emoji à la place de la première lettre dans les menus et sur la page d'invitation */}
+                  <div className="pz-field">
+                    <span className="pz-label" id="settingsTreeIconLabel">{t("Icône de l'arbre")}</span>
+                    <div className="ts-icons" role="radiogroup" aria-labelledby="settingsTreeIconLabel">
+                      <button type="button" role="radio" aria-checked={!treeIcon} className="ts-icon ts-icon--letter" onClick={() => setTreeIcon(null)}>
+                        {t('Première lettre')}
+                      </button>
+                      {TREE_ICONS.map((icon) => (
+                        <button key={icon} type="button" role="radio" aria-checked={treeIcon === icon} className="ts-icon" onClick={() => setTreeIcon(icon)}>
+                          {icon}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="pz-hint">{t("Elle remplace la première lettre dans vos menus et sur la page d'invitation.")}</p>
                   </div>
 
                   <div className="pz-field">

@@ -47,3 +47,6 @@
 .navm-current:hover { background: transparent !important; }
 /* Arbre en cours : désactivé pour le clavier et le clic, mais texte à sa couleur normale (pas la mise en retrait de .navm-item:disabled) */
 .navm-item.navm-current:disabled { opacity: 1; cursor: default; color: var(--pz-ink); }
+
+/* Arbre avec une icône choisie : l'emoji seul, sans la pastille de couleur de la lettre */
+.navm-tree-mono--emoji { background: transparent; font-size: 17px; line-height: 1; }

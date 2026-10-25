@@ -37,7 +37,7 @@ export async function findPendingInvitationByToken(db: Db, token: string) {
   if (!token || token.length > 200) return null
   return db.treeInvitation.findFirst({
     where: { tokenHash: hashInvitationToken(token), ...pendingInvitationWhere() },
-    include: { tree: { select: { id: true, name: true, ownerUserId: true, owner: { select: { firstName: true } } } } },
+    include: { tree: { select: { id: true, name: true, icon: true, ownerUserId: true, owner: { select: { firstName: true } } } } },
   })
 }
 

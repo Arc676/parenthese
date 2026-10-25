@@ -104,7 +104,7 @@ function AvatarMenu({
           return (
             <NavMenuItem
               key={tree.id}
-              icon={<span className="navm-tree-mono" aria-hidden="true">{initialOf(tree.name)}</span>}
+              icon={<span className={`navm-tree-mono${tree.icon ? ' navm-tree-mono--emoji' : ''}`} aria-hidden="true">{tree.icon || initialOf(tree.name)}</span>}
               label={tree.name}
               onSelect={isActive ? undefined : () => { onClose(); onSelectTree?.(tree.id) }}
               disabled={isActive}

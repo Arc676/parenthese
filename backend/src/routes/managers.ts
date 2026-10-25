@@ -210,6 +210,7 @@ export const managerRoutes: FastifyPluginAsync = async (app) => {
     }
     return reply.send({
       treeName: invitation.tree.name,
+      treeIcon: invitation.tree.icon,
       invitedBy: invitation.tree.owner.firstName || null,
       emailHint: maskEmail(invitation.email),
       expiresAt: invitation.expiresAt,

@@ -15,6 +15,12 @@ Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 - Deleting your account now names the co-managers of the trees you own, which are deleted for them too.
 - In the tree menu, "Admin" is now "Co-manager".
 
+### Trees
+
+- A tree can have an icon, picked from fifteen emoji in Settings > Your tree. It replaces the first letter in the tree menu, on the account page and on the invitation page.
+- For whoever manages the tree, the button at the bottom right now reads Edit, with a pencil. The family keeps Add.
+- A tree name starting with an emoji no longer shows a broken letter in the menus.
+
 ### Fixes
 
 - An admin can switch a person's profile to edit mode from a new Edit button on the profile.
