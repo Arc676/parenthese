@@ -82,6 +82,16 @@ export function validateAnnotationChange(change: AnnotationChange, treeId: strin
   throw new AnnotationChangeError('unsupported_change_action_for_annotation')
 }
 
+// L'« après » d'une proposition d'annotation tel qu'il est gardé : contenu nettoyé comme à l'écriture directe
+// (photoPath canonique, sans adresse), pour qu'on le relise toujours de la même façon
+export function normalizedAnnotationAfter(change: AnnotationChange, treeId: string): unknown {
+  const after = change.after
+  if (!after || typeof after !== 'object' || Array.isArray(after)) return after
+  const content = (after as { content?: unknown }).content
+  if (typeof content !== 'string') return after
+  return { ...(after as Record<string, unknown>), content: cleanContent(content, treeId) }
+}
+
 // Identifiant de la photo d'une annotation (contenu JSON { photoPath }), ou null
 export function annotationPhotoId(after: unknown, treeId: string): string | null {
   if (!after || typeof after !== 'object' || Array.isArray(after)) return null
@@ -147,29 +157,41 @@ export async function applyAnnotationChange(tx: Tx, treeId: string, change: Anno
   return { entityId: change.entityId ?? null }
 }
 
-// Une proposition encore en attente cite-t-elle cette photo ? (en dehors d'une session donnée)
-async function isPhotoInPendingProposal(db: Db, treeId: string, photoId: string, excludeSessionId?: string): Promise<boolean> {
-  const needle = `%/trees/${treeId}/annotation-photos/${photoId}%`
-  const rows = await db.$queryRaw<Array<{ id: string }>>`
-    SELECT c.id FROM contribution_changes c
-    JOIN contribution_sessions s ON s.id = c."sessionId"
-    WHERE s."treeId" = ${treeId} AND s.status = 'pending' AND c."entityType" = 'annotation'
-      AND c."afterJson"::text LIKE ${needle}
-      AND (${excludeSessionId ?? null}::text IS NULL OR s.id <> ${excludeSessionId ?? null}::text)
-    LIMIT 1`
-  return rows.length > 0
+// Photos citées par les propositions d'annotation encore en attente sur cet arbre (hors une session donnée).
+// Lu dans le JSON décodé, pas dans son texte : un chemin échappé (\/trees\/…) reste reconnu. Un arbre a au plus
+// quelques centaines de propositions en attente.
+async function photosInPendingProposals(db: Db, treeId: string, excludeSessionId?: string): Promise<Set<string>> {
+  const changes = await db.contributionChange.findMany({
+    where: {
+      entityType: 'annotation',
+      session: { treeId, status: 'pending', ...(excludeSessionId ? { id: { not: excludeSessionId } } : {}) },
+    },
+    select: { afterJson: true },
+  })
+  const cited = new Set<string>()
+  for (const change of changes) {
+    const photoId = annotationPhotoId(change.afterJson, treeId)
+    if (photoId) cited.add(photoId)
+  }
+  return cited
 }
 
-// Photo d'une famille refusée : son fichier est à effacer s'il n'est cité par aucune autre proposition en
-// attente. Renvoie les chemins à effacer une fois la transaction validée.
-export async function releaseRejectedPhoto(tx: Tx, treeId: string, after: unknown, sessionId: string): Promise<string[]> {
-  const photoId = annotationPhotoId(after, treeId)
-  if (!photoId) return []
-  const upload = await tx.annotationPhotoUpload.findFirst({ where: { id: photoId, treeId }, select: { filePath: true } })
-  if (!upload) return []
-  if (await isPhotoInPendingProposal(tx, treeId, photoId, sessionId)) return []
-  await tx.annotationPhotoUpload.delete({ where: { id: photoId } })
-  return [upload.filePath]
+// Photos d'une famille refusées pendant une relecture : effacées si leur ligne d'attente existe encore (une
+// acceptation la retire) et si aucune autre proposition en attente ne les cite. Appelé une fois, après toutes les
+// décisions. Renvoie les chemins à effacer une fois la transaction validée.
+export async function releaseRejectedPhotos(tx: Tx, treeId: string, rejectedAfters: unknown[], sessionId: string): Promise<string[]> {
+  const candidates = new Set(rejectedAfters.map((after) => annotationPhotoId(after, treeId)).filter((id): id is string => Boolean(id)))
+  if (candidates.size === 0) return []
+  const cited = await photosInPendingProposals(tx, treeId, sessionId)
+  const removed: string[] = []
+  for (const photoId of candidates) {
+    if (cited.has(photoId)) continue
+    const upload = await tx.annotationPhotoUpload.findFirst({ where: { id: photoId, treeId }, select: { filePath: true } })
+    if (!upload) continue
+    await tx.annotationPhotoUpload.delete({ where: { id: photoId } })
+    removed.push(upload.filePath)
+  }
+  return removed
 }
 
 // Envois de photos jamais proposés depuis 7 jours : effacés. Appelé à chaque nouvel envoi de la famille, sur
@@ -179,13 +201,31 @@ export async function sweepStalePendingPhotos(db: Db, treeId: string, now = new 
     where: { treeId, createdAt: { lt: new Date(now.getTime() - PENDING_PHOTO_TTL_MS) } },
     select: { id: true, filePath: true },
   })
+  if (stale.length === 0) return []
+  const cited = await photosInPendingProposals(db, treeId)
   const removed: string[] = []
   for (const upload of stale) {
-    if (await isPhotoInPendingProposal(db, treeId, upload.id)) continue
+    if (cited.has(upload.id)) continue
     await db.annotationPhotoUpload.delete({ where: { id: upload.id } })
     removed.push(upload.filePath)
   }
   return removed
+}
+
+// Réserve une place d'envoi en attente sous un verrou par arbre : deux envois simultanés ne dépassent pas le
+// plafond. Renvoie false si l'arbre est plein. La ligne est créée avant l'écriture du fichier ; si l'écriture
+// échoue, l'appelant la retire (forgetPendingPhoto).
+export async function reservePendingPhoto(prisma: PrismaClient, treeId: string, photoId: string, filePath: string): Promise<boolean> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'annotation-photos:' + treeId}))`
+    if (await tx.annotationPhotoUpload.count({ where: { treeId } }) >= MAX_PENDING_PHOTOS_PER_TREE) return false
+    await tx.annotationPhotoUpload.create({ data: { id: photoId, treeId, filePath } })
+    return true
+  })
+}
+
+export async function forgetPendingPhoto(db: Db, photoId: string): Promise<void> {
+  await db.annotationPhotoUpload.deleteMany({ where: { id: photoId } })
 }
 
 // Chemin relatif sûr d'une photo d'annotation (sous <treeId>/annotation-photos/)

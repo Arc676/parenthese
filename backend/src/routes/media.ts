@@ -25,7 +25,7 @@ import { resolveTreeMediaDirectory } from '../lib/tree-purge.js'
 import { canReadTree, canReadTreeWithMediaToken } from '../lib/tree-access.js'
 import type { MembershipRole } from '../types/auth.js'
 import { ContributionRouteError, resolveSubmissionContext } from './contributions.js'
-import { MAX_PENDING_PHOTOS_PER_TREE, sweepStalePendingPhotos } from '../lib/annotation-changes.js'
+import { forgetPendingPhoto, reservePendingPhoto, sweepStalePendingPhotos } from '../lib/annotation-changes.js'
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const MAX_FILE_BYTES = 20 * 1024 * 1024
@@ -1151,9 +1151,6 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
       }
       const stale = await sweepStalePendingPhotos(app.prisma, params.data.id)
       await Promise.all(stale.map((filePath) => removeStoredFile(getStorageRoot(), filePath)))
-      if (await app.prisma.annotationPhotoUpload.count({ where: { treeId: params.data.id } }) >= MAX_PENDING_PHOTOS_PER_TREE) {
-        return reply.code(429).send({ error: 'too_many_pending_photos' })
-      }
     }
 
     const fileBuffer = Buffer.from(stripDataUrlPrefix(payload.data.dataBase64), 'base64')
@@ -1193,10 +1190,17 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: 'invalid_photo_path' })
     }
 
-    await mkdir(path.dirname(absolutePath), { recursive: true })
-    await writeFile(absolutePath, prepared.buffer)
-    if (!isManager) {
-      await app.prisma.annotationPhotoUpload.create({ data: { id: photoId, treeId: params.data.id, filePath: relativePath } })
+    // Famille : la place est réservée sous un verrou par arbre avant d'écrire, pour tenir le plafond même quand
+    // plusieurs envois arrivent ensemble
+    if (!isManager && !(await reservePendingPhoto(app.prisma, params.data.id, photoId, relativePath))) {
+      return reply.code(429).send({ error: 'too_many_pending_photos' })
+    }
+    try {
+      await mkdir(path.dirname(absolutePath), { recursive: true })
+      await writeFile(absolutePath, prepared.buffer)
+    } catch (error) {
+      if (!isManager) await forgetPendingPhoto(app.prisma, photoId)
+      throw error
     }
 
     return reply.code(201).send({

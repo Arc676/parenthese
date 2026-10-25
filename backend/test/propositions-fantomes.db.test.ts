@@ -164,6 +164,48 @@ describe.skipIf(!TEST_DB)('propositions de la famille sur l\'arbre, vraie base',
     expect(await fileOf(kept.body.photoId)).toBeTruthy()
   })
 
+  it('revue : refusée puis acceptée dans la même relecture, la photo reste sur le disque', async () => {
+    const sent = await upload(family)
+    const filePath = await fileOf(sent.body.photoId) as string
+    const proposed = await propose(family, [
+      { entityType: 'annotation', action: 'create', after: photoAnnotation(sent.body.photoPath) },
+      { entityType: 'annotation', action: 'create', after: { ...photoAnnotation(sent.body.photoPath), x: 99 } },
+    ])
+    const session = await prisma.contributionSession.findUnique({ where: { id: proposed.body.session.id }, include: { changes: { orderBy: { createdAt: 'asc' } } } })
+    const [first, second] = session!.changes
+    const res = await call('POST', `/trees/${treeId}/contributions/sessions/${session!.id}/review`, owner.token, {
+      decision: 'approved',
+      changeDecisions: [{ changeId: first.id, decision: 'rejected' }, { changeId: second.id, decision: 'approved' }],
+    })
+    expect(res.status).toBe(200)
+    expect(existsSync(path.join(storage, filePath))).toBe(true)
+  })
+
+  it("revue : un chemin de photo échappé dans le JSON compte quand même comme cité par une proposition en attente", async () => {
+    const sent = await upload(family)
+    const filePath = await fileOf(sent.body.photoId) as string
+    const plain = await propose(family, [{ entityType: 'annotation', action: 'create', after: photoAnnotation(sent.body.photoPath) }])
+    const escaped = `{"photoPath":"${sent.body.photoPath.replaceAll('/', '\/')}","width":1,"height":1}`
+    const other = await propose(family, [{ entityType: 'annotation', action: 'create', after: { type: 'photo', x: 1, y: 1, content: escaped } }])
+    expect(other.status).toBe(201)
+    await review(plain.body.session.id, 'rejected')
+    expect(existsSync(path.join(storage, filePath))).toBe(true)
+    await review(other.body.session.id, 'approved')
+    expect((await annotations()).some((a) => a.content.includes(sent.body.photoId))).toBe(true)
+    expect(existsSync(path.join(storage, filePath))).toBe(true)
+  })
+
+  it('revue : 70 envois simultanés sur un arbre neuf ne dépassent pas le plafond de 50', async () => {
+    const fresh = await call('POST', '/trees', owner.token, { name: 'Arbre neuf', slug: `neuf-${run}`, visitorPassword: 'partage-neuf-1', contributorPassword: 'partage-neuf-1' })
+    const freshId = fresh.body.tree?.id ?? fresh.body.id
+    const access = (await call('POST', `/trees/${freshId}/access/unlock`, undefined, { password: 'partage-neuf-1' })).body.token
+    const results = await Promise.all(Array.from({ length: 70 }, () => call('POST', `/trees/${freshId}/annotation-photos`, access, {
+      fileName: 'photo.png', mimeType: 'image/png', sizeBytes: Buffer.from(PIXEL, 'base64').length, dataBase64: PIXEL,
+    })))
+    expect(results.filter((r) => r.status === 201).length).toBe(50)
+    expect(await prisma.annotationPhotoUpload.count({ where: { treeId: freshId } })).toBe(50)
+  })
+
   it('au-delà de 50 photos en attente sur un arbre, la famille est arrêtée ; un gestionnaire non', async () => {
     const existing = await prisma.annotationPhotoUpload.count({ where: { treeId } })
     await prisma.annotationPhotoUpload.createMany({

@@ -5,7 +5,7 @@ import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { env, UPLOAD_BODY_LIMIT } from '../config/env.js'
 import { sanitizeAnnotationContentForRead } from '../lib/annotation-content.js'
-import { AnnotationChangeError, applyAnnotationChange, releaseRejectedPhoto, validateAnnotationChange } from '../lib/annotation-changes.js'
+import { AnnotationChangeError, applyAnnotationChange, normalizedAnnotationAfter, releaseRejectedPhotos, validateAnnotationChange } from '../lib/annotation-changes.js'
 import { softDeletePersonCascade, softDeleteUnionCascade } from '../lib/entity-deletion.js'
 import { removeStoredFile } from '../lib/media-files.js'
 import { canReadTree } from '../lib/tree-access.js'
@@ -1295,7 +1295,8 @@ export const contributionRoutes: FastifyPluginAsync = async (app) => {
               entityId: effectiveEntityId,
               action: change.action,
               beforeJson: toPrismaJson(change.entityType === 'annotation' ? stripAnnotationUrl(before) : before),
-              afterJson: toPrismaJson(change.entityType === 'annotation' ? stripAnnotationUrl(change.after) : change.after),
+              // Annotation : gardée nettoyée (photoPath canonique), pour être relue sans ambiguïté à la relecture
+              afterJson: toPrismaJson(change.entityType === 'annotation' ? stripAnnotationUrl(normalizedAnnotationAfter(change, params.data.id)) : change.after),
               conflictState: change.conflictState ?? 'none',
               decision: context.autoStatus === 'approved' ? 'approved' : undefined,
             },
@@ -1464,6 +1465,10 @@ export const contributionRoutes: FastifyPluginAsync = async (app) => {
         let rejectedCount = 0
         let conflictCount = 0
         const refs: RefMap = new Map()
+        // Photos posées sur l'arbre par la famille : celles des annotations refusées sont libérées après toutes les
+        // décisions. Une annotation acceptée dans cette même relecture a déjà retiré la ligne d'attente de sa photo,
+        // qui n'est donc plus effacée (avant, la libération dans la boucle effaçait une photo acceptée plus loin).
+        const rejectedAnnotationAfters: unknown[] = []
 
         for (const change of byApplicationOrder(session.changes)) {
           let decision = explicitDecisions.get(change.id) ?? payload.data.decision
@@ -1507,6 +1512,7 @@ export const contributionRoutes: FastifyPluginAsync = async (app) => {
               if (error instanceof ContributionRouteError && (error.code === 'unresolved_reference' || SKIPPABLE_ANNOTATION_ERRORS.has(error.code))) {
                 decision = 'rejected'
                 rejectedCount += 1
+                if (change.entityType === 'annotation') rejectedAnnotationAfters.push(change.afterJson)
               } else {
                 throw error
               }
@@ -1518,10 +1524,7 @@ export const contributionRoutes: FastifyPluginAsync = async (app) => {
                 data: { status: 'rejected', deletedAt: new Date() },
               })
             }
-            // Photo posée sur l'arbre par la famille et refusée : son fichier part avec elle
-            if (change.entityType === 'annotation') {
-              filesToRemove.push(...await releaseRejectedPhoto(tx, params.data.id, change.afterJson, session.id))
-            }
+            if (change.entityType === 'annotation') rejectedAnnotationAfters.push(change.afterJson)
             if (change.entityType === 'media' && change.entityId) {
               await tx.mediaItem.updateMany({
                 where: { id: change.entityId, treeId: params.data.id },
@@ -1541,6 +1544,8 @@ export const contributionRoutes: FastifyPluginAsync = async (app) => {
             },
           })
         }
+
+        filesToRemove.push(...await releaseRejectedPhotos(tx, params.data.id, rejectedAnnotationAfters, session.id))
 
         const status: ContributionStatus = approvedCount > 0 ? 'approved' : 'rejected'
 
