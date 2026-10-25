@@ -2,7 +2,7 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
-## 1.5.0 (unreleased)
+## 1.5.0 (2026-10-25)
 
 ### Several managers for one tree
 
