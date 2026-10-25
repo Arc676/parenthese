@@ -15,6 +15,10 @@ const { prismaMock, oidcMock } = vi.hoisted(() => ({
       findUnique: vi.fn(),
       create: vi.fn(),
     },
+    treeInvitation: {
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+    },
     $transaction: vi.fn(),
     $executeRaw: vi.fn(),
     $disconnect: vi.fn(),
@@ -71,6 +75,8 @@ beforeEach(() => {
   prismaMock.user.count.mockResolvedValue(1)
   prismaMock.user.findUnique.mockResolvedValue(null)
   prismaMock.userIdentity.findUnique.mockResolvedValue(null)
+  prismaMock.treeInvitation.findFirst.mockResolvedValue(null)
+  prismaMock.treeInvitation.findMany.mockResolvedValue([])
   prismaMock.userIdentity.create.mockResolvedValue({})
   prismaMock.user.create.mockResolvedValue({ id: 'user-new' })
   prismaMock.$transaction.mockImplementation(async (run: (tx: typeof prismaMock) => unknown) => run(prismaMock))

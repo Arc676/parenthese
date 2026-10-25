@@ -12,11 +12,14 @@ export async function isRegistrationOpen(prisma: PrismaClient): Promise<boolean>
 // Seul chemin de création d'un compte. Inscription fermée : le compte n'est créé que si la base n'en a aucun,
 // sous un verrou de transaction pour que deux inscriptions simultanées sur une instance neuve n'en créent pas
 // deux. Renvoie null quand la création est refusée.
+// invited : l'appelant a vérifié une invitation à co-gérer un arbre pour cette adresse (issue #145) ; le
+// propriétaire de l'arbre a été admis par l'admin du serveur, son invitation ouvre un compte.
 export async function createAccountIfAllowed<T>(
   prisma: PrismaClient,
   create: (tx: Prisma.TransactionClient) => Promise<T>,
+  { invited = false }: { invited?: boolean } = {},
 ): Promise<T | null> {
-  if (env.ALLOW_REGISTRATION) return create(prisma)
+  if (env.ALLOW_REGISTRATION || invited) return create(prisma)
 
   return prisma.$transaction(async (tx) => {
     // Clé arbitraire, propre à la création de compte. pg_advisory_xact_lock renvoie void : $executeRaw, pas $queryRaw.

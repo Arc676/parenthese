@@ -50,9 +50,10 @@ export function appBaseUrl(): string {
   return (env.OIDC_APP_URL || new URL(env.OIDC_REDIRECT_URI).origin).replace(/\/$/, '')
 }
 
-// Seules la racine et l'adresse d'un arbre partagé sont acceptées comme retour : pas de redirection ouverte
+// Seules la racine, l'adresse d'un arbre partagé et celle d'une invitation à co-gérer un arbre sont acceptées
+// comme retour : pas de redirection ouverte
 export function safeReturnTo(value: unknown): string {
-  return typeof value === 'string' && /^\/(arbre\/[A-Za-z0-9-]{3,64})?$/.test(value) ? value : '/'
+  return typeof value === 'string' && /^\/(arbre\/[A-Za-z0-9-]{3,64}|invitation\/[A-Za-z0-9_-]{20,100})?$/.test(value) ? value : '/'
 }
 
 export async function startAuthorization(returnTo: string): Promise<{ url: URL; pending: OidcPending }> {
