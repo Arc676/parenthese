@@ -13,6 +13,7 @@ import { authRoutes } from './routes/auth.js'
 import { contributionRoutes } from './routes/contributions.js'
 import { graphRoutes } from './routes/graph.js'
 import { immichRoutes } from './routes/immich.js'
+import { searchSourceRoutes } from './routes/search-sources.js'
 import { mediaRoutes } from './routes/media.js'
 import { oidcRoutes } from './routes/oidc.js'
 import { publicRoutes } from './routes/public.js'
@@ -159,6 +160,7 @@ export function createApp() {
   app.register(gedcomRoutes)
   app.register(visitRoutes)
   app.register(immichRoutes)
+  app.register(searchSourceRoutes)
 
   app.setErrorHandler((error: FastifyError | Error, request, reply) => {
     if (error instanceof Prisma.PrismaClientInitializationError) {

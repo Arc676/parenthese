@@ -2,6 +2,13 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
+## Unreleased
+
+### Search for someone elsewhere
+
+- "Someone elsewhere" in the "+" menu opens a panel on the right of the tree: type a name, birth year and place, and search public records. Links to Gallica (old newspapers), FranceArchives (military registers), Mémoire des hommes, Léonore, Geneanet, Open Archives, WikiTree, FreeBMD and FamilySearch open in the browser with the name typed in when the site allows it.
+- The server can query deaths in France since 1970 (INSEE records via matchID) and WikiTree, once listed in `SEARCH_SOURCES`. Each source says what it covers and what is sent. The owner adds a result to a person in the tree: empty fields only, marked as needing checking, source kept in the note.
+
 ## 1.4.0 (2026-10-23)
 
 ### Family tabs
