@@ -96,6 +96,19 @@ export function getAccountErrorMessage(error) {
     return t("Cette instance n'accepte plus de nouveaux comptes. Demandez à la personne qui l'héberge.")
   }
 
+  // Lien d'invitation à co-gérer un arbre (issue #145)
+  if (errorCode === 'invitation_email_mismatch') {
+    return t("Cette invitation est pour une autre adresse. Utilisez l'adresse à laquelle vous avez été invité.")
+  }
+
+  if (errorCode === 'invitation_invalid' || errorCode === 'invitation_used' || errorCode === 'invitation_expired') {
+    return t("Ce lien d'invitation ne marche plus. Demandez-en un nouveau à la personne qui vous a invité.")
+  }
+
+  if (errorCode === 'already_owner') {
+    return t('Vous êtes déjà propriétaire de cet arbre.')
+  }
+
   if (errorCode === 'citation_text_required') {
     return t('Ajoutez le texte de la citation.')
   }

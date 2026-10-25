@@ -109,6 +109,7 @@ describe.skipIf(!TEST_DB)('co-gestion, vraie base', () => {
     expect(accepted.status).toBe(200)
     expect(accepted.body).toEqual({ treeId, role: 'admin' })
     expect((await call('POST', `/invitations/${token}/accept`, co.token)).status).toBe(404)
+    expect((await call('GET', `/invitations/${token}`)).body).toEqual({ error: 'invitation_used' })
     expect((await prisma.treeInvitation.findUnique({ where: { id: invitation.id } }))?.acceptedUserId).toBe(co.id)
 
     // Co-gestionnaire : modifie l'arbre, voit la liste, mais n'invite pas, ne retire personne, ne supprime pas l'arbre
@@ -157,6 +158,8 @@ describe.skipIf(!TEST_DB)('co-gestion, vraie base', () => {
     const late = await invite(email)
     await prisma.treeInvitation.update({ where: { id: late.invitation.id }, data: { expiresAt: new Date(Date.now() - 1000) } })
     expect((await call('POST', `/invitations/${late.token}/accept`, user.token)).status).toBe(404)
+    expect((await call('GET', `/invitations/${late.token}`)).body).toEqual({ error: 'invitation_expired' })
+    expect((await call('GET', `/invitations/${rotated.body.token}`)).body).toEqual({ error: 'invitation_invalid' })
   })
 
   it("inscription fermée : l'invitation ouvre un compte, à l'adresse invitée seulement", async () => {

@@ -41,7 +41,7 @@ function TreeDropdown({ trees = [], activeTreeId, onSelect, onCreate }) {
               <div className="tree-dropdown-item-info">
                 <div className="tree-dropdown-item-name">{tree.name}</div>
                 <div className="tree-dropdown-item-role">
-                  {tree.role === 'owner' ? t('Propriétaire') : t('Admin')}
+                  {tree.role === 'owner' ? t('Propriétaire') : t('Co-gestionnaire')}
                 </div>
               </div>
             </button>

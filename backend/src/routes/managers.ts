@@ -8,6 +8,7 @@ import {
   MAX_PENDING_INVITATIONS,
   acceptInvitation,
   findPendingInvitationByToken,
+  hashInvitationToken,
   maskEmail,
   newInvitationToken,
   normalizeEmail,
@@ -198,7 +199,15 @@ export const managerRoutes: FastifyPluginAsync = async (app) => {
     const params = tokenParamSchema.safeParse(request.params)
     if (!params.success) return reply.code(404).send({ error: 'invitation_invalid' })
     const invitation = await findPendingInvitationByToken(app.prisma, params.data.token)
-    if (!invitation) return reply.code(404).send({ error: 'invitation_invalid' })
+    if (!invitation) {
+      // Lien déjà servi ou expiré : dit tel quel, pour que la page explique quoi faire. Rien d'autre ne sort.
+      const known = await app.prisma.treeInvitation.findUnique({
+        where: { tokenHash: hashInvitationToken(params.data.token) },
+        select: { acceptedAt: true, revokedAt: true, expiresAt: true },
+      })
+      const error = known?.acceptedAt ? 'invitation_used' : known && !known.revokedAt && known.expiresAt <= new Date() ? 'invitation_expired' : 'invitation_invalid'
+      return reply.code(404).send({ error })
+    }
     return reply.send({
       treeName: invitation.tree.name,
       invitedBy: invitation.tree.owner.firstName || null,

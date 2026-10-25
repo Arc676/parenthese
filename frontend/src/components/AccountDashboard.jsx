@@ -344,6 +344,19 @@ const AccountDashboard = ({
               </li>
               <li>{t("Les arbres partagés avec vous restent à leurs propriétaires. Vous n'y aurez simplement plus accès.")}</li>
             </ul>
+            {/* Arbres gérés avec d'autres : ils partent aussi pour leurs co-gestionnaires (issue #145) */}
+            {(trees || []).filter((tree) => tree.role === 'owner' && tree.coManagers?.length > 0).map((tree) => (
+              <div key={tree.id} className="ts-danger account-comanaged">
+                <div className="ts-row-text">
+                  <strong>{t('« {name} » sera supprimé pour tout le monde', { name: tree.name })}</strong>
+                  <span className="pz-small">
+                    {tree.coManagers.length > 1
+                      ? t('{names} le gèrent avec vous. Ils n’y auront plus accès, la famille non plus.', { names: tree.coManagers.join(', ') })
+                      : t('{name} le gère avec vous. Cette personne n’y aura plus accès, la famille non plus.', { name: tree.coManagers[0] })}
+                  </span>
+                </div>
+              </div>
+            ))}
 
             <form className="pz-auth-form" onSubmit={handleDeleteSubmit}>
               <div className="pz-field">
