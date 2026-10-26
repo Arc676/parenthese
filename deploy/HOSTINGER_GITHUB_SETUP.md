@@ -20,6 +20,7 @@ Chaque push sur `main` lance d'abord la CI (`.github/workflows/ci.yml`). Si elle
 - `/etc/parenthese/build.env` : variables de build du front et de la landing (`VITE_POSTHOG_KEY`, `VITE_POSTHOG_HOST`)
 - `/etc/cron.d/parenthese-backup` : sauvegarde nocturne par `deploy/backup.sh`
 - `/etc/genealogy/backup.env` (facultatif) : rétention et envoi S3 des sauvegardes
+- `/usr/local/sbin/parenthese-ssh-deploy` : copie de `deploy/ssh-deploy.sh`, commande forcée de la clé de déploiement (voir plus bas)
 
 ## Prérequis du serveur
 
@@ -28,3 +29,19 @@ Node 20, `pm2` en global, PostgreSQL joignable par `DATABASE_URL`, nginx configu
 ## Déployer à la main
 
 `bash deploy/deploy.sh --sync` depuis le dépôt sur le serveur. `FORCE_FULL=1` pour tout reconstruire. Ne pas le lancer pendant un déploiement GitHub : le verrou le fera attendre.
+
+## Clé de déploiement restreinte
+
+La clé de GitHub ne doit pouvoir que déployer un commit de `main`, jamais lancer une autre commande sur le serveur. On la lie à `deploy/ssh-deploy.sh`, copié hors du dépôt parce que le déploiement réécrit le dépôt :
+
+```
+install -m 755 -o root -g root /var/www/parenthese/deploy/ssh-deploy.sh /usr/local/sbin/parenthese-ssh-deploy
+```
+
+Puis, dans `authorized_keys`, devant la ligne de la clé `github-actions-parenthese-public` :
+
+```
+command="/usr/local/sbin/parenthese-ssh-deploy",no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty ssh-ed25519 AAAA… github-actions-parenthese-public
+```
+
+Le workflow n'a pas à changer. Après une mise à jour de `deploy/ssh-deploy.sh`, refaire l'`install`.
