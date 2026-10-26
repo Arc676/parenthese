@@ -16,7 +16,9 @@ import {
   removeStoredFile,
   sanitizeImage,
   scrubMp4Location,
+  sendFileWithRanges,
   sniffMimeType,
+  storedFileSize,
   type BinaryMediaType,
 } from '../lib/media-files.js'
 import { avatarCropInputSchema, readAvatarCrop, toStoredAvatarCrop } from '../lib/avatar-crop.js'
@@ -1121,16 +1123,13 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: 'invalid_media_path' })
     }
 
-    let fileBuffer: Buffer
-    try {
-      fileBuffer = await readFile(absolutePath)
-    } catch {
+    const size = await storedFileSize(absolutePath)
+    if (size === null) {
       return reply.code(404).send({ error: 'media_file_missing' })
     }
 
     applyMediaResponseHeaders(reply, media.mimeType, path.basename(media.filePath))
-
-    return reply.send(fileBuffer)
+    return sendFileWithRanges(request, reply, absolutePath, size)
   })
 
   // ---- Annotation Photos ----

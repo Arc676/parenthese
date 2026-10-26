@@ -1,7 +1,8 @@
-import { unlink } from 'node:fs/promises'
+import { createReadStream } from 'node:fs'
+import { stat, unlink } from 'node:fs/promises'
 import path from 'node:path'
 
-import type { FastifyReply } from 'fastify'
+import type { FastifyReply, FastifyRequest } from 'fastify'
 import sharp from 'sharp'
 
 // Fichiers envoyés : le type vient des premiers octets, jamais de ce que déclare le navigateur.
@@ -234,4 +235,50 @@ export async function removeStoredFile(storageRoot: string, relativePath: string
   } catch {
     // déjà absent
   }
+}
+
+// Plage demandée par « Range: bytes=début-fin » (une seule plage), bornée à la taille du fichier. null : pas de
+// plage lisible, on envoie tout ; 'unsatisfiable' : la plage tombe hors du fichier.
+export function parseByteRange(header: string | undefined, size: number): { start: number; end: number } | 'unsatisfiable' | null {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(String(header ?? '').trim())
+  if (!match || (match[1] === '' && match[2] === '')) return null
+  if (match[1] === '') {
+    // Les n derniers octets
+    const suffix = Number(match[2])
+    if (suffix === 0 || size === 0) return 'unsatisfiable'
+    return { start: Math.max(0, size - suffix), end: size - 1 }
+  }
+  const start = Number(match[1])
+  const end = match[2] === '' ? size - 1 : Math.min(Number(match[2]), size - 1)
+  if (start >= size || end < start) return 'unsatisfiable'
+  return { start, end }
+}
+
+// Taille d'un fichier stocké, null s'il manque
+export async function storedFileSize(absolutePath: string): Promise<number | null> {
+  try {
+    const info = await stat(absolutePath)
+    return info.isFile() ? info.size : null
+  } catch {
+    return null
+  }
+}
+
+// Envoie un fichier en flux, par morceaux si le navigateur le demande. Safari ne lit une vidéo que si le serveur
+// répond aux plages (206) ; avant, le fichier entier passait en mémoire puis partait d'un bloc. À appeler après
+// applyMediaResponseHeaders.
+export function sendFileWithRanges(request: FastifyRequest, reply: FastifyReply, absolutePath: string, size: number): FastifyReply {
+  reply.header('Accept-Ranges', 'bytes')
+  const range = parseByteRange(request.headers.range, size)
+  if (range === 'unsatisfiable') {
+    return reply.code(416).header('Content-Range', `bytes */${size}`).send()
+  }
+  if (range) {
+    reply.code(206)
+    reply.header('Content-Range', `bytes ${range.start}-${range.end}/${size}`)
+    reply.header('Content-Length', String(range.end - range.start + 1))
+    return reply.send(createReadStream(absolutePath, { start: range.start, end: range.end }))
+  }
+  reply.header('Content-Length', String(size))
+  return reply.send(createReadStream(absolutePath))
 }
