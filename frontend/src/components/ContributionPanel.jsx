@@ -558,16 +558,18 @@ const ContributionPanel = ({
                               key={change.id}
                               className={`contrib-change-card${isApproved ? ' contrib-change-card--approved' : ''}${isRejected ? ' contrib-change-card--rejected' : ''}`}
                             >
-                              <div className="contrib-change-card-head">
+                              {/* Étiquette posée sur le bord haut de la carte ; une fiche changée depuis la proposition dit « À vérifier » à la place */}
+                              {change.conflictState === 'needs_review' ? (
+                                <span className="contrib-action-badge contrib-action-badge--conflict" title={t('La fiche a changé depuis cette proposition')}>{t('À vérifier')}</span>
+                              ) : (
                                 <span className={`contrib-action-badge contrib-action-badge--${change.action}`}>
                                   {formatAction(change.action)}
                                 </span>
+                              )}
+                              <div className="contrib-change-card-head">
                                 <span className="contrib-change-entity-name">
                                   {personName || formatEntityType(change.entityType)}
                                 </span>
-                                {change.conflictState === 'needs_review' && (
-                                  <span className="contrib-conflict-badge">{t('À vérifier')}</span>
-                                )}
                                 <div className="contrib-card-decisions">
                                   <button
                                     type="button"

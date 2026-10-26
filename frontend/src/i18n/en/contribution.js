@@ -108,6 +108,7 @@ export default {
   'Unions': 'Couples',
   'Annotations': 'Annotations',
   'À vérifier': 'Needs checking',
+  'La fiche a changé depuis cette proposition': 'The profile has changed since this proposal',
   'Accepter': 'Accept',
   'Refuser': 'Decline',
   'Dessin libre': 'Freehand drawing',

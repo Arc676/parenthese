@@ -106,7 +106,7 @@
   min-width: 18px;
   height: 18px;
   box-sizing: border-box;
-  padding: 0 5px;
+  padding: 0 3px; /* 5 px faisait d'un chiffre seul un ovale de 20 × 18 */
   border: 2px solid #fff;
   border-radius: 999px;
   background: var(--pz-a500);
