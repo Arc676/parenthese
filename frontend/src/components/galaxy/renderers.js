@@ -13,6 +13,7 @@ import {
 import { getEntranceProgress, drawPartialBezier } from './utils'
 import { fitNickname } from '../../utils/nickname.js'
 import { firstNameLabel, isFirstNameUnknown } from '../../utils/personName.js'
+import { initialsOf } from '../../utils/initial.js'
 
 // Largeur maximale du surnom sur le nœud (px canevas) : au-delà, coupé avec …
 const NICKNAME_MAX_W = 150
@@ -1059,7 +1060,7 @@ function drawPersonImage(ctx, img, person, x, y, w, h) {
     ctx.textBaseline = 'middle'
     ctx.fillStyle = COLORS.text
     ctx.font = '400 16px "Newsreader", Georgia, serif'
-    ctx.fillText((person.firstName[0] || '') + (person.lastName[0] || ''), 0, 0)
+    ctx.fillText(initialsOf(person, ''), 0, 0)
   }
 }
 

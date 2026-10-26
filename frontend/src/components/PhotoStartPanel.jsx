@@ -5,6 +5,7 @@ import PzBusy from './PzBusy.jsx'
 import { t } from '../i18n/index.js'
 import { matchPhotoFiles } from '../utils/photoImport.js'
 import { materializeFile } from '../utils/zipReader.js'
+import { initialsOf } from '../utils/initial.js'
 
 function withEmphasis(text) {
   const [before, emphasized = '', after = ''] = text.split(/<\/?em>/)
@@ -19,10 +20,6 @@ function lifeYears(person) {
 // Singulier ou pluriel, les deux formes passent par t()
 function plural(n, one, many, vars = {}) {
   return n === 1 ? t(one, vars) : t(many, { n, ...vars })
-}
-
-function initialsOf(person) {
-  return `${person.firstName?.[0] || ''}${person.lastName?.[0] || ''}`.toUpperCase() || '?'
 }
 
 // Dossier où le logiciel d'origine rangeait la première photo citée, pour aider à le retrouver

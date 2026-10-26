@@ -21,6 +21,7 @@ import DateField from './DateField.jsx'
 import { runOnce } from '../utils/saveOnLeave.js'
 import { normalizeSex, SEX_CHOICES } from '../utils/personSex.js'
 import { ProposalBanner } from './ProposalCard.jsx'
+import { initialsOf } from '../utils/initial.js'
 
 // Aucune modification en cours (référence stable)
 const NO_EDITS = Object.freeze({})
@@ -602,19 +603,20 @@ const PersonCard = ({
   const visualMedias = personMedias.filter((m) => m.type === 'photo' || m.type === 'video')
   const otherMedias = personMedias.filter((m) => !['citation', 'audio', 'photo', 'video'].includes(m.type) || (m.type === 'citation' && m !== quoteMedia))
 
-  const initials = `${person.firstName?.[0] || ''}${person.lastName?.[0] || ''}` || '?'
+  const initials = initialsOf(person)
   const lifeLine = (() => {
     const born = person.birthYear || (person.birthDate ? String(person.birthDate).slice(0, 4) : '')
     const died = person.deathYear || (person.deathDate ? String(person.deathDate).slice(0, 4) : '')
     const parts = []
-    if (born) parts.push(`${born}${person.birthPlace ? `, ${formatPlace(person.birthPlace)}` : ''}`)
+    // <bdi> : un lieu en arabe ou en hébreu ne retourne pas l'ordre de la ligne (« 1980, الدار البيضاء · 46 ans »)
+    if (born) parts.push(person.birthPlace ? <>{born}, <bdi>{formatPlace(person.birthPlace)}</bdi></> : born)
     if (!person.isAlive) parts.push(died || '?')
-    return parts.join(' – ')
+    return parts.length ? parts.reduce((line, part) => <>{line} – {part}</>) : null
   })()
   const ageLabel = age === null ? null : person.isAlive ? t('{age} ans', { age }) : t('{age} ans au décès', { age })
   // Une seule ligne sous le nom : surnom, repères de vie, âge, séparés par un point médian
   const metaItems = [
-    person.nickname && { key: 'nick', node: <em className="pc-nick">{person.nickname}</em>, nowrap: true },
+    person.nickname && { key: 'nick', node: <em className="pc-nick"><bdi>{person.nickname}</bdi></em>, nowrap: true },
     lifeLine && { key: 'life', node: lifeLine },
     ageLabel && { key: 'age', node: ageLabel, nowrap: true },
   ].filter(Boolean)
