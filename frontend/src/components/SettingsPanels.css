@@ -254,26 +254,28 @@
 .contrib-confirm-approve { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font: 500 13px var(--pz-sans); color: var(--pz-ink); }
 
 /* ── Notification après envoi d'une contribution (montée dans App.jsx) ── */
+/* Centrée par left: 50%, elle n'avait que la moitié de l'écran : sur téléphone, quatre lignes dans une pilule.
+   Sa largeur suit maintenant le texte, jusqu'à l'écran moins les marges. Pas d'animation : elle apparaît nette. */
 .contrib-success-toast {
   position: fixed;
   bottom: 92px;
   left: 50%;
   z-index: 3000;
+  width: max-content;
+  max-width: min(560px, calc(100vw - 32px));
   padding: 11px 20px;
   border-radius: 999px;
   background: var(--pz-ink);
   color: var(--pz-bg);
-  font: 500 14px var(--pz-sans);
+  font: 500 14px/1.4 var(--pz-sans);
+  text-align: center;
+  text-wrap: balance;
   box-shadow: var(--pz-shadow-lg);
   pointer-events: none;
   transform: translateX(-50%);
-  animation: contrib-toast-in 260ms var(--pz-ease) both;
 }
-@keyframes contrib-toast-in {
-  from { opacity: 0; transform: translate(-50%, 8px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
-}
-@media (max-width: 768px) { .contrib-success-toast { bottom: 78px; font-size: 13px; } }
+/* Sur deux lignes, une pilule se déforme : des coins arrondis simples */
+@media (max-width: 768px) { .contrib-success-toast { bottom: 78px; padding: 11px 16px; border-radius: 16px; font-size: 13px; } }
 
 @media (max-width: 560px) {
   .contrib-invite-link { flex-wrap: wrap; border-radius: var(--pz-r-m); padding: 10px; }
