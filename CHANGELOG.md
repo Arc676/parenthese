@@ -22,6 +22,8 @@ Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
 ### Fixes
 
+- The quick buttons to add a parent, partner, child or sibling in a profile's Info tab are dashed chips, like "+ Nickname" in edit mode (#154).
+- The notice after adding someone or sending changes takes the width it needs on a phone, instead of four lines in a pill, and appears without animation (#156).
 - The counter of pending suggestions on the account picture is round for a single digit.
 - Backend dependencies: ip-address 10.7.4 (#144) and fast-uri (#155), for known security issues.
 
