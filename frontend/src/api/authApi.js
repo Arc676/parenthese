@@ -88,6 +88,22 @@ export function oidcStartUrl(returnTo = '/') {
   return `${API_BASE_URL}/auth/oidc/start?returnTo=${encodeURIComponent(returnTo)}`
 }
 
+// Relier le fournisseur au compte connecté : un ticket de deux minutes, à usage unique, puis le départ OIDC qui le porte
+export async function requestOidcLinkTicket(token) {
+  const data = await apiRequest('/auth/oidc/link', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  return data?.ticket
+}
+
+export function oidcLinkUrl(ticket) {
+  return `${API_BASE_URL}/auth/oidc/start?link=${encodeURIComponent(ticket)}`
+}
+
 // Jeton de passage reçu au retour du fournisseur, échangé une seule fois contre une session
 export async function exchangeOidcCode(code) {
   return apiRequest('/auth/oidc/exchange', {

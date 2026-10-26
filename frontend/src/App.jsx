@@ -54,7 +54,7 @@ import {
   uploadPersonMedia,
 } from './api/treeApi'
 import { getImmichErrorMessage, unassignImmichPerson } from './api/immichApi.js'
-import { fetchAuthOptions, oidcStartUrl } from './api/authApi'
+import { fetchAuthOptions, oidcLinkUrl, oidcStartUrl, requestOidcLinkTicket } from './api/authApi'
 import { useAuth } from './hooks/useAuth'
 import { useTreeAccess, getTreeTokenStorageKey, getSlugFromPathname, readTreeAccessRole, TREE_ID_FROM_ENV } from './hooks/useTreeAccess'
 import { useMediaManager } from './hooks/useMediaManager'
@@ -3181,6 +3181,15 @@ function App() {
           oidcName={authOptions.oidc?.name || ''}
           onOidcLogin={authOptions.oidc ? () => window.location.assign(oidcStartUrl(getSlugFromPathname() ? window.location.pathname : '/')) : undefined}
           hasPassword={auth.userAuth.user?.hasPassword !== false}
+          oidcLinked={auth.userAuth.user?.oidcLinked === true}
+          onLinkOidc={authOptions.oidc && auth.userAuth.user?.oidcLinked === false ? async () => {
+            // Relier le fournisseur au compte : le serveur donne un ticket court, le départ OIDC le porte
+            try {
+              window.location.assign(oidcLinkUrl(await requestOidcLinkTicket(auth.userAuth.token)))
+            } catch (error) {
+              auth.setAccountError(getAccountErrorMessage(error))
+            }
+          } : undefined}
           pendingTreeName={pendingSharedTreeName}
           onLogin={handleLogin}
           onRegister={handleRegister}

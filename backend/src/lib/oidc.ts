@@ -11,6 +11,9 @@ export type OidcPending = {
   nonce: string
   codeVerifier: string
   returnTo: string
+  // Rattachement demandé depuis un compte connecté (ticket de /auth/oidc/link) : l'identité du fournisseur rejoint
+  // ce compte, au lieu d'en chercher un par email
+  linkUserId?: string
 }
 
 export type OidcIdentity = {

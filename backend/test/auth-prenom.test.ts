@@ -111,7 +111,7 @@ describe('prénom du compte', () => {
     prismaMock.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'anais@example.com', firstName: 'Anaïs', passwordHash: 'hash' })
     const me = await app.inject({ method: 'GET', url: '/auth/me', headers: { authorization: `Bearer ${token}` } })
     expect(me.statusCode).toBe(200)
-    expect(me.json().user).toEqual({ id: 'user-1', email: 'anais@example.com', firstName: 'Anaïs', hasPassword: true })
+    expect(me.json().user).toEqual({ id: 'user-1', email: 'anais@example.com', firstName: 'Anaïs', hasPassword: true, oidcLinked: false })
 
     const anonymous = await app.inject({ method: 'GET', url: '/auth/me' })
     expect(anonymous.statusCode).toBe(401)

@@ -29,6 +29,10 @@ const AccountDashboard = ({
   oidcName = '',
   onOidcLogin,
   hasPassword = true,
+  // Compte à mot de passe sur une instance OIDC : « Se connecter aussi avec … » relie le fournisseur, pour que le compte
+  // reste accessible quand l'instance passe en connexion par le fournisseur seule. oidcLinked : déjà fait
+  onLinkOidc,
+  oidcLinked = false,
   pendingTreeName = '',
   onLogin,
   onRegister,
@@ -305,7 +309,14 @@ const AccountDashboard = ({
                 {t('Essayer la démo')}
               </button>
             )}
+            {onLinkOidc && !oidcLinked && (
+              <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm account-oidc-link" onClick={onLinkOidc} disabled={loading}>
+                <LogIn size={15} aria-hidden="true" />
+                {t('Se connecter aussi avec {name}', { name: oidcName })}
+              </button>
+            )}
           </div>
+          {oidcLinked && oidcName && <p className="account-oidc-linked">{t('Connexion avec {name} reliée à ce compte.', { name: oidcName })}</p>}
         </div>
 
         <div className="pz-account-foot">

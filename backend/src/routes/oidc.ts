@@ -46,7 +46,41 @@ const pendingSchema = z.object({
   nonce: z.string().min(1),
   codeVerifier: z.string().min(43),
   returnTo: z.string(),
+  linkUserId: z.string().min(1).optional(),
 })
+
+// Rattacher une identité du fournisseur à un compte à mot de passe. Le compte connecté demande un ticket (court, à
+// usage unique), le départ OIDC le porte, et le retour relie l'identité à ce compte. La personne prouve les deux :
+// son mot de passe (session) et son compte chez le fournisseur. C'est le chemin pour passer une instance en
+// PASSWORD_LOGIN=false sans enfermer dehors les comptes à mot de passe : le rattachement automatique par email reste
+// refusé pour eux (resolveAccount), parce que l'inscription par mot de passe ne vérifie pas l'adresse.
+const LINK_TICKET_TTL_S = 120
+type LinkTicketPayload = { kind: 'oidc_link'; sub: string; jti: string; exp?: number }
+const usedLinkTickets = new Map<string, number>()
+function consumeLinkTicket(jti: string, expSeconds: number): boolean {
+  const now = Date.now()
+  for (const [key, expiresAt] of usedLinkTickets) {
+    if (expiresAt < now) usedLinkTickets.delete(key)
+  }
+  if (usedLinkTickets.has(jti)) return false
+  usedLinkTickets.set(jti, expSeconds * 1000)
+  return true
+}
+
+type LinkResult = { userId: string } | { error: 'oidc_identity_taken' | 'oidc_failed' }
+
+async function linkIdentity(app: FastifyInstance, userId: string, identity: OidcIdentity): Promise<LinkResult> {
+  const user = await app.prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
+  if (!user) return { error: 'oidc_failed' }
+  const linked = await app.prisma.userIdentity.findUnique({
+    where: { issuer_subject: { issuer: identity.issuer, subject: identity.subject } },
+    select: { userId: true },
+  })
+  // Déjà reliée à ce compte : rien à faire. Reliée à un autre : jamais déplacée d'un compte à l'autre
+  if (linked) return linked.userId === userId ? { userId } : { error: 'oidc_identity_taken' }
+  await app.prisma.userIdentity.create({ data: { userId, issuer: identity.issuer, subject: identity.subject } })
+  return { userId }
+}
 
 const exchangeSchema = z.object({
   code: z.string().min(1).max(4096),
@@ -114,7 +148,18 @@ export const oidcRoutes: FastifyPluginAsync = async (app) => {
     '/start',
     { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request, reply) => {
-      const returnTo = safeReturnTo((request.query as Record<string, unknown> | undefined)?.returnTo)
+      const query = (request.query as Record<string, unknown> | undefined) ?? {}
+      // Ticket de rattachement : vérifié et consommé ici, le compte voyage dans le cookie signé
+      let linkUserId: string | undefined
+      if (typeof query.link === 'string') {
+        let ticket: LinkTicketPayload | null = null
+        try { ticket = app.jwt.verify<LinkTicketPayload>(query.link) } catch { ticket = null }
+        if (!ticket || ticket.kind !== 'oidc_link' || typeof ticket.exp !== 'number' || !consumeLinkTicket(ticket.jti, ticket.exp)) {
+          return redirectToApp(reply, '/', 'oidc_error=oidc_link_expired')
+        }
+        linkUserId = ticket.sub
+      }
+      const returnTo = linkUserId ? '/' : safeReturnTo(query.returnTo)
       let start: Awaited<ReturnType<typeof startAuthorization>>
       try {
         start = await startAuthorization(returnTo)
@@ -123,7 +168,7 @@ export const oidcRoutes: FastifyPluginAsync = async (app) => {
         return redirectToApp(reply, returnTo, 'oidc_error=oidc_unavailable')
       }
 
-      reply.setCookie(PENDING_COOKIE, JSON.stringify(start.pending), {
+      reply.setCookie(PENDING_COOKIE, JSON.stringify(linkUserId ? { ...start.pending, linkUserId } : start.pending), {
         path: '/',
         httpOnly: true,
         sameSite: 'lax', // envoyé au retour du fournisseur, qui est une navigation de premier niveau
@@ -167,13 +212,13 @@ export const oidcRoutes: FastifyPluginAsync = async (app) => {
         return redirectToApp(reply, returnTo, 'oidc_error=oidc_failed')
       }
 
-      let result: AccountResult
+      let result: AccountResult | LinkResult
       try {
-        result = await resolveAccount(app, identity)
+        result = pending.linkUserId ? await linkIdentity(app, pending.linkUserId, identity) : await resolveAccount(app, identity)
       } catch (error) {
         // Deux retours simultanés pour la même identité : le second retrouve le lien créé par le premier
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-          result = await resolveAccount(app, identity)
+          result = pending.linkUserId ? await linkIdentity(app, pending.linkUserId, identity) : await resolveAccount(app, identity)
         } else {
           throw error
         }
@@ -192,6 +237,23 @@ export const oidcRoutes: FastifyPluginAsync = async (app) => {
         { expiresIn: `${HANDOFF_TTL_S}s` },
       )
       return redirectToApp(reply, returnTo, `oidc=${encodeURIComponent(handoff)}`)
+    },
+  )
+
+  // Ticket de rattachement pour le compte connecté (session par en-tête) : la navigation vers /start ne peut pas
+  // porter l'en-tête, le ticket le remplace, deux minutes et une seule fois
+  app.post(
+    '/link',
+    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      if (!request.actor || request.actor.kind !== 'user') {
+        return reply.code(401).send({ error: 'authentication_required' })
+      }
+      const ticket = app.jwt.sign(
+        { kind: 'oidc_link', sub: request.actor.userId, jti: randomUUID() },
+        { expiresIn: `${LINK_TICKET_TTL_S}s` },
+      )
+      return reply.send({ ticket })
     },
   )
 

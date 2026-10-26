@@ -247,4 +247,9 @@ export default {
   "Aide": "Help",
   "Se déconnecter": "Sign out",
   "Partager l'arbre": "Share the tree",
+  // Relier le fournisseur OIDC à un compte à mot de passe
+  'Se connecter aussi avec {name}': 'Also sign in with {name}',
+  'Connexion avec {name} reliée à ce compte.': 'Sign-in with {name} is linked to this account.',
+  'Ce compte du fournisseur est déjà relié à un autre compte Parenthèse.': 'This provider account is already linked to another Parenthèse account.',
+  'Le lien pour relier le compte a expiré. Recommencez depuis votre compte.': 'The link to connect your account has expired. Start again from your account.',
 }

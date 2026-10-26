@@ -35,7 +35,15 @@ export type OidcHandoffJwtPayload = {
   jti: string
 }
 
-export type AnyJwtPayload = UserJwtPayload | TreeAccessJwtPayload | MediaJwtPayload | OidcHandoffJwtPayload
+// Ticket de rattachement d'une identité OIDC au compte connecté (120 s, à usage unique, porté par /auth/oidc/start) :
+// jamais une session, le décodeur de l'en-tête ne retient que les sortes user et tree_access
+export type OidcLinkJwtPayload = {
+  kind: 'oidc_link'
+  sub: string
+  jti: string
+}
+
+export type AnyJwtPayload = UserJwtPayload | TreeAccessJwtPayload | MediaJwtPayload | OidcHandoffJwtPayload | OidcLinkJwtPayload
 
 export type UserActor = {
   kind: 'user'

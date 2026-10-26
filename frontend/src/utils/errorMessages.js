@@ -92,6 +92,14 @@ export function getAccountErrorMessage(error) {
     return t("Votre fournisseur de connexion n'indique pas que votre adresse email est vérifiée. Vérifiez-la chez lui, puis réessayez.")
   }
 
+  if (errorCode === 'oidc_identity_taken') {
+    return t('Ce compte du fournisseur est déjà relié à un autre compte Parenthèse.')
+  }
+
+  if (errorCode === 'oidc_link_expired') {
+    return t('Le lien pour relier le compte a expiré. Recommencez depuis votre compte.')
+  }
+
   if (errorCode === 'oidc_email_taken') {
     return t("Un compte avec mot de passe existe déjà pour cette adresse. Connectez-vous avec votre email et votre mot de passe.")
   }

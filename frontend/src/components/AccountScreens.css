@@ -70,3 +70,6 @@
 /* Arbre avec une icône choisie : l'emoji seul, sans la pastille de couleur de la lettre */
 .pz-tree-mono--emoji { background: transparent; font-size: 22px; line-height: 1; }
 .invite-tree-icon { font-size: 30px; line-height: 1; }
+
+/* Connexion par le fournisseur reliée au compte (OIDC) */
+.account-oidc-linked { margin: 8px 0 0; font: 400 13px var(--pz-sans); color: var(--pz-muted); }

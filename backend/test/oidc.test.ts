@@ -337,6 +337,89 @@ describe('connexion par le fournisseur seulement (PASSWORD_LOGIN=false)', () => 
   }, 15000)
 })
 
+describe('rattacher le fournisseur à un compte à mot de passe (avant PASSWORD_LOGIN=false)', () => {
+  const sessionOf = (userId: string) => app.jwt.sign({ kind: 'user', sub: userId, jti: `s-${userId}`, userId, email: 'anais@example.com' })
+
+  async function ticketFor(userId: string) {
+    const res = await app.inject({ method: 'POST', url: '/auth/oidc/link', headers: { authorization: `Bearer ${sessionOf(userId)}` }, remoteAddress: nextAddress() })
+    expect(res.statusCode).toBe(200)
+    return res.json().ticket as string
+  }
+
+  async function startLink(ticket: string) {
+    currentAddress = nextAddress()
+    const res = await app.inject({ method: 'GET', url: `/auth/oidc/start?link=${encodeURIComponent(ticket)}&returnTo=${encodeURIComponent('/arbre/abc')}`, remoteAddress: currentAddress })
+    return { res, cookie: String(res.headers['set-cookie']).split(';')[0] }
+  }
+
+  it('sans session, pas de ticket', async () => {
+    const res = await app.inject({ method: 'POST', url: '/auth/oidc/link', remoteAddress: nextAddress() })
+    expect(res.statusCode).toBe(401)
+  })
+
+  it("relie l'identité au compte qui a demandé le ticket, même avec un mot de passe et sans regarder l'email", async () => {
+    const ticket = await ticketFor('user-pw')
+    const { res: started, cookie } = await startLink(ticket)
+    expect(started.statusCode).toBe(302)
+    // Le retour de l'app ne vient pas de la requête : un rattachement revient toujours à la racine
+    expect(oidcMock.startAuthorization).toHaveBeenCalledWith('/')
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'user-pw' })
+    oidcMock.finishAuthorization.mockResolvedValue({ ...identity, email: 'autre@example.com', emailVerified: false })
+    const res = await callback(cookie)
+    expect(prismaMock.userIdentity.create).toHaveBeenCalledWith({ data: { userId: 'user-pw', issuer: ISSUER, subject: 'sub-1' } })
+    const code = fragmentOf(res.headers.location).get('oidc') as string
+    expect(app.jwt.decode<{ sub: string }>(code)?.sub).toBe('user-pw')
+    // Le rattachement ne passe jamais par la recherche d'un compte par email ni par la création d'un compte
+    expect(prismaMock.user.create).not.toHaveBeenCalled()
+  })
+
+  it("une identité déjà reliée à un autre compte n'est jamais déplacée", async () => {
+    const ticket = await ticketFor('user-pw')
+    const { cookie } = await startLink(ticket)
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'user-pw' })
+    prismaMock.userIdentity.findUnique.mockResolvedValue({ userId: 'user-other' })
+    const res = await callback(cookie)
+    expect(fragmentOf(res.headers.location).get('oidc_error')).toBe('oidc_identity_taken')
+    expect(prismaMock.userIdentity.create).not.toHaveBeenCalled()
+  })
+
+  it('déjà reliée à ce compte : connexion, rien de recréé', async () => {
+    const ticket = await ticketFor('user-pw')
+    const { cookie } = await startLink(ticket)
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'user-pw' })
+    prismaMock.userIdentity.findUnique.mockResolvedValue({ userId: 'user-pw' })
+    const res = await callback(cookie)
+    expect(fragmentOf(res.headers.location).get('oidc')).toBeTruthy()
+    expect(prismaMock.userIdentity.create).not.toHaveBeenCalled()
+  })
+
+  it('le ticket sert une fois, et un faux ticket ou une session ne lancent rien', async () => {
+    const ticket = await ticketFor('user-pw')
+    expect((await startLink(ticket)).res.statusCode).toBe(302)
+    const again = await startLink(ticket)
+    expect(fragmentOf(again.res.headers.location).get('oidc_error')).toBe('oidc_link_expired')
+    const forged = await startLink('nimportequoi')
+    expect(fragmentOf(forged.res.headers.location).get('oidc_error')).toBe('oidc_link_expired')
+    const session = await startLink(sessionOf('user-pw'))
+    expect(fragmentOf(session.res.headers.location).get('oidc_error')).toBe('oidc_link_expired')
+  })
+
+  it("le ticket n'ouvre aucune session", async () => {
+    const ticket = await ticketFor('user-pw')
+    const asBearer = await app.inject({ method: 'GET', url: '/auth/me', headers: { authorization: `Bearer ${ticket}` } })
+    expect(asBearer.statusCode).toBe(401)
+  })
+
+  it('compte supprimé entre le ticket et le retour : refusé', async () => {
+    const ticket = await ticketFor('user-pw')
+    const { cookie } = await startLink(ticket)
+    prismaMock.user.findUnique.mockResolvedValue(null)
+    const res = await callback(cookie)
+    expect(fragmentOf(res.headers.location).get('oidc_error')).toBe('oidc_failed')
+    expect(prismaMock.userIdentity.create).not.toHaveBeenCalled()
+  })
+})
+
 describe('journaux', () => {
   it("le code d'autorisation du retour n'est pas journalisé", async () => {
     const { redactUrl } = await import('../src/app.js')

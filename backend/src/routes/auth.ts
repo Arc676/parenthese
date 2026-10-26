@@ -254,14 +254,15 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
     const user = await app.prisma.user.findUnique({
       where: { id: request.actor.userId },
-      select: { id: true, email: true, firstName: true, passwordHash: true },
+      select: { id: true, email: true, firstName: true, passwordHash: true, identities: { select: { id: true }, take: 1 } },
     })
     if (!user) {
       return reply.code(401).send({ error: 'authentication_required' })
     }
 
-    // hasPassword : l'écran de suppression demande le mot de passe, ou l'email pour un compte sans mot de passe
-    return reply.send({ user: { id: user.id, email: user.email, firstName: user.firstName, hasPassword: confirmsWithPassword(user.passwordHash) } })
+    // hasPassword : l'écran de suppression demande le mot de passe, ou l'email pour un compte sans mot de passe.
+    // oidcLinked : le compte se connecte déjà par le fournisseur ; sinon le compte propose « Relier à … »
+    return reply.send({ user: { id: user.id, email: user.email, firstName: user.firstName, hasPassword: confirmsWithPassword(user.passwordHash), oidcLinked: (user.identities?.length ?? 0) > 0 } })
   })
 
   app.get('/me/last-tree', async (request, reply) => {
