@@ -38,3 +38,16 @@ describe('formatDigitsAsDate', () => {
     expect(formatDigitsAsDate('1/3/1950')).toBe('1/3/1950')
   })
 })
+
+describe('ordre mois/jour d un navigateur en-US (issue #152)', () => {
+  it('affiche et lit le mois avant le jour', () => {
+    expect(dateToInputText('1950-03-12', true)).toBe('03/12/1950')
+    expect(parseDateInput('03/12/1950', true)).toBe('1950-03-12')
+    expect(parseDateInput('12/25/1950', true)).toBe('1950-12-25')
+    expect(parseDateInput('25/12/1950', true)).toBeUndefined()
+  })
+  it('une année seule ne change pas', () => {
+    expect(dateToInputText('1950-01-01', true)).toBe('1950')
+    expect(parseDateInput('1950', true)).toBe('1950-01-01')
+  })
+})

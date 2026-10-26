@@ -36,7 +36,7 @@ export default function DateField({ id, value, onChange, placeholder, className 
           else setText(dateToInputText(parsed))
         }}
       />
-      {touched && invalid && <span className="pz-date-hint" role="status">{t('Une année (1950) ou une date (12/03/1950)')}</span>}
+      {touched && invalid && <span className="pz-date-hint" role="status">{t('Une année (1950) ou une date ({exemple})', { exemple: dateToInputText('1950-03-12') })}</span>}
     </span>
   )
 }

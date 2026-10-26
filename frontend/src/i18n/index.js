@@ -32,8 +32,23 @@ function detectLocale() {
 
 export const locale = typeof window === 'undefined' ? 'fr' : detectLocale()
 
-// Pour toLocaleDateString et consorts.
-export const dateLocale = locale === 'fr' ? 'fr-FR' : 'en-GB'
+// Pour toLocaleDateString et consorts. En anglais, la région du navigateur décide de l'ordre jour/mois
+// (en-US : 10/25/2026) ; hors anglais (interface anglaise sur un navigateur allemand…), en-GB (issue #152).
+function englishDateLocale() {
+  const languages = typeof navigator === 'undefined' ? [] : (navigator.languages?.length ? navigator.languages : [navigator.language])
+  const english = languages.find((lang) => /^en-[a-z]{2}$/i.test(String(lang)))
+  if (!english) return 'en-GB'
+  try { return Intl.DateTimeFormat.supportedLocalesOf(english)[0] || 'en-GB' } catch { return 'en-GB' }
+}
+export const dateLocale = locale === 'fr' ? 'fr-FR' : englishDateLocale()
+
+// Le mois avant le jour dans les dates en chiffres de cette langue (en-US)
+export const monthFirst = (() => {
+  try {
+    const parts = new Intl.DateTimeFormat(dateLocale, { day: '2-digit', month: '2-digit', year: 'numeric' }).formatToParts(new Date(Date.UTC(2026, 9, 25)))
+    return parts.findIndex((p) => p.type === 'month') < parts.findIndex((p) => p.type === 'day')
+  } catch { return false }
+})()
 
 if (typeof document !== 'undefined') document.documentElement.lang = locale
 
