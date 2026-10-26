@@ -22,7 +22,7 @@ function plural(n, one, many, vars = {}) {
 }
 
 function initialsOf(person) {
-  return `${person.firstName?.[0] || ''}${person.lastName?.[0] || ''}`.toUpperCase() || '?'
+  return initialsOf(person)
 }
 
 // Dossier où le logiciel d'origine rangeait la première photo citée, pour aider à le retrouver
