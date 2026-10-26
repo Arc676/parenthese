@@ -34,7 +34,7 @@ const MONTHS = [
   ['janvier', 'january'], ['fevrier', 'february'], ['mars', 'march'], ['avril', 'april'], ['mai', 'may'], ['juin', 'june'],
   ['juillet', 'july'], ['aout', 'august'], ['septembre', 'september'], ['octobre', 'october'], ['novembre', 'november'], ['decembre', 'december'],
 ]
-const normalize = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+const normalize = (s) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
 
 // « juin », « June », « sept. », « févr » : un mois si le mot (3 lettres au moins) n'en désigne qu'un
 function monthFromWord(word) {
