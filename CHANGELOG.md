@@ -2,6 +2,33 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
+## 1.5.2 (2026-10-26)
+
+### Dates follow the browser's region (#152)
+
+- Dates follow the browser's regional variant of the interface language (en-US, en-AU, fr-CA…), falling back to fr-FR or en-GB. Before, English always used the British format. This covers every date and time shown in the app, e.g. `10/26/2026, 10:57 AM` in the review panel on an en-US browser.
+- Typed dates follow the region's order and separator: `06/12/1924` in en-US, `1924-06-12` in fr-CA, `12/06/1924` in France and the UK. A year-first date is read everywhere.
+- The date field also accepts a written month, in French or English: `12 juin 1924`, `1er août 1950`, `June 12, 1924`, `3 sept. 1901`. An ambiguous month (`jui`) is refused.
+
+### Names in non-Latin scripts
+
+- Initials for scripts without capital letters (Chinese, Japanese, Korean, Arabic, Hebrew…) are a single character: the family name for Chinese, Japanese and Korean, the first name for Arabic and Hebrew. Latin and Cyrillic keep two initials. This applies to profiles, suggestion cards, the first-photos panel and the tree.
+- A birth place or a nickname in a right-to-left script no longer flips the order of the line under the name.
+
+### Suggestion cards
+
+- The action label (New, Edit, Delete) sits on the top edge of the card, so the name keeps the full width and both buttons stay inside the card on a phone.
+- A change whose profile changed after the suggestion was sent shows "Needs checking" in place of "Edit". Any other action keeps its word ("Delete, needs checking").
+
+### Fixes
+
+- The counter of pending suggestions on the account picture is round for a single digit.
+- Backend dependencies: ip-address 10.7.4 (#144) and fast-uri (#155), for known security issues.
+
+### For self-hosters
+
+- No database change.
+
 ## 1.5.1 (2026-10-25)
 
 ### Suggestions show on the tree
