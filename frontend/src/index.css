@@ -1,8 +1,20 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 @layer base {
+  /* Ce que faisait la remise à zéro de Tailwind 3 et que la 4 ne fait plus : main sur les boutons, placeholder gris,
+     bordure grise quand une règle donne une largeur ou un style sans couleur */
+  *, ::after, ::before, ::backdrop, ::file-selector-button {
+    border-color: #e5e7eb;
+  }
+
+  button:not(:disabled), [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  input::placeholder, textarea::placeholder {
+    color: #9ca3af;
+  }
+
   * {
     margin: 0;
     padding: 0;
@@ -36,15 +48,5 @@
   .admin-person-item span,
   .account-help {
     font-family: 'DM Sans', system-ui, sans-serif;
-  }
-}
-
-@layer utilities {
-  .text-cosmos-cream {
-    color: #FFFFFF;
-  }
-
-  .bg-cosmos-black {
-    background-color: #2A2622;
   }
 }

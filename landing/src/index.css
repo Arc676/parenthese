@@ -1,6 +1,20 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@layer base {
+  /* Ce que faisait la remise à zéro de Tailwind 3 et que la 4 ne fait plus : main sur les boutons, placeholder gris,
+     bordure grise quand une règle donne une largeur ou un style sans couleur */
+  *, ::after, ::before, ::backdrop, ::file-selector-button {
+    border-color: #e5e7eb;
+  }
+
+  button:not(:disabled), [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  input::placeholder, textarea::placeholder {
+    color: #9ca3af;
+  }
+}
 
 /* ─── Tokens, accent terracotta (validé le 24/09/2026), clair uniquement ─── */
 :root {
@@ -112,9 +126,9 @@ html.logo-intro .lk-nom { animation: lk-nom 700ms var(--ease-out) 380ms both; }
 .hero-txt { display: grid; gap: 24px; justify-items: start; }
 .hero-txt .t-d1 { max-width: 17ch; font-size: clamp(40px, 4.6vw, 64px); line-height: 1.04; }
 .hero-txt .lede { max-width: 44ch; }
-/* Le visuel du hero gagne un peu de place sur la gouttière et la marge droite (80px au plus, 24px de garde pour la barre de défilement) */
+/* Le visuel du hero gagne un peu de place sur la marge droite (80px au plus, 24px de garde pour la barre de défilement) */
 @media (min-width: 1024px) {
-  .hero-graph { max-width: none; margin-left: -40px; width: calc(100% + 40px + min(80px, var(--gut) + max(0px, (100vw - 1200px) / 2) - 24px)); }
+  .hero-graph { max-width: none; width: calc(100% + 40px + min(80px, var(--gut) + max(0px, (100vw - 1200px) / 2) - 24px)); }
 }
 .ctas { display: flex; gap: 10px; flex-wrap: wrap; }
 
