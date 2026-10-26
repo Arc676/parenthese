@@ -50,9 +50,9 @@ export function resetTreeUnlockGuard(): void {
   attemptsByTree.clear()
 }
 
-// bcryptjs calcule en JavaScript sur le processus de l'API (≈ 250 ms par comparaison au coût 12) : des essais
-// lancés en parallèle depuis quelques adresses suffisaient à le saturer pour toutes les familles. Les
-// comparaisons de mot de passe de partage passent une par une, le reste de l'API garde la main entre deux.
+// Une comparaison bcrypt coûte ≈ 250 ms au coût 12. Même calculée hors de la boucle (bcrypt natif), des essais
+// lancés en parallèle depuis quelques adresses occuperaient tous les fils de calcul, connexions comprises. Les
+// comparaisons de mot de passe de partage passent une par une.
 // Au-delà de MAX_WAITING comparaisons en attente, on refuse tout de suite (null) plutôt que d'allonger la file.
 const MAX_WAITING = 20
 let queue: Promise<unknown> = Promise.resolve()

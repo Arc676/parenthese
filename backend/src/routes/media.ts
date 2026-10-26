@@ -241,6 +241,18 @@ async function canReadMedia(app: FastifyRequest['server'], treeId: string, reque
   return token ? canReadTreeWithMediaToken(app, treeId, token) : false
 }
 
+// Compte qui demande un média : celui de la session, sinon celui du jeton médias (lien de partage : aucun)
+async function mediaRequesterUserId(app: FastifyRequest['server'], request: FastifyRequest, token: string | undefined): Promise<string | null> {
+  if (request.actor?.kind === 'user') return request.actor.userId
+  if (!token) return null
+  try {
+    const payload = await app.jwt.verify<{ kind?: string; userId?: string }>(token)
+    return payload.kind === 'media' && payload.userId ? payload.userId : null
+  } catch {
+    return null
+  }
+}
+
 export const mediaRoutes: FastifyPluginAsync = async (app) => {
   app.post('/trees/:id/persons/:personId/media', UPLOAD_RATE_LIMIT, async (request, reply) => {
     const actor = request.actor
@@ -1079,11 +1091,23 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
       select: {
         filePath: true,
         mimeType: true,
+        status: true,
+        uploadedBy: true,
       },
     })
 
     if (!media) {
       return reply.code(404).send({ error: 'media_not_found' })
+    }
+
+    // Un souvenir qui attend la relecture ne se lit que par qui gère l'arbre ou par qui l'a envoyé, pas par toute la
+    // famille qui connaîtrait son identifiant. Même réponse qu'un média absent : rien n'indique qu'il existe.
+    if (media.status === 'pending') {
+      const userId = await mediaRequesterUserId(app, request, query.data.token)
+      const allowed = Boolean(userId) && (media.uploadedBy === userId || Boolean(await requireAdminMembership(app, userId as string, params.data.id)))
+      if (!allowed) {
+        return reply.code(404).send({ error: 'media_not_found' })
+      }
     }
 
     // YouTube videos: filePath is the YouTube URL, redirect the browser
