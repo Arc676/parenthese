@@ -451,7 +451,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       })
 
       if (payload.kind === 'user' && typeof payload.exp === 'number') {
-        revokeUserToken(payload.jti, payload.exp)
+        await revokeUserToken(app.prisma, payload.jti, payload.exp)
       }
 
       await removeTreeMediaDirectories(ownedTreeIds, request.log)
@@ -471,7 +471,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     }
 
     if (typeof payload.exp === 'number') {
-      revokeUserToken(payload.jti, payload.exp)
+      await revokeUserToken(app.prisma, payload.jti, payload.exp)
     }
 
     return reply.send({ ok: true })

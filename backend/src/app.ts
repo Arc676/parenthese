@@ -8,7 +8,7 @@ import { Prisma } from '@prisma/client'
 
 import { env } from './config/env.js'
 import { prisma } from './lib/prisma.js'
-import { isUserTokenRevoked } from './lib/token-revocation.js'
+import { isUserTokenRevoked, loadRevokedTokens } from './lib/token-revocation.js'
 import { authRoutes } from './routes/auth.js'
 import { contributionRoutes } from './routes/contributions.js'
 import { graphRoutes } from './routes/graph.js'
@@ -58,6 +58,12 @@ export function createApp() {
   })
 
   app.decorate('prisma', prisma)
+  // Les déconnexions d'avant le redémarrage reviennent en mémoire avant la première requête (onReady passe avant
+  // listen). Sans elles, l'API ne démarre pas : chaque session fermée redeviendrait valable sans que personne le
+  // voie, et pm2 comme Docker relancent l'API.
+  app.addHook('onReady', async () => {
+    await loadRevokedTokens(app.prisma)
+  })
   app.decorateRequest('actor', null)
 
   app.register(cors, {

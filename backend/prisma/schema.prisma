@@ -215,6 +215,15 @@ model TreeInvitation {
   @@map("tree_invitations")
 }
 
+// Sessions fermées (déconnexion, compte supprimé), gardées jusqu'à la fin de leur jeton
+model RevokedSession {
+  jti       String   @id
+  expiresAt DateTime
+
+  @@index([expiresAt])
+  @@map("revoked_sessions")
+}
+
 // Photo posée sur l'arbre par la famille, en attente de relecture (1.5.1). La ligne vit tant que la photo n'est
 // ni acceptée (ligne retirée, fichier gardé) ni refusée (fichier et ligne effacés). Un envoi jamais proposé est
 // effacé après 7 jours, la durée d'un brouillon. Les photos des gestionnaires n'ont pas de ligne.

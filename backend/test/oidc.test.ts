@@ -6,6 +6,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 // fournisseur à part. Ce fichier vérifie ce que Parenthèse décide avec ce que le fournisseur renvoie.
 const { prismaMock, oidcMock } = vi.hoisted(() => ({
   prismaMock: {
+    // Sessions fermées (lib/token-revocation.ts), rechargées au démarrage
+    revokedSession: {
+      upsert: vi.fn().mockResolvedValue({}),
+      findMany: vi.fn().mockResolvedValue([]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
     user: {
       findUnique: vi.fn(),
       create: vi.fn(),

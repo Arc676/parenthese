@@ -9,6 +9,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
+    // Sessions fermées (lib/token-revocation.ts), rechargées au démarrage
+    revokedSession: {
+      upsert: vi.fn().mockResolvedValue({}),
+      findMany: vi.fn().mockResolvedValue([]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
     user: {
       count: vi.fn(),
     },
