@@ -2,6 +2,28 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
+## 1.5.3 (2026-10-26)
+
+### Videos in Safari (#162)
+
+- Media files are streamed and answer byte-range requests (`Accept-Ranges: bytes`, `206` with `Content-Range`, `416` outside the file). Safari on iOS, iPadOS and macOS needs this to play a video. Before, the whole file was read into memory and sent in one block.
+
+### Accounts
+
+- A password account on an OIDC instance can link its provider identity from its account ("Also sign in with …"), through a two-minute, single-use ticket (`POST /auth/oidc/link`, then `/auth/oidc/start?link=`). The identity joins that account whatever its email, and an identity already linked to another account is never moved. This is the way to switch an instance to `PASSWORD_LOGIN=false` without locking out password accounts. `/auth/me` returns `oidcLinked` (#161).
+- Signing out, or deleting the account, now survives an API restart: closed sessions are kept in the `revoked_sessions` table until their token expires, and the API refuses to start if it can't load them. Migration `20261026_001_deconnexions` (#163).
+
+### Security
+
+- A media waiting for review is readable only by a tree admin or by the account that uploaded it. Anyone else gets the same 404 as a missing media (#160).
+- Passwords are hashed with native bcrypt (`@node-rs/bcrypt`) off the event loop. Existing hashes keep working, no migration (#160).
+- Frontend lockfile: zod 4.6.7, a dev dependency (#166).
+
+### Under the hood
+
+- Prisma 7 with the pg driver adapter. The client is generated in `backend/src/generated` and `backend/prisma.config.ts` holds the database URL for the CLI. Without Docker, Node must be ^20.19, ^22.12 or 24+, and `deploy/deploy.sh` stops early on an older Node (#164).
+- Tailwind 4 for the app and the landing, through the Vite plugin. The v3 base styles the app relied on are kept, and nothing changes on screen (#165).
+
 ## 1.5.2 (2026-10-26)
 
 ### Dates follow the browser's region (#152)
