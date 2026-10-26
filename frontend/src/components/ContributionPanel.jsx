@@ -240,6 +240,8 @@ const ContributionPanel = ({
   loading,
   errorMessage,
   inviteShareUrl,
+  // Onglet de famille ouvert : le lien ouvre l'arbre sur cette famille
+  inviteFamilyName = '',
   inviteKnownPasswords,
   inviteSaving,
   inviteError,
@@ -403,7 +405,7 @@ const ContributionPanel = ({
             {/* ── Section invitation ── */}
             <div className="contrib-invite">
               <div className="contrib-invite-top">
-                <strong className="contrib-invite-title">{t('Le lien à envoyer à la famille')}</strong>
+                <strong className="contrib-invite-title">{inviteFamilyName ? t('Le lien à envoyer à la famille {name}', { name: inviteFamilyName }) : t('Le lien à envoyer à la famille')}</strong>
                 {copyFeedback && <span className="contrib-copy-feedback">{copyFeedback}</span>}
               </div>
               <div className="contrib-invite-link">

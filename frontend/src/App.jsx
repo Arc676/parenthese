@@ -544,6 +544,17 @@ function App() {
   })
 
   const [adminPanelVisible, setAdminPanelVisible] = useState(false)
+  // Onglet de famille ouvert : l'adresse de la page le porte (?famille=<charnière>), et le lien à envoyer à la
+  // famille aussi, pour qu'il ouvre l'arbre sur cette famille
+  const [initialFamilyKey] = useState(() => new URLSearchParams(window.location.search).get('famille'))
+  const [openFamily, setOpenFamily] = useState(null)
+  const handleFamilyChange = useCallback((family) => {
+    setOpenFamily(family)
+    const url = new URL(window.location.href)
+    if (family) url.searchParams.set('famille', family.key)
+    else url.searchParams.delete('famille')
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [])
   // Grandes belles-familles dans des onglets (réglage de ce navigateur, voir Paramètres de l'arbre)
   const [familyTabs, setFamilyTabsState] = useState(() => { try { return localStorage.getItem('parenthese.familyTabs') !== 'off' } catch { return true } })
   const setFamilyTabs = useCallback((on) => { setFamilyTabsState(on); try { localStorage.setItem('parenthese.familyTabs', on ? 'on' : 'off') } catch { /* navigateur sans stockage */ } }, [])
@@ -3404,6 +3415,8 @@ function App() {
         onAnnotationsAnchored={persistAnnotationAnchors}
         selfPersonId={linkedSelfPersonId || null}
         ghosts={ghosts}
+        initialFamilyKey={initialFamilyKey}
+        onFamilyChange={handleFamilyChange}
       />
       <ZoomControl zoomApiRef={galaxyZoomApiRef} />
       {selectedGhost && !tree.selectedPerson && (
@@ -3510,7 +3523,8 @@ function App() {
         canModerate={tree.canEditCurrentTree}
         loading={contrib.contribState.loading}
         errorMessage={contrib.contribState.error}
-        inviteShareUrl={contribInviteState.shareUrl}
+        inviteShareUrl={contribInviteState.shareUrl && openFamily ? `${contribInviteState.shareUrl}?famille=${encodeURIComponent(openFamily.key)}` : contribInviteState.shareUrl}
+        inviteFamilyName={openFamily?.label || ''}
         inviteKnownPasswords={contribInviteState.knownPasswords}
         inviteSaving={contribInviteState.loading}
         inviteError={contribInviteState.error}

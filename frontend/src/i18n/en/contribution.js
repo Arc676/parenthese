@@ -56,6 +56,7 @@ export default {
   'participe': 'joins in',
   'Fermer': 'Close',
   'Le lien à envoyer à la famille': 'The link to send to your family',
+  'Le lien à envoyer à la famille {name}': 'The link to send to the {name} family',
   'Lien indisponible': 'Link unavailable',
   'Lien copié': 'Link copied',
   'Copier': 'Copy',

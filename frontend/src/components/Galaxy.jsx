@@ -44,7 +44,7 @@ const DROP_SPRING = { stiffness: 480, dampingRatio: 0.72 }
 const centerX = (node) => node.x + node.width / 2
 const prefersReducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, reorderEnabled = false, onReorderSiblings = null, familyTabs = true, annotationViewRef = null, onAnnotationsAnchored = null, selfPersonId = null, ghosts = null }) => {
+const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, reorderEnabled = false, onReorderSiblings = null, familyTabs = true, annotationViewRef = null, onAnnotationsAnchored = null, selfPersonId = null, ghosts = null, initialFamilyKey = null, onFamilyChange = null }) => {
   const canvasRef = useRef(null)
   const layoutDataRef = useRef(null)
   // Onglets de familles (réglage `familyTabs`) : la liste des familles de l'arbre, calculée une fois par
@@ -54,6 +54,14 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   const [activeKey, setActiveKey] = useState(focusPersonId != null ? String(focusPersonId) : null)
   const tabsCacheRef = useRef({ rev: -1, start: undefined, tabs: [] })
   const pendingFocusRef = useRef(null) // personne cherchée dans un autre onglet, visée après le changement
+  // Lien d'un onglet (?famille=<charnière>) : ouvert dès que l'arbre et ses onglets sont connus, et de nouveau si
+  // la personne de départ arrive après (visiteur), tant qu'on n'a pas soi-même changé d'onglet
+  const linkFamilyRef = useRef(initialFamilyKey != null ? String(initialFamilyKey) : null)
+  const pendingFamilyRef = useRef(initialFamilyKey != null ? String(initialFamilyKey) : null)
+  // Famille du lien sans onglet dans ce navigateur (onglets coupés) : l'arbre entier s'ouvre sur sa charnière
+  const frameOnRef = useRef(null)
+  const onFamilyChangeRef = useRef(onFamilyChange)
+  useEffect(() => { onFamilyChangeRef.current = onFamilyChange }, [onFamilyChange])
   const activeTabRef = useRef(null)
   const familyTabsRef = useRef(familyTabs)
   useEffect(() => { familyTabsRef.current = familyTabs }, [familyTabs])
@@ -63,7 +71,13 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   const onAnnotationsAnchoredRef = useRef(onAnnotationsAnchored)
   useEffect(() => { onAnnotationsAnchoredRef.current = onAnnotationsAnchored }, [onAnnotationsAnchored])
   const startRefRef = useRef(focusPersonId)
-  useEffect(() => { startRefRef.current = focusPersonId; setActiveKey(focusPersonId != null ? String(focusPersonId) : null) }, [focusPersonId])
+  useEffect(() => {
+    startRefRef.current = focusPersonId
+    if (linkFamilyRef.current != null) pendingFamilyRef.current = linkFamilyRef.current
+    setActiveKey(focusPersonId != null ? String(focusPersonId) : null)
+  }, [focusPersonId])
+  // Onglet choisi par la personne (barre, badge, recherche) : le lien d'arrivée ne s'impose plus
+  const chooseTab = useCallback((key) => { linkFamilyRef.current = null; pendingFamilyRef.current = null; frameOnRef.current = null; setActiveKey(key) }, [])
   // Lu au calcul du cadrage et par le réordonnancement : la référence de l'arbre affiché
   const focusPersonIdRef = useRef(focusPersonId)
   // La barre défile quand les onglets débordent : l'onglet ouvert se met en vue (sans animation) et les bords
@@ -83,7 +97,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     return () => window.removeEventListener('resize', updateTabsEdges)
   }, [activeKey, tabs, updateTabsEdges])
   // Clic sur un badge : l'onglet de cette famille (ou, depuis un onglet, celui d'où l'on vient)
-  const openFamily = useCallback((tabKey) => { if (tabKey != null) setActiveKey(String(tabKey)) }, [])
+  const openFamily = useCallback((tabKey) => { if (tabKey != null) chooseTab(String(tabKey)) }, [chooseTab])
   // Propriétaire : un portrait vide survolé montre « + photo »
   const [layoutReady, setLayoutReady] = useState(false)
   const transformRef = useRef({ x: 0, y: 0, scale: 1 })
@@ -418,7 +432,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
         const id = String(personId)
         const all = tabsCacheRef.current.tabs
         const home = all.find((tb) => tb.personIds?.has(id) && !(tb.hinges || []).map(String).includes(id)) || all.find((tb) => tb.personIds?.has(id)) || all[0]
-        if (home && home.key !== activeTabRef.current?.key) { pendingFocusRef.current = id; setActiveKey(home.key) }
+        if (home && home.key !== activeTabRef.current?.key) { pendingFocusRef.current = id; chooseTab(home.key) }
         return
       }
       if (!canvas || !node) return
@@ -490,6 +504,15 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       setTabs(tabsCacheRef.current.tabs)
     }
     if (!familyTabs && tabsCacheRef.current.tabs.length) { tabsCacheRef.current = { rev: -1, start: undefined, tabs: [] }; setTabs([]) }
+    // La famille du lien : son onglet s'il existe dans ce navigateur, sinon l'arbre entier ouvert sur sa charnière
+    if (pendingFamilyRef.current != null && graphPersons.length) {
+      const key = pendingFamilyRef.current
+      pendingFamilyRef.current = null
+      if (familyTabs && tabsCacheRef.current.tabs.some((tb) => tb.key === key)) {
+        frameOnRef.current = null
+        if (key !== activeKey) { setActiveKey(key); return }
+      } else frameOnRef.current = key
+    }
     const tab = familyTabs ? (tabsCacheRef.current.tabs.find((tb) => tb.key === activeKey) || tabsCacheRef.current.tabs[0] || null) : null
     activeTabRef.current = tab
     // La personne de départ (ou la charnière de l'onglet) sert de référence aux rangées
@@ -554,7 +577,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
 
     // Grand arbre : vu en entier, les portraits deviennent des pastilles illisibles.
     // On ouvre sur la personne de départ, à une taille où l'on reconnaît les visages.
-    const focusId = focusPersonIdRef.current
+    const focusId = frameOnRef.current ?? focusPersonIdRef.current
     const personNodes = result.children.filter((n) => n._type === 'person')
     let focusNode = focusId != null
       ? personNodes.find((n) => String(n._data?.id) === String(focusId))
@@ -662,6 +685,13 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       requestAnimationFrame(() => zoomApiRef?.current?.focusPerson?.(id))
     }
   }, [graphRevision, activeKey, familyTabs, selfPersonId, ghosts])
+
+  // Onglet ouvert, remonté pour l'adresse de la page et le lien de partage ; null pour la famille de départ
+  useEffect(() => {
+    if (pendingFamilyRef.current != null) return
+    const open = familyTabs && tabs.length > 1 ? tabs.find((tb) => tb.key === activeKey) : null
+    onFamilyChangeRef.current?.(open && open !== tabs[0] ? { key: open.key, label: open.label } : null)
+  }, [activeKey, tabs, familyTabs])
 
   // Sync selectedPersonId
   useEffect(() => {
@@ -1114,7 +1144,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
               type="button"
               className={`family-tab${active ? ' is-active' : ''}`}
               aria-current={active ? 'page' : undefined}
-              onClick={() => setActiveKey(tb.key)}
+              onClick={() => chooseTab(tb.key)}
             >
               <span className="family-tab-name">{tb.label ? tr('Famille {name}', { name: tb.label }) : tr('Famille')}</span>
               <span className="family-tab-count">{tb.count}</span>
