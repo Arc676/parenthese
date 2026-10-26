@@ -2,6 +2,14 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
+## 1.5.4 (2026-10-26)
+
+### A link per family tab (#167)
+
+- `?famille=<hinge person id>` opens the tree on that family's tab. The tab opens once the tree and its tabs are known, and again if the start person arrives later (as it does for a visitor), unless the person already picked a tab. With tabs turned off in that browser, the whole tree opens framed on the hinge person. An unknown key is ignored.
+- The page address follows the open tab. In the share panel, the link to send and the invitation message follow it too, and the title names the family ("The link to send to the Garnier family").
+- Same password and same access: the link picks the landing tab and restricts nothing.
+
 ## 1.5.3 (2026-10-26)
 
 ### Videos in Safari (#162)
