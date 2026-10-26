@@ -305,9 +305,6 @@
 .pc-quick-edit:focus-visible { outline: 2px solid var(--pz-a500); outline-offset: 2px; }
 @media (hover: hover) and (pointer: fine) { .pc-quick-edit:hover { background: var(--pz-line-soft); } }
 
-/* Ajouter un proche depuis la fiche en lecture (1.5.1) */
-.pc-quick-add { display: flex; flex-wrap: wrap; gap: 6px; }
-.pc-quick-add .pz-btn { gap: 4px; }
 /* « Créer « Jeanne » comme parent » sous la recherche d'un proche */
 .pc-search-create .pc-rel-avatar { color: var(--pz-a700); background: var(--pz-a50); }
 .pc-search-create em { color: var(--pz-muted); font-style: normal; }
