@@ -39,15 +39,54 @@ describe('formatDigitsAsDate', () => {
   })
 })
 
-describe('ordre mois/jour d un navigateur en-US (issue #152)', () => {
-  it('affiche et lit le mois avant le jour', () => {
-    expect(dateToInputText('1950-03-12', true)).toBe('03/12/1950')
-    expect(parseDateInput('03/12/1950', true)).toBe('1950-03-12')
-    expect(parseDateInput('12/25/1950', true)).toBe('1950-12-25')
-    expect(parseDateInput('25/12/1950', true)).toBeUndefined()
+const FR = { order: 'dmy', sep: '/' }
+const US = { order: 'mdy', sep: '/' }
+const CA = { order: 'ymd', sep: '-' }
+
+describe('région du navigateur (issue #152)', () => {
+  it('en-US : le mois avant le jour', () => {
+    expect(dateToInputText('1950-03-12', US)).toBe('03/12/1950')
+    expect(parseDateInput('03/12/1950', US)).toBe('1950-03-12')
+    expect(parseDateInput('12/25/1950', US)).toBe('1950-12-25')
+    expect(parseDateInput('25/12/1950', US)).toBeUndefined()
+    expect(formatDigitsAsDate('03121950', US)).toBe('03/12/1950')
   })
-  it('une année seule ne change pas', () => {
-    expect(dateToInputText('1950-01-01', true)).toBe('1950')
-    expect(parseDateInput('1950', true)).toBe('1950-01-01')
+  it('fr-CA : l année d abord, avec des tirets', () => {
+    expect(dateToInputText('1950-03-12', CA)).toBe('1950-03-12')
+    expect(parseDateInput('1950-3-12', CA)).toBe('1950-03-12')
+    expect(formatDigitsAsDate('19500312', CA)).toBe('1950-03-12')
+    expect(formatDigitsAsDate('19503', CA)).toBe('1950-3')
+  })
+  it('une année seule ne change nulle part', () => {
+    for (const f of [FR, US, CA]) {
+      expect(dateToInputText('1950-01-01', f)).toBe('1950')
+      expect(dateToInputText('1950', f)).toBe('1950')
+      expect(parseDateInput('1950', f)).toBe('1950-01-01')
+    }
+  })
+  it('l année en premier se lit partout', () => {
+    expect(parseDateInput('1950-03-12', FR)).toBe('1950-03-12')
+    expect(parseDateInput('1950/03/12', US)).toBe('1950-03-12')
+  })
+})
+
+describe('mois en lettres, français ou anglais', () => {
+  it('jour, mois, année', () => {
+    expect(parseDateInput('12 juin 1924', FR)).toBe('1924-06-12')
+    expect(parseDateInput('1er août 1950', FR)).toBe('1950-08-01')
+    expect(parseDateInput('12 June 1924', US)).toBe('1924-06-12')
+    expect(parseDateInput('3 sept. 1901', FR)).toBe('1901-09-03')
+    expect(parseDateInput('3 févr 1901', FR)).toBe('1901-02-03')
+    expect(parseDateInput('3 FEVRIER 1901', FR)).toBe('1901-02-03')
+  })
+  it('mois, jour, année', () => {
+    expect(parseDateInput('June 12, 1924', US)).toBe('1924-06-12')
+    expect(parseDateInput('Aug 1st 1950', FR)).toBe('1950-08-01')
+  })
+  it('refuse un mois ambigu ou une date impossible', () => {
+    expect(parseDateInput('12 ju 1924', FR)).toBeUndefined()
+    expect(parseDateInput('12 jui 1924', FR)).toBeUndefined()
+    expect(parseDateInput('31 juin 1924', FR)).toBeUndefined()
+    expect(parseDateInput('juin 1924', FR)).toBeUndefined()
   })
 })

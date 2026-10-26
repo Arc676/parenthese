@@ -32,22 +32,25 @@ function detectLocale() {
 
 export const locale = typeof window === 'undefined' ? 'fr' : detectLocale()
 
-// Pour toLocaleDateString et consorts. En anglais, la région du navigateur décide de l'ordre jour/mois
-// (en-US : 10/25/2026) ; hors anglais (interface anglaise sur un navigateur allemand…), en-GB (issue #152).
-function englishDateLocale() {
+// Pour toLocaleDateString et consorts : la région du navigateur dans la langue de l'interface (en-US, fr-CA…),
+// sinon fr-FR ou en-GB. Elle décide de l'ordre jour, mois, année et du séparateur (issue #152).
+function regionalDateLocale() {
+  const fallback = locale === 'fr' ? 'fr-FR' : 'en-GB'
   const languages = typeof navigator === 'undefined' ? [] : (navigator.languages?.length ? navigator.languages : [navigator.language])
-  const english = languages.find((lang) => /^en-[a-z]{2}$/i.test(String(lang)))
-  if (!english) return 'en-GB'
-  try { return Intl.DateTimeFormat.supportedLocalesOf(english)[0] || 'en-GB' } catch { return 'en-GB' }
+  const regional = languages.find((lang) => new RegExp(`^${locale}-[a-z]{2}$`, 'i').test(String(lang)))
+  if (!regional) return fallback
+  try { return Intl.DateTimeFormat.supportedLocalesOf(regional)[0] || fallback } catch { return fallback }
 }
-export const dateLocale = locale === 'fr' ? 'fr-FR' : englishDateLocale()
+export const dateLocale = regionalDateLocale()
 
-// Le mois avant le jour dans les dates en chiffres de cette langue (en-US)
-export const monthFirst = (() => {
+// Une date en chiffres dans cette région : ordre ('dmy', 'mdy' ou 'ymd') et séparateur (« / », « - », « . »)
+export const dateFormat = (() => {
   try {
     const parts = new Intl.DateTimeFormat(dateLocale, { day: '2-digit', month: '2-digit', year: 'numeric' }).formatToParts(new Date(Date.UTC(2026, 9, 25)))
-    return parts.findIndex((p) => p.type === 'month') < parts.findIndex((p) => p.type === 'day')
-  } catch { return false }
+    const order = parts.filter((p) => ['day', 'month', 'year'].includes(p.type)).map((p) => p.type[0]).join('')
+    const sep = parts.find((p) => p.type === 'literal')?.value.trim() || '/'
+    return ['dmy', 'mdy', 'ymd'].includes(order) ? { order, sep } : { order: 'dmy', sep: '/' }
+  } catch { return { order: 'dmy', sep: '/' } }
 })()
 
 if (typeof document !== 'undefined') document.documentElement.lang = locale

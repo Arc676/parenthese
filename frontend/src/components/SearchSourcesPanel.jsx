@@ -34,7 +34,7 @@ function formatDate(value) {
   const options = day ? { day: 'numeric', month: 'long', year: 'numeric' } : { month: 'long', year: 'numeric' }
   const text = date.toLocaleDateString(dateLocale, { ...options, timeZone: 'UTC' })
   // « 1er janvier », pas « 1 janvier »
-  return dateLocale === 'fr-FR' && day === 1 ? text.replace(/^1 /, '1er ') : text
+  return dateLocale.startsWith('fr') && day === 1 ? text.replace(/^1 /, '1er ') : text
 }
 
 // « Né le 24 août 1898 à Monségur (40) », accordé au sexe quand la source le donne
