@@ -137,7 +137,8 @@ if changed backend ecosystem.config.cjs; then
   node -e "const [a, b] = process.versions.node.split('.').map(Number); process.exit((a === 20 && b >= 19) || (a === 22 && b >= 12) || a >= 24 ? 0 : 1)" \
     || { echo "ERROR: Node $(node -v) trop ancien pour Prisma 7 (^20.19, ^22.12 ou 24+)"; exit 1; }
   install_deps backend
-  (cd "$REPO_DIR/backend" && node -e "require('fastify'); require('zod'); require('@prisma/client')") \
+  # Le client Prisma n'existe qu'après prisma:generate (src/generated) : on vérifie ses dépendances, pas le client
+  (cd "$REPO_DIR/backend" && node -e "require('fastify'); require('zod'); require('@prisma/adapter-pg'); require.resolve('@prisma/client/runtime/client')") \
     || { echo "ERROR: dépendances backend manquantes après installation"; exit 1; }
   log "Build backend"
   (cd "$REPO_DIR/backend" && NODE_ENV='' npm run prisma:generate && NODE_ENV='' npm run build)
