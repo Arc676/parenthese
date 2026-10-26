@@ -513,13 +513,6 @@
 
 /* Confirmation "Tout approuver" inline */
 
-/* Toast succès contribution envoyée */
-
-@keyframes toastIn {
-  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
-}
-
 @media (max-width: 700px) {
 
   .media-manager-item {
