@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client'
+import type { Prisma } from '../generated/prisma/client.js'
 
 // Renumérote les souvenirs acceptés d'une personne et met en avant les trois premiers.
 // Les souvenirs en attente de relecture ne comptent pas.

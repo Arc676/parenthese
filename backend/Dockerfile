@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
 # API Parenthèse (Fastify + Prisma). Contexte de build : le dossier backend/.
-# Étape 1 : dépendances complètes, client Prisma, compilation TypeScript.
+# Étape 1 : dépendances complètes, client Prisma (généré dans src/generated), compilation TypeScript.
 # Étape 2 : image finale avec les seules dépendances de production, plus la CLI Prisma
 #           installée à part (nécessaire à `prisma migrate deploy` au démarrage).
 
 FROM node:24-bookworm-slim AS build
 
-# openssl : requis par les moteurs Prisma (cible debian-openssl-3.0.x).
+# openssl : requis par le moteur de migration de Prisma (cible debian-openssl-3.0.x).
 RUN apt-get update \
   && apt-get install -y --no-install-recommends openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
@@ -14,12 +14,12 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-COPY prisma ./prisma
 RUN npm ci --no-audit --no-fund
-RUN npx prisma generate
 
-COPY tsconfig.json ./
+COPY prisma ./prisma
+COPY prisma.config.ts tsconfig.json ./
 COPY src ./src
+RUN npx prisma generate
 RUN npm run build
 
 
@@ -46,10 +46,9 @@ RUN PRISMA_VERSION="$(node -p "require('./package-lock.json').packages['node_mod
   && npm install --no-audit --no-fund "prisma@${PRISMA_VERSION}" \
   && npm cache clean --force
 
-# Client Prisma généré à l'étape 1 (même image de base, même cible de moteur).
-COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
-# Schéma + migrations : indispensables à `prisma migrate deploy`.
+# Schéma, migrations et configuration : indispensables à `prisma migrate deploy`. Le client Prisma est compilé dans dist.
 COPY prisma ./prisma
+COPY prisma.config.ts ./
 COPY --from=build /app/dist ./dist
 
 RUN mkdir -p /app/storage/media && chown -R node:node /app/storage

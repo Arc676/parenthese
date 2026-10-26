@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 
-import type { Prisma, PrismaClient } from '@prisma/client'
+import type { Prisma, PrismaClient } from '../generated/prisma/client.js'
 
 // Co-gestion d'un arbre (issue #145). Le propriétaire invite une adresse ; Parenthèse n'envoie pas de mail, il
 // donne un lien à transmettre. Seule l'empreinte du jeton est gardée en base.

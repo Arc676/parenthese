@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from '@prisma/client'
+import type { Prisma, PrismaClient } from '../generated/prisma/client.js'
 import { z } from 'zod'
 
 type Db = PrismaClient | Prisma.TransactionClient

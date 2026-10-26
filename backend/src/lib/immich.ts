@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 
-import type { PrismaClient } from '@prisma/client'
+import type { PrismaClient } from '../generated/prisma/client.js'
 
 import { env } from '../config/env.js'
 import { decryptImmichApiKey } from './immich-secret.js'

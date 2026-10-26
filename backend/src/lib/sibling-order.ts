@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from '@prisma/client'
+import type { Prisma, PrismaClient } from '../generated/prisma/client.js'
 
 type LinkReader = Pick<PrismaClient, 'parentChildLink'> | Pick<Prisma.TransactionClient, 'parentChildLink'>
 

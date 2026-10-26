@@ -1,10 +1,14 @@
+// Client généré dans src/generated (ignoré par git), compilé avec le reste dans dist : rien à copier depuis
+// node_modules dans les images. L'adresse de la base vient de prisma.config.ts.
 generator client {
-  provider = "prisma-client-js"
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum MembershipRole {

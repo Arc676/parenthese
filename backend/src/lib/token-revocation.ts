@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client'
+import type { PrismaClient } from '../generated/prisma/client.js'
 
 // Sessions fermées par « Se déconnecter » ou par la suppression du compte, jusqu'à la fin de leur jeton.
 // Gardées en mémoire pour ne coûter aucune requête par appel, et en base pour survivre au redémarrage de l'API :

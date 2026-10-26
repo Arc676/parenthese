@@ -1,7 +1,7 @@
 import path from 'node:path'
 
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
-import { Prisma } from '@prisma/client'
+import { Prisma } from '../generated/prisma/client.js'
 import { z } from 'zod'
 
 import { env } from '../config/env.js'

@@ -4,7 +4,7 @@ import cookie from '@fastify/cookie'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
 import rateLimit from '@fastify/rate-limit'
-import { Prisma } from '@prisma/client'
+import { Prisma } from './generated/prisma/client.js'
 
 import { env } from './config/env.js'
 import { prisma } from './lib/prisma.js'

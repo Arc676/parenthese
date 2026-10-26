@@ -7,6 +7,7 @@
 !deploy/aio
 backend/node_modules
 backend/dist
+backend/src/generated
 backend/.local
 backend/storage
 backend/test

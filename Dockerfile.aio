@@ -18,12 +18,12 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY backend/package.json backend/package-lock.json ./
-COPY backend/prisma ./prisma
 RUN npm ci --no-audit --no-fund
-RUN npx prisma generate
 
-COPY backend/tsconfig.json ./
+COPY backend/prisma ./prisma
+COPY backend/prisma.config.ts backend/tsconfig.json ./
 COPY backend/src ./src
+RUN npx prisma generate
 RUN npm run build
 
 
@@ -68,8 +68,8 @@ RUN PRISMA_VERSION="$(node -p "require('./package-lock.json').packages['node_mod
   && npm install --no-audit --no-fund "prisma@${PRISMA_VERSION}" \
   && npm cache clean --force
 
-COPY --from=api-build /app/node_modules/.prisma ./node_modules/.prisma
 COPY backend/prisma ./prisma
+COPY backend/prisma.config.ts ./
 COPY --from=api-build /app/dist ./dist
 
 # nginx : la configuration du conteneur web de compose, l'API étant ici sur la même machine.

@@ -1,6 +1,6 @@
 import path from 'node:path'
 
-import { Prisma, type PrismaClient } from '@prisma/client'
+import { Prisma, type PrismaClient } from '../generated/prisma/client.js'
 import { z } from 'zod'
 
 import { InvalidAnnotationContentError, sanitizeAnnotationContentForWrite } from './annotation-content.js'

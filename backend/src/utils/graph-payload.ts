@@ -1,4 +1,4 @@
-import type { Annotation, MediaItem, MediaPersonTag, ParentChildLink, Person, Union } from '@prisma/client'
+import type { Annotation, MediaItem, MediaPersonTag, ParentChildLink, Person, Union } from '../generated/prisma/client.js'
 
 import { sanitizeAnnotationContentForRead } from '../lib/annotation-content.js'
 import { readAvatarCrop, type AvatarCrop } from '../lib/avatar-crop.js'

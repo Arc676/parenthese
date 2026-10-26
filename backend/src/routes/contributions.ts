@@ -1,7 +1,7 @@
 import path from 'node:path'
 
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify'
-import { Prisma } from '@prisma/client'
+import { Prisma } from '../generated/prisma/client.js'
 import { z } from 'zod'
 import { env, UPLOAD_BODY_LIMIT } from '../config/env.js'
 import { sanitizeAnnotationContentForRead } from '../lib/annotation-content.js'
@@ -250,7 +250,7 @@ function stripAnnotationUrl<T>(value: T): T {
 
 function toPrismaJson(
   value: unknown,
-): Prisma.InputJsonValue | Prisma.NullTypes.DbNull | Prisma.NullTypes.JsonNull | undefined {
+): Prisma.InputJsonValue | typeof Prisma.DbNull | typeof Prisma.JsonNull | undefined {
   if (value === undefined) {
     return undefined
   }
