@@ -558,9 +558,12 @@ const ContributionPanel = ({
                               key={change.id}
                               className={`contrib-change-card${isApproved ? ' contrib-change-card--approved' : ''}${isRejected ? ' contrib-change-card--rejected' : ''}`}
                             >
-                              {/* Étiquette posée sur le bord haut de la carte ; une fiche changée depuis la proposition dit « À vérifier » à la place */}
+                              {/* Étiquette posée sur le bord haut de la carte. Une fiche changée depuis la proposition dit « À vérifier »
+                                  à la place de « Modification » ; toute autre action garde son mot (une suppression reste lisible) */}
                               {change.conflictState === 'needs_review' ? (
-                                <span className="contrib-action-badge contrib-action-badge--conflict" title={t('La fiche a changé depuis cette proposition')}>{t('À vérifier')}</span>
+                                <span className="contrib-action-badge contrib-action-badge--conflict" title={t('La fiche a changé depuis cette proposition')}>
+                                  {change.action === 'update' ? t('À vérifier') : t('{action}, à vérifier', { action: formatAction(change.action) })}
+                                </span>
                               ) : (
                                 <span className={`contrib-action-badge contrib-action-badge--${change.action}`}>
                                   {formatAction(change.action)}
