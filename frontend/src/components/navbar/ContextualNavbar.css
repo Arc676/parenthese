@@ -181,28 +181,29 @@
 
 /* --- Exit edit mode button --- */
 .nav-annot-exit {
-  width: 36px;
-  height: 36px;
+  height: 40px;
+  padding: 0 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 50%;
+  border-radius: 999px;
   background: rgba(42, 38, 34, 0.08);
-  color: #6B645D;
+  color: #2A2622;
+  font: 500 14.5px/1 var(--pz-sans);
+  white-space: nowrap;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: background-color 160ms ease, transform 140ms var(--pz-ease);
   flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.nav-annot-exit:hover {
-  background: rgba(42, 38, 34, 0.16);
-  color: #2A2622;
-  transform: rotate(90deg);
+@media (hover: hover) and (pointer: fine) {
+  .nav-annot-exit:hover { background: rgba(42, 38, 34, 0.14); }
 }
 
 .nav-annot-exit:active {
-  transform: rotate(90deg) scale(0.88);
+  transform: scale(0.97);
 }
 
 /* --- Separator --- */

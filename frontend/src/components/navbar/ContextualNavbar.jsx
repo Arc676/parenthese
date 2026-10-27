@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import {
-  Brush, ImagePlus, Plus, UserPlus, User, X, MousePointer2, Pencil, Type, Star, Trash2, Image, ArrowLeft, Search,
+  Brush, ImagePlus, Plus, UserPlus, User, MousePointer2, Pencil, Type, Star, Trash2, Image, ArrowLeft, Search,
 } from 'lucide-react'
 import { NavMenu, NavMenuGroup, NavMenuItem } from './NavMenu'
 import AvatarMenu from './AvatarMenu'
@@ -292,13 +292,14 @@ function ContextualNavbar({
       <div className={`navbar-content${showMobileAnnot ? ' navbar-content--annot' : ''}`}>
         {showMobileAnnot && !annotMode ? (
           <>
+            {/* Sortie de l'édition en toutes lettres : une croix seule à côté du « + » ne disait pas ce qu'elle faisait (Patch, 27/10) */}
             <button
+              type="button"
               className="nav-annot-exit"
               onClick={onEditClick}
-              aria-label={t("Quitter l'édition")}
               title={t("Quitter l'édition")}
             >
-              <X size={18} strokeWidth={2.5} />
+              {t('Terminé')}
             </button>
 
             <button

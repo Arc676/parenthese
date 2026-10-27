@@ -58,6 +58,10 @@
   .edit-mode-toast--contrib .edit-mode-toast-short { display: inline; }
 }
 
+/* « Terminé » dans la barre du bas fait déjà sortir de l'édition : pas de seconde croix dans la bulle (Patch, 27/10) */
+body:has(.nav-annot-exit) .edit-mode-toast-close { display: none; }
+body:has(.nav-annot-exit) .edit-mode-toast:not(.edit-mode-toast--with-submit) { padding-right: 16px; }
+
 /* Téléphone : le texte de l'éditeur se coupait en « Vous modifi… » à côté du bouton, qui suffit à lui seul.
    L'invité garde son texte court, qui tient sur une ligne. */
 @media (max-width: 480px) {
