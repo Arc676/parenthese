@@ -261,7 +261,8 @@ function getMatchDetail(query, person) {
  * @param {Array} persons - Liste de toutes les personnes
  * @returns {Object} API de recherche
  */
-export function usePersonSearch(persons = []) {
+// revision : le tableau des personnes est modifié sur place (ajout, suppression) ; sa révision relance le calcul
+export function usePersonSearch(persons = [], revision = 0) {
   const [query, setQuery] = useState('')
   const [isActive, setIsActive] = useState(false)
 
@@ -291,7 +292,7 @@ export function usePersonSearch(persons = []) {
       .slice(0, 50) // Limiter à 50 résultats max
 
     return scored
-  }, [query, persons])
+  }, [query, persons, revision]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Liste des IDs de personnes matchées (pour highlight galaxie)
   const matchedPersonIds = useMemo(() => {

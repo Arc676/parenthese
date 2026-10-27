@@ -507,6 +507,61 @@ function readInvitationToken() {
 const INVITATION_TOKEN = readInvitationToken()
 let oidcSignIn = null
 
+// Retire une personne du graphe en mémoire, avec ses unions, ses liens et ses médias. Renvoie les tableaux tels
+// qu'ils étaient avant le retrait, ou null si la personne n'y était plus
+function removePersonFromGraph(personId) {
+  if (!persons.some((candidate) => String(candidate.id) === String(personId))) return null
+  const snapshot = { persons: [...persons], unions: [...unions], filiations: [...filiations], medias: [...medias] }
+
+  for (let idx = persons.length - 1; idx >= 0; idx -= 1) {
+    if (String(persons[idx].id) === String(personId)) {
+      persons.splice(idx, 1)
+    }
+  }
+
+  const removedUnionIds = new Set()
+  for (let idx = unions.length - 1; idx >= 0; idx -= 1) {
+    const union = unions[idx]
+    if (
+      String(union.partner1Id) === String(personId)
+      || String(union.partner2Id) === String(personId)
+    ) {
+      removedUnionIds.add(union.id)
+      unions.splice(idx, 1)
+    }
+  }
+
+  for (let idx = filiations.length - 1; idx >= 0; idx -= 1) {
+    const filiation = filiations[idx]
+    const touchesPerson = (
+      String(filiation.childId) === String(personId)
+      || String(filiation.parentId) === String(personId)
+    )
+    const touchesRemovedUnion = filiation.unionId && removedUnionIds.has(filiation.unionId)
+    if (touchesPerson || touchesRemovedUnion) {
+      filiations.splice(idx, 1)
+    }
+  }
+
+  for (let idx = medias.length - 1; idx >= 0; idx -= 1) {
+    if (String(medias[idx].personId) === String(personId)) {
+      medias.splice(idx, 1)
+    }
+  }
+
+  return snapshot
+}
+
+function restoreGraphSnapshot(snapshot) {
+  persons.splice(0, persons.length, ...snapshot.persons)
+  unions.splice(0, unions.length, ...snapshot.unions)
+  filiations.splice(0, filiations.length, ...snapshot.filiations)
+  medias.splice(0, medias.length, ...snapshot.medias)
+}
+
+// Délai pendant lequel une suppression reste annulable avant de partir au serveur
+const UNDO_DELAY_MS = 6000
+
 function App() {
   const auth = useAuth()
   const tree = useTreeAccess()
@@ -711,7 +766,7 @@ function App() {
   const canEditInCurrentMode = tree.canSubmitContribution || isDemoMode
 
   // Recherche de personnes avec scoring
-  const search = usePersonSearch(persons)
+  const search = usePersonSearch(persons, tree.graphRevision)
 
   // Mode édition avec auto-save
   const editMode = useEditMode({
@@ -1919,59 +1974,92 @@ function App() {
     }
   }, [auth.userAuth.token, tree.treeContext.accessToken, tree.treeContext.treeId, refreshTreeAndKeepSelection])
 
-  // Suppression personne (mode édition, admin)
+  // Suppression d'une personne : elle disparaît tout de suite, et « Annuler » reste possible quelques secondes.
+  // Sur un vrai arbre, la requête ne part qu'à la fin du délai (ou à la fermeture de la page)
+  const pendingDeleteRef = useRef(null)
+  const [undoDelete, setUndoDelete] = useState(null)
+
+  const commitPendingDelete = useCallback(async (pending, { keepalive = false } = {}) => {
+    if (pendingDeleteRef.current !== pending) return
+    pendingDeleteRef.current = null
+    clearTimeout(pending.timer)
+    setUndoDelete(null)
+    if (!pending.treeId) return
+    try {
+      await deletePerson(pending.treeId, pending.personId, pending.accessToken, { keepalive })
+      if (!keepalive) await refreshTreeAndKeepSelection(null, { relayout: true })
+    } catch {
+      if (keepalive) return
+      await refreshTreeAndKeepSelection(null, { relayout: true })
+      setDraftNotice(t("{name} n'a pas pu être supprimé·e. Réessayez.", { name: pending.name }))
+    }
+  }, [refreshTreeAndKeepSelection])
+
+  const handleUndoDelete = useCallback(async () => {
+    const pending = pendingDeleteRef.current
+    if (!pending) return
+    pendingDeleteRef.current = null
+    clearTimeout(pending.timer)
+    setUndoDelete(null)
+    if (pending.treeId) {
+      await refreshTreeAndKeepSelection(pending.personId, { relayout: true })
+      return
+    }
+    restoreGraphSnapshot(pending.snapshot)
+    tree.bumpGraphRevision()
+    tree.setSelectedPerson(persons.find((candidate) => String(candidate.id) === String(pending.personId)) || null)
+  }, [refreshTreeAndKeepSelection]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Un rechargement de l'arbre pendant le délai ramènerait la personne : on la retire à nouveau
+  useEffect(() => {
+    const pending = pendingDeleteRef.current
+    if (pending && removePersonFromGraph(pending.personId)) tree.bumpGraphRevision()
+  }, [tree.graphRevision]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Page fermée pendant le délai : la suppression part quand même
+  useEffect(() => {
+    const flush = () => {
+      if (pendingDeleteRef.current) commitPendingDelete(pendingDeleteRef.current, { keepalive: true })
+    }
+    window.addEventListener('pagehide', flush)
+    return () => window.removeEventListener('pagehide', flush)
+  }, [commitPendingDelete])
+
+  // Ctrl+Z (Cmd+Z) annule, hors des champs de saisie
+  useEffect(() => {
+    if (!undoDelete) return undefined
+    const onKeyDown = (event) => {
+      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.key.toLowerCase() !== 'z') return
+      if (event.target.closest?.('input, textarea, select, [contenteditable="true"]')) return
+      event.preventDefault()
+      handleUndoDelete()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [undoDelete, handleUndoDelete])
+
   const handlePersonDelete = useCallback(async (personId) => {
     if (!tree.treeContext.treeId && !isDemoMode) return
 
-    if (isDemoMode) {
-      for (let idx = persons.length - 1; idx >= 0; idx -= 1) {
-        if (String(persons[idx].id) === String(personId)) {
-          persons.splice(idx, 1)
-        }
-      }
+    const ownTree = !isDemoMode && tree.canEditCurrentTree
+    if (isDemoMode || ownTree) {
+      const accessToken = ownTree ? (tree.treeContext.accessToken || auth.userAuth.token) : null
+      if (ownTree && !accessToken) return
 
-      const removedUnionIds = new Set()
-      for (let idx = unions.length - 1; idx >= 0; idx -= 1) {
-        const union = unions[idx]
-        if (
-          String(union.partner1Id) === String(personId)
-          || String(union.partner2Id) === String(personId)
-        ) {
-          removedUnionIds.add(union.id)
-          unions.splice(idx, 1)
-        }
-      }
+      // Une seule suppression en attente : la précédente part maintenant
+      if (pendingDeleteRef.current) commitPendingDelete(pendingDeleteRef.current)
 
-      for (let idx = filiations.length - 1; idx >= 0; idx -= 1) {
-        const filiation = filiations[idx]
-        const touchesPerson = (
-          String(filiation.childId) === String(personId)
-          || String(filiation.parentId) === String(personId)
-        )
-        const touchesRemovedUnion = filiation.unionId && removedUnionIds.has(filiation.unionId)
-        if (touchesPerson || touchesRemovedUnion) {
-          filiations.splice(idx, 1)
-        }
-      }
-
-      for (let idx = medias.length - 1; idx >= 0; idx -= 1) {
-        if (String(medias[idx].personId) === String(personId)) {
-          medias.splice(idx, 1)
-        }
-      }
-
+      const target = persons.find((candidate) => String(candidate.id) === String(personId))
+      const name = target ? firstNameLabel(target) : ''
+      const snapshot = removePersonFromGraph(personId)
       tree.setSelectedPerson(null)
       tree.bumpGraphRevision()
-      return
-    }
+      if (!snapshot) return
 
-    if (tree.canEditCurrentTree) {
-      const accessToken = tree.treeContext.accessToken || auth.userAuth.token
-      if (!accessToken) return
-
-      await deletePerson(tree.treeContext.treeId, personId, accessToken)
-      await refreshTreeAndKeepSelection(null, { relayout: true })
-      tree.setSelectedPerson(null)
+      const pending = { personId, name, snapshot, treeId: ownTree ? tree.treeContext.treeId : null, accessToken }
+      pending.timer = setTimeout(() => commitPendingDelete(pending), UNDO_DELAY_MS)
+      pendingDeleteRef.current = pending
+      setUndoDelete({ personId, name })
       return
     }
 
@@ -1981,7 +2069,7 @@ function App() {
     editMode.updateDraft({ deletedPersons })
 
     tree.setSelectedPerson(null)
-  }, [auth.userAuth.token, refreshTreeAndKeepSelection, tree.canEditCurrentTree, tree.treeContext.accessToken, tree.treeContext.treeId, isDemoMode]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [auth.userAuth.token, commitPendingDelete, tree.canEditCurrentTree, tree.treeContext.accessToken, tree.treeContext.treeId, isDemoMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ajout d'une relation (mode édition)
   const handleAddRelation = useCallback(async (sourcePersonId, targetPersonId, relationType) => {
@@ -3350,7 +3438,15 @@ function App() {
         onAddPerson={handleSouvenirPickerAddPerson}
         onClose={() => setSouvenirPickerVisible(false)}
       />
-      {draftNotice && !contribSuccess && !showContribModal && (
+      {undoDelete && (
+        <div className="contrib-success-toast undo-toast" role="status">
+          <span>{undoDelete.name
+            ? t("{name} est supprimé·e de l'arbre.", { name: undoDelete.name })
+            : t("La personne est supprimée de l'arbre.")}</span>
+          <button type="button" className="undo-toast-btn" onClick={handleUndoDelete} title={t('Annuler (Ctrl+Z)')}>{t('Annuler')}</button>
+        </div>
+      )}
+      {draftNotice && !undoDelete && !contribSuccess && !showContribModal && (
         <div className="contrib-success-toast" role="status">{draftNotice}</div>
       )}
       {contribSuccess && (
