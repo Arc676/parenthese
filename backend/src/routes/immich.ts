@@ -16,6 +16,7 @@ import {
   ImmichUnavailableError,
   type ImmichPersonSummary,
 } from '../lib/immich.js'
+import { computeBlurhash } from '../lib/blurhash.js'
 import { decryptImmichApiKey, encryptImmichApiKey } from '../lib/immich-secret.js'
 import { IMAGE_MIME_TYPES, InvalidMediaError, isImmichAvatarPath, removeStoredFile, sniffMimeType } from '../lib/media-files.js'
 import { exceedsStorageQuota, getStorageRoot, prepareUploadedFile } from './media.js'
@@ -539,6 +540,7 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
             avatarMimeType: prepared.mimeType,
             // Nouveau portrait, nouveau cadrage à faire
             avatarCrop: Prisma.DbNull,
+            avatarBlurhash: await computeBlurhash(prepared.buffer) ?? '',
             immichPersonId,
             updatedBy: request.actor.userId,
           },
@@ -619,11 +621,13 @@ export const immichRoutes: FastifyPluginAsync = async (app) => {
       avatarPath?: null
       avatarMimeType?: null
       avatarCrop?: typeof Prisma.DbNull
+      avatarBlurhash?: null
     } = { immichPersonId: null, updatedBy: request.actor.userId }
     if (avatarFromImmich) {
       updateData.avatarPath = null
       updateData.avatarMimeType = null
       updateData.avatarCrop = Prisma.DbNull
+      updateData.avatarBlurhash = null
     }
 
     // Base d'abord, fichier ensuite : le portrait disparaît seulement une fois la base à jour.

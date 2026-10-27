@@ -8,6 +8,7 @@ import PzBusy from './PzBusy.jsx'
 import { t } from '../i18n/index.js'
 import ImmichAssetPicker from './ImmichAssetPicker.jsx'
 import { fetchImmichConfig } from '../api/immichApi.js'
+import { blurPlaceholder } from '../utils/blurhash.js'
 
 const MEDIA_TYPES = [
   { value: 'photo', label: t('Photo'), Icon: Image },
@@ -358,7 +359,7 @@ const MediaManagerPanel = ({
                 <li key={media.id} className="mm-item">
                   <span className="mm-preview" aria-hidden="true">
                     {media.type === 'photo' && media.url ? (
-                      <img src={media.url} alt="" />
+                      <img src={media.url} alt="" {...blurPlaceholder(media.blurhash)} />
                     ) : media.type === 'geojson' || media.type === 'gpx' ? (
                       <GeoMediaThumbnail media={media} className="media-manager-modal-preview-map" />
                     ) : (

@@ -310,6 +310,8 @@ model Person {
   // { "x": 0..1, "y": 0..1, "zoom": 1..4 }, centre du cadrage en proportion de l'image, zoom 1 = image entière
   // recouvrant le cadre. Null = cadrage par défaut (centré, zoom 1).
   avatarCrop         Json?
+  // Aperçu flou du portrait (BlurHash), montré pendant le chargement. Null : pas encore calculé ; vide : illisible
+  avatarBlurhash     String?
   sex                String?
   notes              String?
   createdBy          String?
@@ -370,6 +372,8 @@ model MediaItem {
   mimeType              String
   filePath              String
   thumbPath             String?
+  // Aperçu flou d'une photo (BlurHash), montré pendant le chargement. Null : pas encore calculé ; vide : illisible
+  blurhash              String?
   caption               String?
   source                String?
   sizeBytes             Int

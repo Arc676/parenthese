@@ -23,6 +23,7 @@ import { runOnce } from '../utils/saveOnLeave.js'
 import { normalizeSex, SEX_CHOICES } from '../utils/personSex.js'
 import { ProposalBanner } from './ProposalCard.jsx'
 import { initialsOf } from '../utils/initial.js'
+import { blurPlaceholder } from '../utils/blurhash.js'
 
 // Aucune modification en cours (référence stable)
 const NO_EDITS = Object.freeze({})
@@ -548,7 +549,7 @@ const PersonCard = ({
   const renderMediaIcon = (media) => {
     if (media.type === 'photo') {
       return media.url
-        ? <img src={media.url} alt="" />
+        ? <img src={media.url} alt="" {...blurPlaceholder(media.blurhash)} />
         : <span>&#128247;</span>
     }
 
@@ -691,9 +692,10 @@ const PersonCard = ({
             />
           )}
           {/* Hors modification, le portrait se regarde : la photo s'ajoute ou se change en mode modification */}
-          <div className="pc-photo">
+          {/* Aperçu flou du portrait sur le cadre pendant le chargement (le recadrage s'applique à l'image) */}
+          <div className="pc-photo" style={person.photo ? blurPlaceholder(person.avatarBlurhash).style : undefined}>
             {person.photo
-              ? <img src={person.photo} alt={fullNameLabel(person)} onLoad={(event) => setPhotoSize({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight })} style={photoStyle} />
+              ? <img src={person.photo} alt={fullNameLabel(person)} onLoad={(event) => { event.currentTarget.parentElement.style.backgroundImage = 'none'; setPhotoSize({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight }) }} style={photoStyle} />
               : <span className="pc-photo-initials">{initials}</span>}
           </div>
           {editMode && onAvatarUpload && (
@@ -856,7 +858,7 @@ const PersonCard = ({
                     title={media.label || TYPE_LABELS[media.type]}
                   >
                     {media.type === 'photo' && media.url
-                      ? <img src={media.url} alt={media.label || ''} loading="lazy" />
+                      ? <img src={media.url} alt={media.label || ''} loading="lazy" {...blurPlaceholder(media.blurhash)} />
                       : <span className="pc-tile-video"><Play size={18} fill="currentColor" strokeWidth={0} /></span>}
                     {media.label && <span className="pc-tile-label">{media.label}</span>}
                   </button>
@@ -884,7 +886,7 @@ const PersonCard = ({
                         title={media.label || TYPE_LABELS[media.type]}
                       >
                         {media.type === 'photo' && media.url
-                          ? <img src={media.url} alt={media.label || ''} loading="lazy" />
+                          ? <img src={media.url} alt={media.label || ''} loading="lazy" {...blurPlaceholder(media.blurhash)} />
                           : <span className="pc-tile-video"><Play size={18} fill="currentColor" strokeWidth={0} /></span>}
                         {media.label && <span className="pc-tile-label">{media.label}</span>}
                       </button>
