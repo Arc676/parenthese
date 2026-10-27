@@ -14,6 +14,7 @@ import { getEntranceProgress, drawPartialBezier } from './utils'
 import { fitNickname } from '../../utils/nickname.js'
 import { firstNameLabel, isFirstNameUnknown } from '../../utils/personName.js'
 import { initialsOf } from '../../utils/initial.js'
+import { blurhashCanvas } from '../../utils/blurhash.js'
 
 // Largeur maximale du surnom sur le nœud (px canevas) : au-delà, coupé avec …
 const NICKNAME_MAX_W = 150
@@ -829,7 +830,8 @@ function drawGpxThumbnail(ctx, ms) {
 }
 
 function drawMediaContent(ctx, media, ms, imageCache) {
-  const mImg = media.url ? imageCache.get(media.url) : null
+  // Photo pas encore chargée : son aperçu flou
+  const mImg = media.url ? (imageCache.get(media.url) || (media.type === 'photo' ? blurhashCanvas(media.blurhash) : null)) : null
 
   if (media.type === 'photo' && mImg) {
     ctx.save()
@@ -1047,8 +1049,10 @@ function drawFrame(ctx, frameType, person, img) {
 // Dessiner l'image ou le placeholder initiales
 // ============================================================
 function drawPersonImage(ctx, img, person, x, y, w, h) {
-  if (img) {
-    drawImageCover(ctx, img, x, y, w, h, person.avatarCrop)
+  // Portrait pas encore chargé : son aperçu flou, cadré pareil
+  const placeholder = !img && person.photo ? blurhashCanvas(person.avatarBlurhash) : null
+  if (img || placeholder) {
+    drawImageCover(ctx, img || placeholder, x, y, w, h, person.avatarCrop)
     if (!person.isAlive) {
       ctx.fillStyle = 'rgba(235, 230, 223, 0.25)'
       ctx.fillRect(x, y, w, h)

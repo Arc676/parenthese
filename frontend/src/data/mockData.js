@@ -127,6 +127,8 @@ function mapRemotePersonToLocal(person, current = null) {
     photo: current?.photo || null,
     avatarFromImmich: person?.avatarFromImmich ?? false,
     avatarCrop: person ? (person.avatarCrop ?? null) : (current?.avatarCrop ?? null),
+    // Aperçu flou du portrait pendant son chargement (utils/blurhash.js)
+    avatarBlurhash: person ? (person.avatarBlurhash ?? null) : (current?.avatarBlurhash ?? null),
   }
 }
 
@@ -264,6 +266,7 @@ export function loadGraphData(graph, options = {}) {
         displayOrder: Number.isFinite(media.displayOrder) ? media.displayOrder : index + 1,
         isFeatured: Boolean(media.isFeatured),
         mimeType: media.mimeType || null,
+        blurhash: media.blurhash || null,
         // Personnes identifiées sur le souvenir, point facultatif sur le visage (0 à 1)
         people: (Array.isArray(media.people) ? media.people : [])
           .filter((tag) => personIdSet.has(tag.personId))

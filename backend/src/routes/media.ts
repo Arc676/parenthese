@@ -22,6 +22,7 @@ import {
   type BinaryMediaType,
 } from '../lib/media-files.js'
 import { avatarCropInputSchema, readAvatarCrop, toStoredAvatarCrop } from '../lib/avatar-crop.js'
+import { computeBlurhash } from '../lib/blurhash.js'
 import { syncPersonMediaOrder } from '../lib/media-order.js'
 import { resolveTreeMediaDirectory } from '../lib/tree-purge.js'
 import { canReadTree, canReadTreeWithMediaToken } from '../lib/tree-access.js'
@@ -501,6 +502,7 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
         status: isPending ? 'pending' : 'approved',
         contributionSessionId: contributionSession?.id ?? null,
         lifeEventId,
+        blurhash: payload.data.type === 'photo' ? await computeBlurhash(prepared.buffer) ?? '' : null,
       },
     })
 
@@ -620,6 +622,7 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
         avatarMimeType: prepared.mimeType,
         // Nouveau portrait : le cadrage de l'ancien ne s'applique pas à celui-ci
         avatarCrop: Prisma.DbNull,
+        avatarBlurhash: await computeBlurhash(prepared.buffer) ?? '',
         updatedBy: request.actor.userId,
         // Un portrait déposé à la main remplace aussi le lien Immich : sans cela, l'association
         // survivrait invisible en base (le graphe ne publie que l'origine du portrait) et ne
@@ -676,6 +679,7 @@ export const mediaRoutes: FastifyPluginAsync = async (app) => {
         avatarPath: null,
         avatarMimeType: null,
         avatarCrop: Prisma.DbNull,
+        avatarBlurhash: null,
         // Retirer le portrait retire aussi le lien Immich : l'association ne survit pas au portrait.
         immichPersonId: null,
         updatedBy: request.actor.userId,

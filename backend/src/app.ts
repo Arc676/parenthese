@@ -10,13 +10,14 @@ import { env } from './config/env.js'
 import { prisma } from './lib/prisma.js'
 import { isUserTokenRevoked, loadRevokedTokens } from './lib/token-revocation.js'
 import { registerIdempotency } from './lib/idempotency.js'
+import { startBlurhashFiller } from './lib/blurhash.js'
 import { authRoutes } from './routes/auth.js'
 import { contributionRoutes } from './routes/contributions.js'
 import { graphRoutes } from './routes/graph.js'
 import { immichRoutes } from './routes/immich.js'
 import { managerRoutes } from './routes/managers.js'
 import { searchSourceRoutes } from './routes/search-sources.js'
-import { mediaRoutes } from './routes/media.js'
+import { getStorageRoot, mediaRoutes } from './routes/media.js'
 import { oidcRoutes } from './routes/oidc.js'
 import { publicRoutes } from './routes/public.js'
 import { annotationRoutes } from './routes/annotations.js'
@@ -65,6 +66,8 @@ export function createApp() {
   app.addHook('onReady', async () => {
     await loadRevokedTokens(app.prisma)
   })
+  // Aperçus flous des photos et portraits qui n'en ont pas encore (lib/blurhash.ts) ; pas pendant les tests
+  if (env.NODE_ENV !== 'test') app.addHook('onReady', async () => startBlurhashFiller(app, getStorageRoot()))
   app.decorateRequest('actor', null)
 
   app.register(cors, {

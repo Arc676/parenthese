@@ -3,6 +3,7 @@ import { Plus, Play, FileText, Mic, Paperclip } from 'lucide-react'
 import { t } from '../i18n/index.js'
 import { buildLifeTimeline } from '../utils/lifeTimeline.js'
 import './LifeTimeline.css'
+import { blurPlaceholder } from '../utils/blurhash.js'
 
 // Onglet Vie de la fiche : naissance, unions et décès en grands repères, les autres événements
 // plus petits entre eux, la famille proche en retrait. Les sources restent repliées.
@@ -37,7 +38,7 @@ function Attachments({ medias, onOpen }) {
         <div className="lt-photos">
           {photos.map((media) => (
             <button key={media.id} type="button" className="lt-photo" onClick={() => onOpen?.(media)} aria-label={t('Voir « {title} »', { title: media.label })}>
-              <img src={media.url} alt="" loading="lazy" />
+              <img src={media.url} alt="" loading="lazy" {...blurPlaceholder(media.blurhash)} />
             </button>
           ))}
         </div>

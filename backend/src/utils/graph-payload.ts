@@ -26,6 +26,7 @@ export type GraphPayload = {
     notes: string | null
     avatarFromImmich: boolean
     avatarCrop: AvatarCrop | null
+    avatarBlurhash: string | null
   }>
   unions: Array<{
     id: string
@@ -54,6 +55,7 @@ export type GraphPayload = {
     source: string | null
     displayOrder: number
     isFeatured: boolean
+    blurhash: string | null
     // Personnes identifiées sur le souvenir, point facultatif sur le visage (0 à 1)
     people: Array<{ personId: string; x: number | null; y: number | null }>
   }>
@@ -117,6 +119,7 @@ export function buildGraphPayload(
         notes: person.notes,
         avatarFromImmich: isImmichAvatarPath(person.avatarPath),
         avatarCrop: person.avatarPath ? readAvatarCrop(person.avatarCrop) : null,
+        avatarBlurhash: (person.avatarPath && person.avatarBlurhash) || null,
       })),
     unions: unions.map((union) => ({
         id: union.id,
@@ -145,6 +148,7 @@ export function buildGraphPayload(
         source: media.source,
         displayOrder: media.displayOrder,
         isFeatured: media.isFeatured,
+        blurhash: media.blurhash || null,
         people: peopleByMedia.get(media.id) ?? [],
       })),
     annotations: annotations.map((ann) => ({
