@@ -29,11 +29,21 @@ export function canStartSheetDrag(target, zoneSelector, selectionText = '') {
   return !target.closest(NO_DRAG_SELECTOR)
 }
 
-/** Intention du mouvement depuis l'appui : 'pending' (encore trop petit), 'down' (glisser vers le bas), 'other' (haut ou horizontal) */
+/** Intention du mouvement depuis l'appui : 'pending' (encore trop petit), 'down' ou 'up' (glisser vertical), 'other' (horizontal) */
 export function sheetDragIntent(dx, dy) {
   if (Math.abs(dx) < DIRECTION_LOCK_PX && Math.abs(dy) < DIRECTION_LOCK_PX) return 'pending'
-  if (dy > 0 && dy >= Math.abs(dx)) return 'down'
-  return 'other'
+  if (Math.abs(dy) < Math.abs(dx)) return 'other'
+  return dy > 0 ? 'down' : 'up'
+}
+
+// Au-dessus de sa position de repos, la feuille cède de moins en moins, sans jamais dépasser ce plafond (px)
+export const RUBBER_MAX_PX = 40
+const RUBBER_SOFTNESS_PX = 120
+
+/** Décalage de la feuille pour un déplacement du doigt : suit vers le bas, résiste vers le haut (négatif, borné) */
+export function sheetOffset(dy) {
+  if (dy >= 0) return dy
+  return -RUBBER_MAX_PX * (1 - 1 / (1 + -dy / RUBBER_SOFTNESS_PX))
 }
 
 /** Vitesse (px/ms, positive vers le bas) entre deux points {y, t}. Zéro si les points sont trop éloignés dans le temps. */

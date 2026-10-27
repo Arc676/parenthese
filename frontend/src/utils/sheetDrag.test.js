@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   NO_DRAG_SELECTOR,
+  RUBBER_MAX_PX,
   canStartSheetDrag,
   shouldCloseSheet,
   sheetDragIntent,
+  sheetOffset,
   velocityBetween,
 } from './sheetDrag'
 
@@ -55,9 +57,32 @@ describe('sheetDragIntent (direction)', () => {
     expect(sheetDragIntent(10, 20)).toBe('down')
   })
 
-  it('rejette le haut et l\'horizontal', () => {
-    expect(sheetDragIntent(0, -20)).toBe('other')
+  it('reconnaît un glisser vers le haut', () => {
+    expect(sheetDragIntent(0, -20)).toBe('up')
+    expect(sheetDragIntent(-10, -20)).toBe('up')
+  })
+
+  it('rejette l\'horizontal', () => {
     expect(sheetDragIntent(30, 20)).toBe('other')
+    expect(sheetDragIntent(-30, -20)).toBe('other')
+  })
+})
+
+describe('sheetOffset (résistance au-dessus du repos)', () => {
+  it('suit le doigt vers le bas', () => {
+    expect(sheetOffset(0)).toBe(0)
+    expect(sheetOffset(120)).toBe(120)
+  })
+
+  it('cède de moins en moins vers le haut, sans dépasser le plafond', () => {
+    const a = sheetOffset(-60)
+    const b = sheetOffset(-120)
+    const c = sheetOffset(-2000)
+    expect(a).toBeLessThan(0)
+    expect(b).toBeLessThan(a)
+    expect(-b).toBeLessThan(120)
+    expect(b - c).toBeLessThan(0 - b)
+    expect(c).toBeGreaterThan(-RUBBER_MAX_PX)
   })
 })
 
