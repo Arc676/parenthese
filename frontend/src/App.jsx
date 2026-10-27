@@ -5,6 +5,7 @@ import PersonCard from './components/PersonCard.jsx'
 import { FamilyWelcome, SouvenirPicker } from './components/FamilyOnboarding.jsx'
 import { HELP_URL } from './utils/siteLinks.js'
 import { firstNameLabel } from './utils/personName.js'
+import { useUndoable } from './hooks/useUndoable.js'
 import { hasSeenFamilyWelcome, markFamilyWelcomeSeen } from './utils/familyWelcome'
 import MediaViewer from './components/MediaViewer'
 import MediaManagerPanel from './components/MediaManagerPanel'
@@ -38,6 +39,7 @@ import {
   createUnion,
   batchAnnotations,
   deletePersonAvatar,
+  deletePersonMedia,
   getTree,
   importGedcom,
   linkTreeAccess,
@@ -65,7 +67,7 @@ import { useEditMode } from './hooks/useEditMode'
 import { useAnnotations } from './hooks/useAnnotations'
 import AnnotationToolbar from './components/annotations/AnnotationToolbar'
 import TextInputOverlay from './components/annotations/TextInputOverlay'
-import { filiations, getChildren, getParents, getPersonUnions, medias, persons, unions } from './data/mockData'
+import { filiations, getChildren, getParents, getPersonUnions, medias, persons, replaceGraph, unions } from './data/mockData'
 import { readGedcomFile } from './utils/gedcomText'
 import { readGedcomBundle, zipErrorMessage } from './utils/gedcomBundle.js'
 import { materializeFile } from './utils/zipReader.js'
@@ -510,57 +512,24 @@ let oidcSignIn = null
 // Retire une personne du graphe en mémoire, avec ses unions, ses liens et ses médias. Renvoie les tableaux tels
 // qu'ils étaient avant le retrait, ou null si la personne n'y était plus
 function removePersonFromGraph(personId) {
-  if (!persons.some((candidate) => String(candidate.id) === String(personId))) return null
-  const snapshot = { persons: [...persons], unions: [...unions], filiations: [...filiations], medias: [...medias] }
-
-  for (let idx = persons.length - 1; idx >= 0; idx -= 1) {
-    if (String(persons[idx].id) === String(personId)) {
-      persons.splice(idx, 1)
-    }
-  }
-
-  const removedUnionIds = new Set()
-  for (let idx = unions.length - 1; idx >= 0; idx -= 1) {
-    const union = unions[idx]
-    if (
-      String(union.partner1Id) === String(personId)
-      || String(union.partner2Id) === String(personId)
-    ) {
-      removedUnionIds.add(union.id)
-      unions.splice(idx, 1)
-    }
-  }
-
-  for (let idx = filiations.length - 1; idx >= 0; idx -= 1) {
-    const filiation = filiations[idx]
-    const touchesPerson = (
-      String(filiation.childId) === String(personId)
-      || String(filiation.parentId) === String(personId)
-    )
-    const touchesRemovedUnion = filiation.unionId && removedUnionIds.has(filiation.unionId)
-    if (touchesPerson || touchesRemovedUnion) {
-      filiations.splice(idx, 1)
-    }
-  }
-
-  for (let idx = medias.length - 1; idx >= 0; idx -= 1) {
-    if (String(medias[idx].personId) === String(personId)) {
-      medias.splice(idx, 1)
-    }
-  }
-
+  const id = String(personId)
+  if (!persons.some((candidate) => String(candidate.id) === id)) return null
+  const snapshot = { persons, unions, filiations, medias }
+  const removedUnionIds = new Set(unions
+    .filter((union) => String(union.partner1Id) === id || String(union.partner2Id) === id)
+    .map((union) => union.id))
+  replaceGraph({
+    persons: persons.filter((candidate) => String(candidate.id) !== id),
+    unions: unions.filter((union) => !removedUnionIds.has(union.id)),
+    filiations: filiations.filter((filiation) => (
+      String(filiation.childId) !== id
+      && String(filiation.parentId) !== id
+      && !(filiation.unionId && removedUnionIds.has(filiation.unionId))
+    )),
+    medias: medias.filter((media) => String(media.personId) !== id),
+  })
   return snapshot
 }
-
-function restoreGraphSnapshot(snapshot) {
-  persons.splice(0, persons.length, ...snapshot.persons)
-  unions.splice(0, unions.length, ...snapshot.unions)
-  filiations.splice(0, filiations.length, ...snapshot.filiations)
-  medias.splice(0, medias.length, ...snapshot.medias)
-}
-
-// Délai pendant lequel une suppression reste annulable avant de partir au serveur
-const UNDO_DELAY_MS = 6000
 
 function App() {
   const auth = useAuth()
@@ -1273,7 +1242,7 @@ function App() {
             frameType: 'round',
           }
 
-          persons.push(newPerson)
+          replaceGraph({ persons: [...persons, newPerson] })
 
           for (const rel of formData.relations) {
             if (rel.type === 'spouse') {
@@ -1974,69 +1943,22 @@ function App() {
     }
   }, [auth.userAuth.token, tree.treeContext.accessToken, tree.treeContext.treeId, refreshTreeAndKeepSelection])
 
-  // Suppression d'une personne : elle disparaît tout de suite, et « Annuler » reste possible quelques secondes.
-  // Sur un vrai arbre, la requête ne part qu'à la fin du délai (ou à la fermeture de la page)
-  const pendingDeleteRef = useRef(null)
-  const [undoDelete, setUndoDelete] = useState(null)
+  // Suppressions annulables (personne, souvenir, moment) : l'écran change tout de suite, « Annuler » reste
+  // possible quelques secondes, et la requête ne part qu'ensuite (voir hooks/useUndoable.js)
+  const undoable = useUndoable()
+  // Un rechargement de l'arbre vide la sélection : la requête part après le délai, quand une autre fiche
+  // peut être ouverte, et c'est celle-là qu'on garde
+  const selectedPersonIdRef = useRef(null)
+  useEffect(() => { selectedPersonIdRef.current = tree.selectedPerson?.id ?? null }, [tree.selectedPerson])
+  const refreshKeepingSelection = useCallback(
+    (options) => refreshTreeAndKeepSelection(selectedPersonIdRef.current, options),
+    [refreshTreeAndKeepSelection],
+  )
 
-  const commitPendingDelete = useCallback(async (pending, { keepalive = false } = {}) => {
-    if (pendingDeleteRef.current !== pending) return
-    pendingDeleteRef.current = null
-    clearTimeout(pending.timer)
-    setUndoDelete(null)
-    if (!pending.treeId) return
-    try {
-      await deletePerson(pending.treeId, pending.personId, pending.accessToken, { keepalive })
-      if (!keepalive) await refreshTreeAndKeepSelection(null, { relayout: true })
-    } catch {
-      if (keepalive) return
-      await refreshTreeAndKeepSelection(null, { relayout: true })
-      setDraftNotice(t("{name} n'a pas pu être supprimé·e. Réessayez.", { name: pending.name }))
-    }
-  }, [refreshTreeAndKeepSelection])
-
-  const handleUndoDelete = useCallback(async () => {
-    const pending = pendingDeleteRef.current
-    if (!pending) return
-    pendingDeleteRef.current = null
-    clearTimeout(pending.timer)
-    setUndoDelete(null)
-    if (pending.treeId) {
-      await refreshTreeAndKeepSelection(pending.personId, { relayout: true })
-      return
-    }
-    restoreGraphSnapshot(pending.snapshot)
-    tree.bumpGraphRevision()
-    tree.setSelectedPerson(persons.find((candidate) => String(candidate.id) === String(pending.personId)) || null)
-  }, [refreshTreeAndKeepSelection]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Un rechargement de l'arbre pendant le délai ramènerait la personne : on la retire à nouveau
+  // Un rechargement de l'arbre pendant le délai ramènerait ce qui vient d'être supprimé : on le retire à nouveau
   useEffect(() => {
-    const pending = pendingDeleteRef.current
-    if (pending && removePersonFromGraph(pending.personId)) tree.bumpGraphRevision()
+    if (undoable.reapply()) tree.bumpGraphRevision()
   }, [tree.graphRevision]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Page fermée pendant le délai : la suppression part quand même
-  useEffect(() => {
-    const flush = () => {
-      if (pendingDeleteRef.current) commitPendingDelete(pendingDeleteRef.current, { keepalive: true })
-    }
-    window.addEventListener('pagehide', flush)
-    return () => window.removeEventListener('pagehide', flush)
-  }, [commitPendingDelete])
-
-  // Ctrl+Z (Cmd+Z) annule, hors des champs de saisie
-  useEffect(() => {
-    if (!undoDelete) return undefined
-    const onKeyDown = (event) => {
-      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.key.toLowerCase() !== 'z') return
-      if (event.target.closest?.('input, textarea, select, [contenteditable="true"]')) return
-      event.preventDefault()
-      handleUndoDelete()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [undoDelete, handleUndoDelete])
 
   const handlePersonDelete = useCallback(async (personId) => {
     if (!tree.treeContext.treeId && !isDemoMode) return
@@ -2046,9 +1968,6 @@ function App() {
       const accessToken = ownTree ? (tree.treeContext.accessToken || auth.userAuth.token) : null
       if (ownTree && !accessToken) return
 
-      // Une seule suppression en attente : la précédente part maintenant
-      if (pendingDeleteRef.current) commitPendingDelete(pendingDeleteRef.current)
-
       const target = persons.find((candidate) => String(candidate.id) === String(personId))
       const name = target ? firstNameLabel(target) : ''
       const snapshot = removePersonFromGraph(personId)
@@ -2056,10 +1975,31 @@ function App() {
       tree.bumpGraphRevision()
       if (!snapshot) return
 
-      const pending = { personId, name, snapshot, treeId: ownTree ? tree.treeContext.treeId : null, accessToken }
-      pending.timer = setTimeout(() => commitPendingDelete(pending), UNDO_DELAY_MS)
-      pendingDeleteRef.current = pending
-      setUndoDelete({ personId, name })
+      const treeId = ownTree ? tree.treeContext.treeId : null
+      undoable.start({
+        message: name ? t("{name} est supprimé·e de l'arbre.", { name }) : t("La personne est supprimée de l'arbre."),
+        reapply: () => Boolean(removePersonFromGraph(personId)),
+        commit: async ({ keepalive = false } = {}) => {
+          if (!treeId) return
+          try {
+            await deletePerson(treeId, personId, accessToken, { keepalive })
+            if (!keepalive) await refreshKeepingSelection({ relayout: true })
+          } catch {
+            if (keepalive) return
+            await refreshKeepingSelection({ relayout: true })
+            setDraftNotice(t("{name} n'a pas pu être supprimé·e. Réessayez.", { name }))
+          }
+        },
+        undo: async () => {
+          if (treeId) {
+            await refreshTreeAndKeepSelection(personId, { relayout: true })
+            return
+          }
+          replaceGraph(snapshot)
+          tree.bumpGraphRevision()
+          tree.setSelectedPerson(persons.find((candidate) => String(candidate.id) === String(personId)) || null)
+        },
+      })
       return
     }
 
@@ -2069,7 +2009,35 @@ function App() {
     editMode.updateDraft({ deletedPersons })
 
     tree.setSelectedPerson(null)
-  }, [auth.userAuth.token, commitPendingDelete, tree.canEditCurrentTree, tree.treeContext.accessToken, tree.treeContext.treeId, isDemoMode]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [auth.userAuth.token, undoable.start, tree.canEditCurrentTree, tree.treeContext.accessToken, tree.treeContext.treeId, isDemoMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleMediaDelete = useCallback((mediaId) => {
+    const personId = tree.selectedPerson?.id
+    const { treeId, accessToken } = tree.treeContext
+    if (!tree.canEditCurrentTree || !personId || !treeId || !accessToken) return
+    const removeMedia = () => {
+      if (!medias.some((candidate) => String(candidate.id) === String(mediaId))) return false
+      replaceGraph({ medias: medias.filter((candidate) => String(candidate.id) !== String(mediaId)) })
+      return true
+    }
+    if (!removeMedia()) return
+    tree.bumpGraphRevision()
+    undoable.start({
+      message: t('Le souvenir est supprimé.'),
+      reapply: removeMedia,
+      commit: async ({ keepalive = false } = {}) => {
+        try {
+          await deletePersonMedia(treeId, personId, mediaId, accessToken, { keepalive })
+          if (!keepalive) await refreshKeepingSelection({ relayout: false })
+        } catch {
+          if (keepalive) return
+          await refreshKeepingSelection({ relayout: false })
+          setDraftNotice(t('La suppression n’a pas abouti. Réessayez dans un instant.'))
+        }
+      },
+      undo: () => refreshKeepingSelection({ relayout: false }),
+    })
+  }, [tree.selectedPerson, tree.canEditCurrentTree, tree.treeContext, undoable.start, refreshKeepingSelection]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ajout d'une relation (mode édition)
   const handleAddRelation = useCallback(async (sourcePersonId, targetPersonId, relationType) => {
@@ -3438,15 +3406,13 @@ function App() {
         onAddPerson={handleSouvenirPickerAddPerson}
         onClose={() => setSouvenirPickerVisible(false)}
       />
-      {undoDelete && (
+      {undoable.message && (
         <div className="contrib-success-toast undo-toast" role="status">
-          <span>{undoDelete.name
-            ? t("{name} est supprimé·e de l'arbre.", { name: undoDelete.name })
-            : t("La personne est supprimée de l'arbre.")}</span>
-          <button type="button" className="undo-toast-btn" onClick={handleUndoDelete} title={t('Annuler (Ctrl+Z)')}>{t('Annuler')}</button>
+          <span>{undoable.message}</span>
+          <button type="button" className="undo-toast-btn" onClick={undoable.undo} title={t('Annuler (Ctrl+Z)')}>{t('Annuler')}</button>
         </div>
       )}
-      {draftNotice && !undoDelete && !contribSuccess && !showContribModal && (
+      {draftNotice && !undoable.message && !contribSuccess && !showContribModal && (
         <div className="contrib-success-toast" role="status">{draftNotice}</div>
       )}
       {contribSuccess && (
@@ -3526,6 +3492,7 @@ function App() {
       {tree.selectedPerson && (
         <PersonCard
           person={tree.selectedPerson}
+          onUndoable={undoable.start}
           onClose={() => chooseSelectedPerson(null)}
           onMediaSelect={handleMediaSelectFresh}
           saveOnLeaveRef={personSaveOnLeaveRef}
@@ -3611,7 +3578,7 @@ function App() {
         onClose={media.handleCloseMediaManager}
         onUpload={media.handleUploadPersonMedia}
         onMove={media.handleMovePersonMedia}
-        onDelete={media.handleDeletePersonMedia}
+        onDelete={handleMediaDelete}
       />
       <ContributionPanel
         visible={contrib.contribState.visible}

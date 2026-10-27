@@ -154,6 +154,15 @@ export function getDemoLife(personId) {
   return DEMO_LIFE[personId] || null
 }
 
+// Remplace des tableaux du graphe. Ne jamais les muter en place (push, splice) : les index par personne
+// ci-dessous ne se reconstruisent que quand le tableau change d'identité
+export function replaceGraph(next) {
+  if (next.persons) persons = next.persons
+  if (next.unions) unions = next.unions
+  if (next.filiations) filiations = next.filiations
+  if (next.medias) medias = next.medias
+}
+
 export function resetToDemoData() {
   persons = JSON.parse(JSON.stringify(INITIAL_PERSONS))
   medias = JSON.parse(JSON.stringify(INITIAL_MEDIAS))

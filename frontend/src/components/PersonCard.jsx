@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, forwardRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Save, Trash2, Plus, X, Search, Check, Play, ImagePlus, Camera, Crop, Sparkles, ChevronLeft, ChevronRight, Pencil } from 'lucide-react'
 import { getParents, getChildren, getPersonUnions, getPersonMedias, getPersonTaggedMedias, getDemoLife, getPersonById, filiations, persons, unions } from '../data/mockData'
-import { fetchPersonLife } from '../api/treeApi.js'
+import { deleteLifeEvent, fetchPersonLife } from '../api/treeApi.js'
 import LifeTimeline from './LifeTimeline.jsx'
 import MomentSheet from './MomentSheet.jsx'
 import { fetchImmichConfig } from '../api/immichApi.js'
@@ -81,6 +81,8 @@ const PersonCard = ({
   onMoveSibling,
   onUploadMomentFile,
   onMomentSaved,
+  // Suppression annulable (App, hooks/useUndoable.js)
+  onUndoable,
   saveOnLeaveRef = null,
   // Administrateur, hors démo : la fiche passe en modification d'un clic, sans chercher le crayon de l'arbre
   onQuickEdit,
@@ -1252,6 +1254,24 @@ const PersonCard = ({
           isAdmin={canEditMoments}
           onUploadFile={onUploadMomentFile}
           onClose={() => setMomentSheet(null)}
+          onDelete={onUndoable && treeId && immichToken ? (event) => {
+            // Le moment quitte la frise tout de suite ; la requête part à la fin du délai d'annulation
+            setMomentSheet(null)
+            setLifeState((prev) => (prev.data?.events ? { ...prev, data: { ...prev.data, events: prev.data.events.filter((e) => e.id !== event.id) } } : prev))
+            onUndoable({
+              message: t('Le moment est supprimé.'),
+              commit: async ({ keepalive = false } = {}) => {
+                try {
+                  await deleteLifeEvent(treeId, event.id, immichToken, { keepalive })
+                } catch {
+                  if (keepalive) return
+                  setLifeRevision((r) => r + 1)
+                  setLifeNotice(t('La suppression n’a pas abouti. Réessayez dans un instant.'))
+                }
+              },
+              undo: () => setLifeRevision((r) => r + 1),
+            })
+          } : undefined}
           onSaved={({ pending, uploaded }) => {
             setMomentSheet(null)
             if (pending) setLifeNotice(t('Merci, c’est envoyé. Le moment apparaîtra dans sa vie quand la personne qui gère l’arbre l’aura accepté.'))
