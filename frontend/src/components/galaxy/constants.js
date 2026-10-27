@@ -45,14 +45,13 @@ export const REPULSION_STRENGTH = 2
 export const ANGLE_VARIATION = Math.PI / 6
 
 // --- Constantes animation d'entrée ---
-// Cascade génération par génération, puis nœud par nœud de gauche à droite. Les délais unitaires
-// s'appliquent aux petits arbres ; sur un grand arbre ils sont réduits pour que la cascade tienne
-// dans ENTRANCE_MAX_GEN_SPAN (toutes générations) + ENTRANCE_MAX_NODE_SPAN (nœuds d'une génération).
-export const ENTRANCE_GEN_DELAY = 500
-export const ENTRANCE_NODE_DURATION = 700
-export const ENTRANCE_NODE_STAGGER = 80
-export const ENTRANCE_MAX_GEN_SPAN = 1600
-export const ENTRANCE_MAX_NODE_SPAN = 700
+// À la première ouverture d'un arbre, la caméra part serrée sur la personne de départ (au moins
+// ENTRANCE_CAMERA_FROM_SCALE) et recule en ENTRANCE_CAMERA_DURATION ; chaque personne apparaît en
+// ENTRANCE_NODE_DURATION quand elle entre dans le champ. Mouvements réduits : fondu de ENTRANCE_REDUCED_DURATION.
+export const ENTRANCE_CAMERA_DURATION = 1100
+export const ENTRANCE_CAMERA_FROM_SCALE = 1.3
+export const ENTRANCE_NODE_DURATION = 360
+export const ENTRANCE_REDUCED_DURATION = 200
 export const ENTRANCE_LINE_DELAY = 200
 export const ENTRANCE_LINE_DURATION = 500
 export const ENTRANCE_ORBIT_DELAY = 300
