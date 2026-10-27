@@ -8,11 +8,12 @@ import { nameKinship, normalizeSex } from '../../utils/kinship/index.js'
 // noeuds intermédiaires invisibles ; seuls les noeuds personne
 // comptent comme "étapes".
 // ============================================================
-// persons : les personnes à jour (sexe modifié sans recalcul du placement) ; à défaut, celles du placement
-export function findPathBFS(fromElkId, toElkId, layoutData, persons = null) {
-  if (!layoutData || fromElkId === toElkId) return null
-
-  // Construire l'adjacence
+// Adjacence d'un placement, calculée une fois par placement et par jeu de couples (le survol la redemandait
+// à chaque personne survolée)
+const adjacencyCache = new WeakMap()
+function adjacencyOf(layoutData) {
+  const cached = adjacencyCache.get(layoutData)
+  if (cached && cached.meta === coupleBarMeta && cached.edges === layoutData.edges) return cached.adj
   const adj = new Map()
   const ensure = (id) => { if (!adj.has(id)) adj.set(id, []) }
 
@@ -32,14 +33,32 @@ export function findPathBFS(fromElkId, toElkId, layoutData, persons = null) {
       adj.get(tgt).push({ neighbor: src, type: 'filiation', id: edge.id })
     })
   }
+  adjacencyCache.set(layoutData, { meta: coupleBarMeta, edges: layoutData.edges, adj })
+  return adj
+}
 
-  // BFS
+// Index des personnes par identifiant du placement, une fois par tableau (le tableau change d'identité à chaque
+// modification, voir replaceGraph)
+const personIndexCache = new WeakMap()
+function personIndexOf(persons) {
+  let index = personIndexCache.get(persons)
+  if (!index) { index = new Map(persons.map((person) => [`p-${person.id}`, person])); personIndexCache.set(persons, index) }
+  return index
+}
+
+// persons : les personnes à jour (sexe modifié sans recalcul du placement) ; à défaut, celles du placement
+export function findPathBFS(fromElkId, toElkId, layoutData, persons = null) {
+  if (!layoutData || fromElkId === toElkId) return null
+
+  const adj = adjacencyOf(layoutData)
+
+  // BFS (file lue par index : shift() recopie la file à chaque pas, quadratique sur un gros arbre)
   const visited = new Set([fromElkId])
   const prev = new Map()
   const queue = [fromElkId]
 
-  while (queue.length > 0) {
-    const cur = queue.shift()
+  for (let head = 0; head < queue.length; head++) {
+    const cur = queue[head]
     if (cur === toElkId) break
     for (const link of (adj.get(cur) || [])) {
       if (!visited.has(link.neighbor)) {
@@ -64,9 +83,7 @@ export function findPathBFS(fromElkId, toElkId, layoutData, persons = null) {
   }
   nodePath.unshift(fromElkId)
 
-  const personById = persons
-    ? new Map(persons.map((person) => [`p-${person.id}`, person]))
-    : new Map((layoutData.children || []).filter((node) => node._type === 'person').map((node) => [node.id, node._data]))
+  const personById = persons ? personIndexOf(persons) : new Map((layoutData.children || []).filter((node) => node._type === 'person').map((node) => [node.id, node._data]))
   const kinship = kinshipPath(edgePath, nodePath, (id) => personById.get(id))
   return { nodePath, edgePath, kinship, label: nameKinship(kinship) }
 }

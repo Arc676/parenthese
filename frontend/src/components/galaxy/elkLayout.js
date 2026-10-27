@@ -10,6 +10,8 @@ import {
 // État partagé — peuplé par computeLayout, lu par renderers
 // ============================================================
 export let coupleBarMeta = []
+// Remet les couples d'un placement déjà calculé (placement repris d'un cache, voir familyTabsOf)
+export function restoreCoupleBarMeta(meta) { coupleBarMeta = meta }
 export let componentOrderPerGen = new Map()
 
 // ============================================================
@@ -372,9 +374,12 @@ export function computeLayout(graphData = null, referenceId = null) {
   const personByElkId = new Map(persons.map(p => [`p-${p.id}`, p]))
   const unionEntryByElkId = new Map()
 
+  // Rang de chaque nœud dans allNodes, tenu à jour à chaque ajout (le reconstruire à chaque chaîne coûtait N² sur un gros arbre)
+  const nodeIdx = new Map()
   function pushNode(node) {
     if (pushedNodeIds.has(node.id)) return
     pushedNodeIds.add(node.id)
+    nodeIdx.set(node.id, allNodes.length)
     allNodes.push(node)
   }
 
@@ -482,7 +487,6 @@ export function computeLayout(graphData = null, referenceId = null) {
 
     // Si plusieurs extrémités, choisir celle dont les enfants sont le plus à gauche
     if (leaves.length > 1) {
-      const nodeIdx = new Map(allNodes.map((n, i) => [n.id, i]))
       let bestIdx = Number.MAX_SAFE_INTEGER
       for (const leafKey of leaves) {
         const children = childrenByParentKey.get(leafKey) || []
@@ -555,7 +559,6 @@ export function computeLayout(graphData = null, referenceId = null) {
 
     // Heuristique barycentrique : trier par position des parents déjà placés
     if (gen > 0) {
-      const nodeIdx = new Map(allNodes.map((n, i) => [n.id, i]))
       const getAvgParentPos = (comp) => {
         let sum = 0, count = 0
         for (const key of comp) {

@@ -3,7 +3,7 @@ import { getPersonMedias, getParents, getChildren, getPersonUnions, persons as g
 import { PERSON_R, FLOAT_SPEED, FLOAT_AMPLITUDE, REPULSION_RADIUS, REPULSION_STRENGTH, MAX_ORBIT_MEDIAS, ENTRANCE_GEN_DELAY, ENTRANCE_NODE_DURATION, ENTRANCE_NODE_STAGGER, ENTRANCE_MAX_GEN_SPAN, ENTRANCE_MAX_NODE_SPAN, ENTRANCE_LINE_DELAY, ENTRANCE_LINE_DURATION, ENTRANCE_ORBIT_DELAY, ENTRANCE_ORBIT_DURATION, ENTRANCE_ORBIT_STAGGER } from './galaxy/constants'
 import { easeOutCubic } from './galaxy/utils'
 import { computeLayout, generateNodeRandomData, coupleBarMeta } from './galaxy/elkLayout'
-import { computeBlockLayout, familyTabsOf, lineToFamily, subgraphOf } from './galaxy/blockLayout'
+import { computeBlockLayout, familyTabsOf, lineToFamily, subgraphOf, takeRootLayout } from './galaxy/blockLayout'
 import { hasGhosts, withGhosts } from '../utils/ghosts'
 
 // Placement par blocs familiaux par défaut (mesures : tools/layout-bench). ?layout=sugiyama = placement Sugiyama.
@@ -499,9 +499,11 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     // avant l'arbre affiché, parce que chaque calcul de placement remplit les couples du module (coupleBarMeta)
     const start = startRefRef.current != null ? String(startRefRef.current) : null
     const cache = tabsCacheRef.current
+    let freshTabs = null
     if (USE_BLOCK_LAYOUT && familyTabs && (cache.rev !== graphRevision || cache.start !== start)) {
-      tabsCacheRef.current = { rev: graphRevision, start, tabs: familyTabsOf(null, startRefRef.current) }
-      setTabs(tabsCacheRef.current.tabs)
+      freshTabs = familyTabsOf(null, startRefRef.current)
+      tabsCacheRef.current = { rev: graphRevision, start, tabs: freshTabs }
+      setTabs(freshTabs)
     }
     if (!familyTabs && tabsCacheRef.current.tabs.length) { tabsCacheRef.current = { rev: -1, start: undefined, tabs: [] }; setTabs([]) }
     // La famille du lien : son onglet s'il existe dans ce navigateur, sinon l'arbre entier ouvert sur sa charnière
@@ -528,7 +530,9 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     // placement de l'onglet de départ, puis enregistrées. Calculé avant l'arbre affiché (coupleBarMeta, voir plus haut)
     const legacy = annotationData.some((a) => !readAnchor(a))
     const departure = legacy && USE_BLOCK_LAYOUT && graph ? computeBlockLayout(null, startRefRef.current, { familyTabs }) : null
-    const result = USE_BLOCK_LAYOUT ? computeBlockLayout(graph, focusPersonIdRef.current, { familyTabs }) : computeLayout(null, focusPersonIdRef.current)
+    // Famille de départ sans propositions : son placement vient d'être calculé avec la liste des onglets
+    const kept = USE_BLOCK_LAYOUT && !graph && tab === freshTabs?.[0] ? takeRootLayout(freshTabs, focusPersonIdRef.current) : null
+    const result = kept || (USE_BLOCK_LAYOUT ? computeBlockLayout(graph, focusPersonIdRef.current, { familyTabs }) : computeLayout(null, focusPersonIdRef.current))
     if (legacy) {
       const anchored = anchorLegacy(annotationData, layoutCenters(departure || result))
       for (const ann of anchored) updateAnnotationInStore(ann.id, { style: ann.style })
