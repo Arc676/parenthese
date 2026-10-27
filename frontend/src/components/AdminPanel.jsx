@@ -41,6 +41,8 @@ const TREE_ICONS = ['🌳', '🌿', '🌻', '🏡', '❤️', '🧡', '⭐', '�
 const AdminPanel = ({
   familyTabs = true,
   onFamilyTabsChange = null,
+  fullNames = false,
+  onFullNamesChange = null,
   visible,
   treeId,
   authToken,
@@ -543,6 +545,18 @@ const AdminPanel = ({
                       <span className="ts-choice-text">
                         <strong>{t('Les grandes familles par alliance dans des onglets')}</strong>
                         <small>{t("Une belle-famille plus large qu'un écran s'ouvre dans son propre onglet au lieu d'être dessinée dans l'arbre. Réglage de ce navigateur.")}</small>
+                      </span>
+                    </label>
+                    <label className={`ts-choice ${fullNames ? 'is-active' : ''}`}>
+                      <input
+                        type="checkbox"
+                        name="fullNames"
+                        checked={fullNames}
+                        onChange={(event) => onFullNamesChange?.(event.target.checked)}
+                      />
+                      <span className="ts-choice-text">
+                        <strong>{t("Le nom de famille sous le prénom")}</strong>
+                        <small>{t("Le nom de naissance quand il est connu, sinon le nom d'usage. Réglage de ce navigateur.")}</small>
                       </span>
                     </label>
                   </fieldset>
