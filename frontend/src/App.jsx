@@ -582,6 +582,9 @@ function App() {
   // Grandes belles-familles dans des onglets (réglage de ce navigateur, voir Paramètres de l'arbre)
   const [familyTabs, setFamilyTabsState] = useState(() => { try { return localStorage.getItem('parenthese.familyTabs') !== 'off' } catch { return true } })
   const setFamilyTabs = useCallback((on) => { setFamilyTabsState(on); try { localStorage.setItem('parenthese.familyTabs', on ? 'on' : 'off') } catch { /* navigateur sans stockage */ } }, [])
+  // Nom de famille sous le prénom dans l'arbre, celui de naissance s'il est connu (#168). Réglage de ce navigateur.
+  const [fullNames, setFullNamesState] = useState(() => { try { return localStorage.getItem('parenthese.fullNames') === 'on' } catch { return false } })
+  const setFullNames = useCallback((on) => { setFullNamesState(on); try { localStorage.setItem('parenthese.fullNames', on ? 'on' : 'off') } catch { /* navigateur sans stockage */ } }, [])
   // Premiers visages : fenêtre ouverte après un import GEDCOM, ou depuis les paramètres de l'arbre
   const [photoStart, setPhotoStart] = useState({ visible: false, personsImported: null, refs: [], mediaRefs: [], faces: [], bundledFiles: [] })
   const photoStartDirtyRef = useRef(false)
@@ -3473,6 +3476,7 @@ function App() {
         reorderEnabled={canReorderSiblings}
         onReorderSiblings={handleReorderSiblings}
         familyTabs={familyTabs}
+        fullNames={fullNames}
         annotationViewRef={annotationViewRef}
         onAnnotationsAnchored={persistAnnotationAnchors}
         selfPersonId={linkedSelfPersonId || null}
@@ -3647,6 +3651,8 @@ function App() {
         onClose={() => setAdminPanelVisible(false)}
         familyTabs={familyTabs}
         onFamilyTabsChange={setFamilyTabs}
+        fullNames={fullNames}
+        onFullNamesChange={setFullNames}
       />
       <PhotoStartPanel
         visible={photoStart.visible}

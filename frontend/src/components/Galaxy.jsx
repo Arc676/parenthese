@@ -47,7 +47,7 @@ const centerX = (node) => node.x + node.width / 2
 const easeOutQuint = (t) => 1 - (1 - t) ** 5
 const prefersReducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, reorderEnabled = false, onReorderSiblings = null, familyTabs = true, annotationViewRef = null, onAnnotationsAnchored = null, selfPersonId = null, ghosts = null, initialFamilyKey = null, onFamilyChange = null }) => {
+const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, reorderEnabled = false, onReorderSiblings = null, familyTabs = true, fullNames = false, annotationViewRef = null, onAnnotationsAnchored = null, selfPersonId = null, ghosts = null, initialFamilyKey = null, onFamilyChange = null }) => {
   const canvasRef = useRef(null)
   const layoutDataRef = useRef(null)
   // Onglets de familles (réglage `familyTabs`) : la liste des familles de l'arbre, calculée une fois par
@@ -79,6 +79,8 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   useEffect(() => { familyTabsRef.current = familyTabs }, [familyTabs])
   // Propositions pas encore relues (utils/ghosts.js) : placées et dessinées en transparence, jamais dans les données
   const ghostsRef = useRef(ghosts)
+  const fullNamesRef = useRef(fullNames)
+  useEffect(() => { fullNamesRef.current = fullNames; needsRedrawRef.current = true }, [fullNames])
   useEffect(() => { ghostsRef.current = ghosts; needsRedrawRef.current = true }, [ghosts])
   const onAnnotationsAnchoredRef = useRef(onAnnotationsAnchored)
   useEffect(() => { onAnnotationsAnchoredRef.current = onAnnotationsAnchored }, [onAnnotationsAnchored])
@@ -1084,6 +1086,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
         view,
         liftScales: liftScalesRef.current,
         ghostPatches: ghostsRef.current?.patches || null,
+        fullNames: fullNamesRef.current,
       })
       drawRenvoiPills(ctx)
       // Annotations dessinées APRES les noeuds pour que stickers/texte soient au-dessus.

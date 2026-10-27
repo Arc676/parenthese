@@ -6,6 +6,8 @@ export default {
   'Affichage': 'Display',
   'Les grandes familles par alliance dans des onglets': 'Large in-law families in tabs',
   "Une belle-famille plus large qu'un écran s'ouvre dans son propre onglet au lieu d'être dessinée dans l'arbre. Réglage de ce navigateur.": 'An in-law family wider than a screen opens in its own tab instead of being drawn in the tree. Saved in this browser.',
+  'Le nom de famille sous le prénom': 'Last name under the first name',
+  "Le nom de naissance quand il est connu, sinon le nom d'usage. Réglage de ce navigateur.": 'The maiden name when it is known, otherwise the current last name. Saved in this browser.',
   // Arbre sur canvas (components/galaxy/renderers.js)
   'Voir les parents': 'See parents',
   'Voir {firstName}': 'See {firstName}',

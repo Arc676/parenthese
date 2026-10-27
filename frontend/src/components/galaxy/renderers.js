@@ -472,7 +472,7 @@ function measureTextCached(ctx, text, fontKey) {
 // ============================================================
 function drawPersonNode(ctx, node, pos, nodeProgress, {
   nodeRandomData, imageCache, hoverScales, selectedGlowScales, searchGlowScales,
-  mediaHoverState, entrance, entranceActive, elapsed, view = null, liftScales = null,
+  mediaHoverState, entrance, entranceActive, elapsed, view = null, liftScales = null, fullNames = false,
 }) {
   const { cx, cy } = pos
   const person = getPersonById(node._data.id) || node._data
@@ -633,15 +633,20 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
   ctx.font = `${nameUnknown ? 'italic ' : ''}400 13px "Newsreader", Georgia, serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
+  // Réglage « nom de famille sous le prénom » (#168) : celui de naissance s'il est connu, coupé comme le surnom
+  const familyName = fullNames && withDetail ? String(person.birthName || person.lastName || '').trim() : ''
+  const familyLabel = familyName ? fitNickname(ctx, familyName, NICKNAME_MAX_W) : ''
+  const lineShift = familyLabel ? 15 : 0
   if (nameLabel) {
     if (withDetail) {
       const nameMetrics = measureTextCached(ctx, nameLabel, nameUnknown ? 'name-unknown' : 'name')
       const nameBlockH = Math.max(
         18,
         (nameMetrics.actualBoundingBoxAscent || 7) + (nameMetrics.actualBoundingBoxDescent || 4) + 8,
-      )
-      const labelGlowY = 6
-      const labelGlowRx = Math.max(26, Math.round(nameMetrics.width * 0.62))
+      ) + lineShift
+      const labelGlowY = 6 + lineShift / 2
+      const labelW = familyLabel ? Math.max(nameMetrics.width, ctx.measureText(familyLabel).width) : nameMetrics.width
+      const labelGlowRx = Math.max(26, Math.round(labelW * 0.62))
       const labelGlowRy = Math.max(16, Math.round(nameBlockH * 1.15))
       const labelGlow = ctx.createRadialGradient(0, labelGlowY, 0, 0, labelGlowY, labelGlowRx)
       labelGlow.addColorStop(0, 'rgba(251, 250, 247, 0.98)')
@@ -661,13 +666,18 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
     ctx.fillStyle = COLORS.text
     ctx.fillText(nameLabel, 0, 0)
   }
+  if (familyLabel) {
+    ctx.font = '400 13px "Newsreader", Georgia, serif'
+    ctx.fillStyle = COLORS.text
+    ctx.fillText(familyLabel, 0, 15)
+  }
 
   // Surnom sous le nom, en italique : les dates descendent pour lui faire place
   const hasNickname = withDetail && Boolean(person.nickname)
   if (hasNickname) {
     ctx.font = 'italic 300 13px "Newsreader", Georgia, serif'
     ctx.fillStyle = COLORS.textLight
-    ctx.fillText(fitNickname(ctx, person.nickname, NICKNAME_MAX_W), 0, 15)
+    ctx.fillText(fitNickname(ctx, person.nickname, NICKNAME_MAX_W), 0, 15 + lineShift)
   }
 
   if (withDetail) {
@@ -677,7 +687,7 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
     const years = person.deathYear
       ? `${birthYearLabel}–${person.deathYear}`
       : person.isAlive === false ? `${birthYearLabel}–?` : `${birthYearLabel}`
-    ctx.fillText(years, 0, hasNickname ? 31 : 15)
+    ctx.fillText(years, 0, (hasNickname ? 31 : 15) + lineShift)
   }
 
   ctx.restore()
