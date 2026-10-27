@@ -71,10 +71,10 @@ export default function LifeTimeline({
   )
   const noticeLine = notice && <p className="pz-success lt-notice" role="status">{notice}</p>
 
-  // Premier chargement : la place de la frise, au lieu d'un « pas encore de date » qui serait faux une seconde après
-  if (loading && !life) return <Skeleton variant="timeline" count={4} label={t('Chargement de la frise')} />
-
   if (entries.length === 0) {
+    // Premier chargement, aucune date connue sur la fiche : la place de la frise, au lieu d'un « pas encore de
+    // date » qui serait faux une seconde après. Avec des dates connues, elles s'affichent tout de suite.
+    if (loading && !life) return <Skeleton variant="timeline" count={3} label={t('Chargement de la frise')} />
     return (
       <div className="pc-empty">
         <p className="pz-sub">{t('Pas encore de date connue pour {name}.', { name: person.firstName })}</p>
