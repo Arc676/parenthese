@@ -277,3 +277,8 @@ button:disabled:has(.pz-busy.is-busy) { opacity: 1; cursor: progress; }
     inset: min(0px, calc((100% - 44px) / 2)) min(0px, calc((100% - 44px) / 2));
   }
 }
+
+/* Raccourci clavier à droite d'une entrée de menu (components/Kbd.jsx) ; rien sur écran tactile */
+.pz-kbd { display: inline-flex; gap: 3px; margin-left: auto; padding-left: 12px; }
+.pz-kbd kbd { min-width: 20px; padding: 1px 5px; border: 1px solid var(--pz-line); border-radius: 5px; background: var(--pz-bg); font: 500 11px/16px var(--pz-sans); color: var(--pz-muted); text-align: center; }
+@media (pointer: coarse) { .pz-kbd { display: none; } }

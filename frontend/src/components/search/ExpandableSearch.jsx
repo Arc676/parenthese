@@ -3,6 +3,7 @@ import { Search, X } from 'lucide-react'
 import SearchResultsDropdown from './SearchResultsDropdown'
 import './ExpandableSearch.css'
 import { t } from '../../i18n/index.js'
+import { isCommandK, withShortcut } from '../../utils/shortcuts.js'
 
 /**
  * Recherche expandable haut-droite
@@ -80,6 +81,22 @@ function ExpandableSearch({
     setExpanded(true)
   }
 
+  // Ctrl+K (⌘K sur Mac), de n'importe où : ouvre la recherche, ou y remet le curseur si elle est déjà ouverte
+  useEffect(() => {
+    function handleCommandK(event) {
+      if (!isCommandK(event)) return
+      event.preventDefault()
+      if (!expanded) setExpanded(true)
+      else {
+        inputRef.current?.focus()
+        inputRef.current?.select()
+      }
+    }
+
+    document.addEventListener('keydown', handleCommandK)
+    return () => document.removeEventListener('keydown', handleCommandK)
+  }, [expanded])
+
   const handleInputChange = (e) => {
     const value = e.target.value
     setQuery(value)
@@ -106,6 +123,7 @@ function ExpandableSearch({
           className="search-icon-button"
           onClick={handleExpand}
           aria-label={t('Rechercher une personne')}
+          title={withShortcut(t('Rechercher une personne'), 'cmd', 'k')}
         >
           <span className="search-icon"><Search size={22} strokeWidth={2} /></span>
         </button>
