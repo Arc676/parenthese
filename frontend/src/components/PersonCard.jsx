@@ -11,6 +11,7 @@ import ImmichFacePanel from './ImmichFacePanel.jsx'
 import './PersonCard.css'
 import PzBusy from './PzBusy.jsx'
 import { useSheetDrag, useSheetMode } from '../hooks/useSheetDrag'
+import { rememberOrigin } from '../utils/openOrigin'
 import PortraitCropModal from './PortraitCropModal.jsx'
 import { imagePlacement } from '../utils/portraitCrop.js'
 import { t, dateLocale } from '../i18n/index.js'
@@ -849,7 +850,7 @@ const PersonCard = ({
                     key={media.id}
                     type="button"
                     className={`pc-tile pc-tile--${media.type}`}
-                    onClick={() => onMediaSelect?.(media, person)}
+                    onClick={(e) => { rememberOrigin(e.currentTarget); onMediaSelect?.(media, person) }}
                     title={media.label || TYPE_LABELS[media.type]}
                   >
                     {media.type === 'photo' && media.url
@@ -877,7 +878,7 @@ const PersonCard = ({
                         key={media.id}
                         type="button"
                         className={`pc-tile pc-tile--${media.type}`}
-                        onClick={() => owner && onMediaSelect?.(media, owner)}
+                        onClick={(e) => { if (!owner) return; rememberOrigin(e.currentTarget); onMediaSelect?.(media, owner) }}
                         title={media.label || TYPE_LABELS[media.type]}
                       >
                         {media.type === 'photo' && media.url

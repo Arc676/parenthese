@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Pencil, UserPlus, X } from 'lucide-react'
 import { MediaPeopleList, MediaPeopleMarkers } from './MediaPeople.jsx'
 import {
@@ -13,6 +13,7 @@ import { t } from '../i18n/index.js'
 import { firstNameLabel } from '../utils/personName.js'
 import { eventTitle } from '../utils/lifeTimeline.js'
 import { getAccountErrorMessage } from '../utils/errorMessages.js'
+import { growFromTransform, takeOrigin } from '../utils/openOrigin.js'
 
 const HTTP_URL_RE = /^https?:\/\/\S+$/i
 const MAX_TITLE_LENGTH = 280
@@ -562,11 +563,30 @@ const MediaViewer = ({
     }
   }
 
+  // Ouvert depuis une vignette de la fiche : la carte part de la vignette et grandit jusqu'à sa place (Patch, 27/10).
+  // Avant la peinture, pour ne jamais montrer la carte à sa place une image plus tôt.
+  const cardRef = useRef(null)
+  const mediaId = media?.id
+  useLayoutEffect(() => {
+    const card = cardRef.current
+    const from = takeOrigin()
+    if (!card || !from) return
+    card.style.animation = 'none'
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+    // Sur téléphone, la fenêtre est collée en bas (pz.css, place-items: end) : on part du bord bas
+    const anchor = getComputedStyle(card.parentElement).alignItems.includes('end') ? 'bottom' : 'center'
+    const start = growFromTransform(from, card.getBoundingClientRect().width, { width: window.innerWidth, height: window.innerHeight }, anchor)
+    if (!start) return
+    card.style.transformOrigin = start.origin
+    card.animate?.([{ transform: start.transform }, { transform: 'none' }], { duration: 280, easing: 'cubic-bezier(.23, 1, .32, 1)' })
+  }, [mediaId])
+
   if (!media) return null
 
   return (
     <div className="pz-overlay media-viewer-overlay" onClick={handleOverlayClick}>
       <div
+        ref={cardRef}
         className={`media-viewer-card media-viewer-card--${mediaType}`}
         role="dialog"
         aria-modal="true"
