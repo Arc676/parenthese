@@ -508,3 +508,8 @@
 .mv-edit-quote { font-family: var(--pz-serif); font-size: 18px; resize: vertical; }
 .mv-edit-error { margin: 0; font: 400 13px var(--pz-sans); color: var(--pz-a700); }
 .mv-edit-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+
+/* Mouvements réduits : la carte n'a pas la classe .pz-modal que vise pz.css, elle jouait donc sa montée quand même */
+@media (prefers-reduced-motion: reduce) {
+  .media-viewer-card { animation: none; }
+}
