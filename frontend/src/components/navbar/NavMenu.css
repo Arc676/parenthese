@@ -41,7 +41,8 @@
   padding: 0 14px calc(16px + env(safe-area-inset-bottom, 0px));
   background: var(--pz-surface);
   border-radius: 24px 24px 0 0;
-  box-shadow: 0 -12px 40px rgba(42, 38, 34, 0.16);
+  /* Ombre pleine sous la feuille, en premier pour passer au-dessus de l'ombre floue : tirée vers le haut (40 px au plus, sheetOffset), elle ne laisse pas voir la page dessous */
+  box-shadow: 0 40px 0 var(--pz-surface), 0 -12px 40px rgba(42, 38, 34, 0.16);
   /* Pas de fill-mode : une fois l'entrée finie, le glisser (style inline) reprend la main */
   animation: navmSheetIn 320ms var(--pz-ease-drawer);
   transition: transform 240ms var(--pz-ease-drawer);
