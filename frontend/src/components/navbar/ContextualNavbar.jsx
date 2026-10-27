@@ -12,6 +12,7 @@ import { t } from '../../i18n/index.js'
 import { PHONE_QUERY } from '../../utils/sheetDrag'
 import './ContextualNavbar.css'
 import { initialOf } from '../../utils/initial.js'
+import Kbd from '../Kbd.jsx'
 
 const ANNOT_TOOLS = [
   { id: 'pointer', label: t('Sélection'), Icon: MousePointer2 },
@@ -211,9 +212,9 @@ function ContextualNavbar({
     }
     const fixItems = []
     if (isFamily) {
-      fixItems.push({ key: 'edit', icon: <Pencil {...ICON} />, label: editLabel, sub: editModeActive ? null : t('dates, noms, liens, le propriétaire relit'), onSelect: onEditClick })
+      fixItems.push({ key: 'edit', icon: <Pencil {...ICON} />, label: editLabel, sub: editModeActive ? null : t('dates, noms, liens, le propriétaire relit'), onSelect: onEditClick, shortcut: 'e' })
     } else if (isOwner || isDemo) {
-      fixItems.push({ key: 'edit', icon: <Pencil {...ICON} />, label: editLabel, onSelect: onEditClick })
+      fixItems.push({ key: 'edit', icon: <Pencil {...ICON} />, label: editLabel, onSelect: onEditClick, shortcut: 'e' })
     }
     if (addItems.length) addGroups.push({ label: t('Ajouter'), items: addItems })
     if (fixItems.length) addGroups.push({ label: t('Corriger'), items: fixItems })
@@ -235,6 +236,7 @@ function ContextualNavbar({
               label={item.label}
               sub={item.sub}
               onSelect={run(item.onSelect)}
+              right={item.shortcut ? <Kbd mod="ctrl" k={item.shortcut} /> : null}
             />
           ))}
         </NavMenuGroup>
