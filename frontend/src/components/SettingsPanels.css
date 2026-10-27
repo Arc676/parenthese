@@ -276,6 +276,22 @@
   transform: translateX(-50%);
 }
 /* Sur deux lignes, une pilule se déforme : des coins arrondis simples */
+/* Suppression annulable : le bouton Annuler doit rester cliquable */
+.undo-toast { display: flex; align-items: center; gap: 14px; padding-right: 8px; pointer-events: auto; }
+.undo-toast-btn {
+  position: relative;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pz-bg) 16%, transparent);
+  color: var(--pz-bg);
+  font: 600 14px/1.2 var(--pz-sans);
+  cursor: pointer;
+}
+/* Zone de clic d'au moins 44 px sans grossir le bouton */
+.undo-toast-btn::before { content: ''; position: absolute; inset: -8px; }
+.undo-toast-btn:hover { background: color-mix(in srgb, var(--pz-bg) 26%, transparent); }
+.undo-toast-btn:focus-visible { outline: 2px solid var(--pz-bg); outline-offset: 2px; }
 @media (max-width: 768px) { .contrib-success-toast { bottom: 78px; padding: 11px 16px; border-radius: 16px; font-size: 13px; } }
 
 @media (max-width: 560px) {

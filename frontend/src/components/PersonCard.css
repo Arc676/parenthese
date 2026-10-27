@@ -241,8 +241,6 @@
 .pc-foot { flex: none; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-top: 14px; border-top: 1px solid var(--pz-line); }
 .pc-foot .pc-save { margin-left: auto; }
 .pc-save.is-saved { background: var(--pz-success); }
-.pc-delete-confirm { display: grid; gap: 10px; width: 100%; font: 500 14px var(--pz-sans); color: var(--pz-danger); }
-.pc-delete-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* ── Téléphone : panneau qui monte par le bas ── */
 @media (max-width: 768px) {

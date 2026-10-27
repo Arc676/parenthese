@@ -130,7 +130,6 @@ const PersonCard = ({
   const [saveError, setSaveError] = useState('')
   // Enregistrement en cours : un second appel (bouton, puis changement de fiche) reçoit la même promesse
   const saveInFlight = useRef(null)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showImmichPanel, setShowImmichPanel] = useState(false)
   // null : connexion Immich de l'arbre inconnue, puis booléen. Le menu de source ne se propose
   // qu'à qui peut agir (owner/admin de l'arbre, comme pour toute action Immich) et seulement
@@ -164,7 +163,6 @@ const PersonCard = ({
     setUnknownFirstName(isFirstNameUnknown(person))
     setFirstNameMissing(false)
     setLastNameMissing(false)
-    setShowDeleteConfirm(false)
     setActiveRelationSearch(null)
     setRelationSearchQuery('')
     setSaveSuccess(false)
@@ -393,7 +391,6 @@ const PersonCard = ({
   const handleDelete = () => {
     if (!onDelete) return
     onDelete(person.id)
-    setShowDeleteConfirm(false)
   }
 
   const handleAvatarFileChange = async (event) => {
@@ -1154,32 +1151,20 @@ const PersonCard = ({
       {editMode && saveError && <p className="pc-save-error" role="alert">{saveError}</p>}
       {editMode && (
         <footer className="pc-foot">
-          {showDeleteConfirm ? (
-            <div className="pc-delete-confirm">
-              <span>{t("Supprimer {name} de l'arbre ?", { name: firstNameLabel(person) })}</span>
-              <div className="pc-delete-actions">
-                <button type="button" className="pz-btn pz-btn--ghost pz-btn--sm" onClick={() => setShowDeleteConfirm(false)}>{t('Annuler')}</button>
-                <button type="button" className="pz-btn pz-btn--danger pz-btn--sm" onClick={handleDelete}>{t('Supprimer')}</button>
-              </div>
-            </div>
-          ) : (
-            <>
-              {isAdmin && (
-                <button type="button" className="pz-btn pz-btn--danger-ghost pz-btn--sm" onClick={() => setShowDeleteConfirm(true)}>
-                  <Trash2 size={15} strokeWidth={2} />
-                  {t('Supprimer')}
-                </button>
-              )}
-              <button
-                type="button"
-                className={`pz-btn pz-btn--primary pc-save ${saveSuccess ? 'is-saved' : ''}`}
-                disabled={(!hasChanges && !saveSuccess) || saving}
-                onClick={handleSave}
-              >
-                {saveSuccess ? (<><Check size={16} strokeWidth={2.5} />{t('Enregistré')}</>) : (<PzBusy busy={saving} busyLabel={t('Enregistrement en cours')}><Save size={16} strokeWidth={2} />{t('Enregistrer')}</PzBusy>)}
-              </button>
-            </>
+          {isAdmin && (
+            <button type="button" className="pz-btn pz-btn--danger-ghost pz-btn--sm" onClick={handleDelete}>
+              <Trash2 size={15} strokeWidth={2} />
+              {t('Supprimer')}
+            </button>
           )}
+          <button
+            type="button"
+            className={`pz-btn pz-btn--primary pc-save ${saveSuccess ? 'is-saved' : ''}`}
+            disabled={(!hasChanges && !saveSuccess) || saving}
+            onClick={handleSave}
+          >
+            {saveSuccess ? (<><Check size={16} strokeWidth={2.5} />{t('Enregistré')}</>) : (<PzBusy busy={saving} busyLabel={t('Enregistrement en cours')}><Save size={16} strokeWidth={2} />{t('Enregistrer')}</PzBusy>)}
+          </button>
         </footer>
       )}
 

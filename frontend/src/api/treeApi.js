@@ -178,9 +178,10 @@ export async function updatePerson(treeId, personId, payload, token) {
   return data.person
 }
 
-export async function deletePerson(treeId, personId, token) {
+export async function deletePerson(treeId, personId, token, { keepalive = false } = {}) {
   const data = await apiRequest(`/trees/${encodeURIComponent(treeId)}/persons/${encodeURIComponent(personId)}`, {
     method: 'DELETE',
+    keepalive,
     headers: {
       Authorization: `Bearer ${token}`,
     },
