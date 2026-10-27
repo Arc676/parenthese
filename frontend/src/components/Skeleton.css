@@ -1,0 +1,14 @@
+/* Blocs gris de chargement (Skeleton.jsx) : immobiles, couleur des séparateurs */
+.pz-skel { display: grid; gap: 14px; padding: 4px 0; }
+.pz-skel-row { display: flex; align-items: center; gap: 12px; }
+.pz-skel-text { display: grid; gap: 7px; flex: 1; min-width: 0; }
+.pz-skel-bar { display: block; height: 12px; border-radius: 6px; background: var(--pz-line); }
+.pz-skel-bar--thin { height: 9px; background: var(--pz-line-soft); }
+.pz-skel-dot { flex: none; width: 32px; height: 32px; border-radius: 50%; background: var(--pz-line); }
+
+/* Frise : année, point sur le rail, texte */
+.pz-skel--timeline { gap: 22px; padding: 8px 0 4px; }
+.pz-skel--timeline .pz-skel-year { flex: none; width: 34px; height: 11px; }
+.pz-skel--timeline .pz-skel-dot { width: 10px; height: 10px; }
+
+.pz-skel--lines .pz-skel-bar { height: 10px; }

@@ -4,6 +4,7 @@ import { t } from '../i18n/index.js'
 import { buildLifeTimeline } from '../utils/lifeTimeline.js'
 import './LifeTimeline.css'
 import { blurPlaceholder } from '../utils/blurhash.js'
+import Skeleton from './Skeleton.jsx'
 
 // Onglet Vie de la fiche : naissance, unions et décès en grands repères, les autres événements
 // plus petits entre eux, la famille proche en retrait. Les sources restent repliées.
@@ -71,6 +72,9 @@ export default function LifeTimeline({
   const noticeLine = notice && <p className="pz-success lt-notice" role="status">{notice}</p>
 
   if (entries.length === 0) {
+    // Premier chargement, aucune date connue sur la fiche : la place de la frise, au lieu d'un « pas encore de
+    // date » qui serait faux une seconde après. Avec des dates connues, elles s'affichent tout de suite.
+    if (loading && !life) return <Skeleton variant="timeline" count={3} label={t('Chargement de la frise')} />
     return (
       <div className="pc-empty">
         <p className="pz-sub">{t('Pas encore de date connue pour {name}.', { name: person.firstName })}</p>

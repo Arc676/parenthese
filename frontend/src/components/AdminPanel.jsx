@@ -24,6 +24,7 @@ import { removeManager } from '../api/managersApi.js'
 import { t } from '../i18n/index.js'
 import { readGedcomFile } from '../utils/gedcomText.js'
 import { readGedcomBundle, zipErrorMessage } from '../utils/gedcomBundle.js'
+import Skeleton from './Skeleton.jsx'
 
 function normalizeSlug(value) {
   return String(value || '')
@@ -442,7 +443,7 @@ const AdminPanel = ({
 
         <div className="ts-content">
           {loading ? (
-            <p className="pz-small ts-loading">{t('Chargement…')}</p>
+            <Skeleton variant="lines" count={4} />
           ) : (
             <>
               {errorMessage && <div className="pz-error" role="alert">{errorMessage}</div>}
