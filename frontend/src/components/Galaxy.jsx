@@ -32,8 +32,11 @@ const MAX_SCALE = 3.2
 // Carte des familles : l'arbre s'efface entre ces deux échelles, les tuiles de familles apparaissent
 // Ouverture sur la personne de départ quand l'arbre entier serait illisible
 const FOCUS_MIN_READABLE_SCALE = 0.5
-// Assez loin pour voir la famille autour, assez près pour lire les prénoms (LOD_LABEL_FADE_IN)
-const FOCUS_SCALE = 0.5
+// Prénoms à 12 px (13 px à l'échelle 1) : en dessous, ils restent dessinés mais ne se lisent plus
+const FOCUS_SCALE = 0.95
+// Sous 768 px, la réglette de zoom reste ouverte en bas à gauche (ZoomControl.css) : la personne de départ se
+// centre dans la largeur qu'elle laisse libre
+const PHONE_SLIDER_BAND = 64
 
 // Réordonner une fratrie : seuil avant de soulever à la souris, appui long au doigt
 const REORDER_MOUSE_THRESHOLD = 4
@@ -675,7 +678,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     }
     if (focusNode && fitScale < FOCUS_MIN_READABLE_SCALE) {
       scale = FOCUS_SCALE
-      offsetX = cssW / 2 - (focusNode.x + focusNode.width / 2) * scale
+      offsetX = (cssW < 768 ? (PHONE_SLIDER_BAND + cssW) / 2 : cssW / 2) - (focusNode.x + focusNode.width / 2) * scale
       // Sur un écran étroit, la barre des familles couvre le haut : la personne de départ un peu plus bas
       offsetY = cssH * (cssW < 768 ? 0.56 : 0.42) - (focusNode.y + focusNode.height / 2) * scale
     }
