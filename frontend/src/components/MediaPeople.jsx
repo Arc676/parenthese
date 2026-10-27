@@ -14,9 +14,9 @@ function PersonAvatar({ person }) {
     : <span className="mp-avatar mp-avatar--initial" aria-hidden="true">{person?.firstName?.[0] || '?'}</span>
 }
 
-// Points posés sur la photo : un rond par visage, le prénom au survol ou au focus. En identification, le point de
-// la personne choisie est mis en avant.
-export function MediaPeopleMarkers({ people, getPerson, activeId = null, onOpenPerson }) {
+// Ronds posés sur les visages, cachés tant qu'on ne les demande pas (survol de la photo, photo touchée, prénom survolé
+// dessous : `hotId`). En identification, ils restent visibles et le rond de la personne choisie est mis en avant.
+export function MediaPeopleMarkers({ people, getPerson, activeId = null, hotId = null, onOpenPerson }) {
   return people.filter((tag) => tag.x != null && tag.y != null).map((tag) => {
     const person = getPerson(tag.personId)
     if (!person) return null
@@ -25,7 +25,7 @@ export function MediaPeopleMarkers({ people, getPerson, activeId = null, onOpenP
       <button
         key={tag.personId}
         type="button"
-        className={`mp-marker${activeId === tag.personId ? ' is-active' : ''}`}
+        className={`mp-marker${activeId === tag.personId ? ' is-active' : ''}${hotId === tag.personId ? ' is-hot' : ''}`}
         style={{ left: `${tag.x * 100}%`, top: `${tag.y * 100}%` }}
         onClick={(event) => { event.stopPropagation(); onOpenPerson?.(tag.personId) }}
         aria-label={t('Voir la fiche de {name}', { name })}
@@ -49,6 +49,7 @@ export function MediaPeopleList({
   onAdd,
   onRemove,
   onOpenPerson,
+  onHover,
 }) {
   const [query, setQuery] = useState('')
   const taken = useMemo(() => new Set(people.map((tag) => tag.personId)), [people])
@@ -69,7 +70,16 @@ export function MediaPeopleList({
       <div className="mp-list" aria-label={t('Sur la photo')}>
         <span className="mp-list-label">{t('Sur la photo')}</span>
         {known.map(({ person }) => (
-          <button key={person.id} type="button" className="mp-chip" onClick={() => onOpenPerson?.(person.id)}>
+          <button
+            key={person.id}
+            type="button"
+            className="mp-chip"
+            onClick={() => onOpenPerson?.(person.id)}
+            onPointerEnter={() => onHover?.(person.id)}
+            onPointerLeave={() => onHover?.(null)}
+            onFocus={() => onHover?.(person.id)}
+            onBlur={() => onHover?.(null)}
+          >
             <PersonAvatar person={person} />
             <span>{firstNameLabel(person)}</span>
           </button>

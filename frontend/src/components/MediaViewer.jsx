@@ -43,6 +43,10 @@ const MediaViewer = ({
   const [tagging, setTagging] = useState(false)
   const [draftPeople, setDraftPeople] = useState([])
   const [activeTagId, setActiveTagId] = useState(null)
+  // Visages identifiés : rien sur la photo par défaut (Patch, 27/10). Toucher la photo montre ou cache les prénoms,
+  // survoler un prénom sous la photo entoure son visage.
+  const [showNames, setShowNames] = useState(false)
+  const [hotPersonId, setHotPersonId] = useState(null)
   const [savingPeople, setSavingPeople] = useState(false)
   const [peopleError, setPeopleError] = useState('')
   const [peopleNotice, setPeopleNotice] = useState('')
@@ -310,12 +314,16 @@ const MediaViewer = ({
     // La boîte épouse l'image : les points (x, y en proportion) tombent pile sur les visages
     return (
       <div className="media-photo-frame">
-        <div className={`mv-photo-box${tagging ? ' is-tagging' : ''}${activeTagId ? ' is-placing' : ''}`} onClick={placeActiveTag}>
+        <div
+          className={`mv-photo-box${tagging ? ' is-tagging' : ''}${activeTagId ? ' is-placing' : ''}${showNames ? ' show-names' : ''}`}
+          onClick={(event) => (tagging ? placeActiveTag(event) : setShowNames((shown) => !shown))}
+        >
           <img src={mediaUrl} alt={media?.label || t('Photo')} />
           <MediaPeopleMarkers
             people={shownPeople}
             getPerson={getPerson}
             activeId={activeTagId}
+            hotId={tagging ? null : hotPersonId}
             onOpenPerson={tagging ? (id) => setActiveTagId(id) : onOpenPerson}
           />
         </div>
@@ -666,7 +674,7 @@ const MediaViewer = ({
               </div>
             ) : (
               <div className="mv-people">
-                <MediaPeopleList people={savedPeople} getPerson={getPerson} onOpenPerson={onOpenPerson} />
+                <MediaPeopleList people={savedPeople} getPerson={getPerson} onOpenPerson={onOpenPerson} onHover={setHotPersonId} />
                 {canTag && onSavePeople && (
                   <button type="button" className="pz-btn pz-btn--soft pz-btn--sm mv-people-btn" onClick={startTagging}>
                     <UserPlus size={15} strokeWidth={2} aria-hidden="true" />

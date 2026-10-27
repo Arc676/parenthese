@@ -3,19 +3,27 @@
 .mp-avatar { width: 24px; height: 24px; flex: none; border-radius: 50%; object-fit: cover; }
 .mp-avatar--initial { display: grid; place-items: center; background: var(--pz-a100); color: var(--pz-a700); font: 400 12px/1 var(--pz-serif); }
 
-/* Point sur un visage : rond blanc cerclé, le prénom apparaît au survol ou au focus (toujours en identification) */
+/* Rond sur un visage : fil fin, assez large pour entourer le visage sans le couvrir. Caché par défaut, la photo d'abord
+   (Patch, 27/10) : visible au survol de la photo, quand on la touche (.show-names), quand son prénom est survolé
+   dessous (.is-hot), et toujours en identification. Apparition d'un coup, sans fondu. */
 .mp-marker {
   position: absolute;
-  width: 26px;
-  height: 26px;
-  margin: -13px 0 0 -13px;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
   padding: 0;
-  border: 2px solid #fff;
+  border: 1.5px solid rgba(255, 255, 255, .9);
   border-radius: 50%;
   background: transparent;
-  box-shadow: 0 0 0 1px rgba(42, 38, 34, .3), 0 2px 8px rgba(42, 38, 34, .25);
+  box-shadow: 0 0 0 1px rgba(42, 38, 34, .18);
   cursor: pointer;
+  visibility: hidden;
 }
+@media (hover: hover) and (pointer: fine) { .mv-photo-box:hover .mp-marker { visibility: visible; } }
+.mv-photo-box.is-tagging .mp-marker,
+.mv-photo-box.show-names .mp-marker,
+.mp-marker.is-hot { visibility: visible; }
+.mp-marker.is-hot { border-color: #fff; box-shadow: 0 0 0 1px rgba(42, 38, 34, .25), 0 0 0 4px rgba(255, 255, 255, .25); }
 .mp-marker.is-active { border-color: var(--pz-a500); box-shadow: 0 0 0 3px rgba(210, 105, 74, .35), 0 2px 8px rgba(42, 38, 34, .25); }
 .mp-marker:focus-visible { outline: 2px solid var(--pz-a700); outline-offset: 3px; }
 .mp-marker-name {
@@ -33,10 +41,9 @@
   visibility: hidden;
 }
 .mp-marker:hover .mp-marker-name,
-.mp-marker:focus-visible .mp-marker-name,
+.mp-marker.is-hot .mp-marker-name,
 .mv-photo-box.is-tagging .mp-marker-name,
 .mv-photo-box.show-names .mp-marker-name { visibility: visible; }
-@media (hover: none) { .mp-marker-name { visibility: visible; } }
 
 /* Photo cliquable pendant le placement d'un point */
 .mv-photo-box.is-placing img { cursor: crosshair; }
