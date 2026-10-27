@@ -14,6 +14,7 @@ import { firstNameLabel } from '../utils/personName.js'
 import { eventTitle } from '../utils/lifeTimeline.js'
 import { getAccountErrorMessage } from '../utils/errorMessages.js'
 import { growFromTransform, takeOrigin } from '../utils/openOrigin.js'
+import { useSheetDrag, useSheetMode } from '../hooks/useSheetDrag.js'
 
 const HTTP_URL_RE = /^https?:\/\/\S+$/i
 const MAX_TITLE_LENGTH = 280
@@ -589,12 +590,25 @@ const MediaViewer = ({
     card.animate?.([{ transform: start.transform }, { transform: 'none' }], { duration: 280, easing: 'cubic-bezier(.23, 1, .32, 1)' })
   }, [mediaId])
 
+  // Téléphone : glisser la photo vers le bas ferme le souvenir, comme la fiche (Patch, 27/10). Pas pendant
+  // l'identification (on touche la photo pour placer un visage), ni quand la carte a défilé (on remonte d'abord).
+  const sheetMode = useSheetMode()
+  const drag = useSheetDrag({
+    enabled: sheetMode && !tagging,
+    zone: '.mv-photo-box',
+    onClose,
+    canStart: () => (cardRef.current?.scrollTop ?? 0) <= 0,
+  })
+
   if (!media) return null
 
   return (
     <div className="pz-overlay media-viewer-overlay" onClick={handleOverlayClick}>
       <div
         ref={cardRef}
+        style={drag.style}
+        data-dragging={drag.dragging || undefined}
+        {...drag.bind}
         className={`media-viewer-card media-viewer-card--${mediaType}`}
         role="dialog"
         aria-modal="true"
