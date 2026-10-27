@@ -1,6 +1,6 @@
 import { memo, useEffect, useImperativeHandle, useRef, useState, useCallback } from 'react'
 import { getPersonMedias, getParents, getChildren, getPersonUnions, persons as graphPersons, unions as graphUnions, filiations as graphFiliations } from '../data/mockData'
-import { PERSON_R, FLOAT_SPEED, FLOAT_AMPLITUDE, REPULSION_RADIUS, REPULSION_STRENGTH, MAX_ORBIT_MEDIAS, ENTRANCE_GEN_DELAY, ENTRANCE_NODE_DURATION, ENTRANCE_NODE_STAGGER, ENTRANCE_MAX_GEN_SPAN, ENTRANCE_MAX_NODE_SPAN, ENTRANCE_LINE_DELAY, ENTRANCE_LINE_DURATION, ENTRANCE_ORBIT_DELAY, ENTRANCE_ORBIT_DURATION, ENTRANCE_ORBIT_STAGGER } from './galaxy/constants'
+import { PERSON_R, FLOAT_SPEED, FLOAT_AMPLITUDE, REPULSION_RADIUS, REPULSION_STRENGTH, MAX_ORBIT_MEDIAS, ENTRANCE_NODE_DURATION, ENTRANCE_CAMERA_DURATION, ENTRANCE_CAMERA_FROM_SCALE, ENTRANCE_REDUCED_DURATION, ENTRANCE_LINE_DELAY, ENTRANCE_LINE_DURATION, ENTRANCE_ORBIT_DELAY, ENTRANCE_ORBIT_DURATION, ENTRANCE_ORBIT_STAGGER } from './galaxy/constants'
 import { easeOutCubic } from './galaxy/utils'
 import { computeLayout, generateNodeRandomData, coupleBarMeta, restoreCoupleBarMeta } from './galaxy/elkLayout'
 import { computeBlockLayout, familyTabsOf, lineToFamily, subgraphOf, takeRootLayout } from './galaxy/blockLayout'
@@ -32,7 +32,8 @@ const MAX_SCALE = 3.2
 // Carte des familles : l'arbre s'efface entre ces deux échelles, les tuiles de familles apparaissent
 // Ouverture sur la personne de départ quand l'arbre entier serait illisible
 const FOCUS_MIN_READABLE_SCALE = 0.5
-const FOCUS_SCALE = 0.95
+// Assez loin pour voir la famille autour, assez près pour lire les prénoms (LOD_LABEL_FADE_IN)
+const FOCUS_SCALE = 0.5
 
 // Réordonner une fratrie : seuil avant de soulever à la souris, appui long au doigt
 const REORDER_MOUSE_THRESHOLD = 4
@@ -42,6 +43,8 @@ const REORDER_LONG_PRESS_MS = 320
 const SHIFT_SPRING = { stiffness: 560, dampingRatio: 0.92 }
 const DROP_SPRING = { stiffness: 480, dampingRatio: 0.72 }
 const centerX = (node) => node.x + node.width / 2
+// Recul de la caméra à l'ouverture : départ immédiat, long freinage (ease-out quint)
+const easeOutQuint = (t) => 1 - (1 - t) ** 5
 const prefersReducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
 const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, reorderEnabled = false, onReorderSiblings = null, familyTabs = true, annotationViewRef = null, onAnnotationsAnchored = null, selfPersonId = null, ghosts = null, initialFamilyKey = null, onFamilyChange = null }) => {
@@ -125,6 +128,9 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   const mediaHoverState = useRef(new Map())
   const dragLiftProgress = useRef(0)
   const entranceRef = useRef(null)
+  // Arbre déjà ouvert dans cette page (sa première personne) : l'entrée ne se joue qu'à la première ouverture,
+  // un arbre modifié ou un autre onglet s'affiche net
+  const openedTreeRef = useRef(null)
   const selectedPersonIdRef = useRef(null)
   const selectedGlowScales = useRef(new Map())
   const searchGlowScales = useRef(new Map())
@@ -678,32 +684,50 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     targetTransformRef.current = init
     nodeRandomDataRef.current = generateNodeRandomData(result.children, result.edges)
 
-    // Construire le schedule d'animation d'entrée
-    const genGroups = new Map()
-    result.children.forEach(node => {
-      const gen = node._generation ?? 0
-      if (!genGroups.has(gen)) genGroups.set(gen, [])
-      genGroups.get(gen).push(node)
-    })
-    genGroups.forEach(group => group.sort((a, b) => a.x - b.x))
-
+    // Entrée, à la première ouverture de l'arbre seulement. La caméra part serrée sur la personne de départ et
+    // recule jusqu'à la vue d'arrivée ; chaque personne apparaît quand elle entre dans le champ, la personne de
+    // départ dès la première image. On reprend la main à tout moment (le recul s'arrête au premier geste).
+    // Mouvements réduits : pas de recul, un fondu court. Ensuite (modification, autre onglet) : rien ne s'anime.
     const nodeSchedule = new Map()
     const coupleSchedule = new Map()
     const edgeSchedule = new Map()
     const orbitSchedule = new Map()
     let maxEndMs = 0
-
-    // Délais réduits sur les grands arbres pour que l'entrée reste courte (voir constants.js)
-    const genDelay = Math.min(ENTRANCE_GEN_DELAY, ENTRANCE_MAX_GEN_SPAN / Math.max(1, genGroups.size - 1))
-    genGroups.forEach((nodes, gen) => {
-      const genStart = gen * genDelay
-      const nodeStagger = Math.min(ENTRANCE_NODE_STAGGER, ENTRANCE_MAX_NODE_SPAN / Math.max(1, nodes.length - 1))
-      nodes.forEach((node, idx) => {
-        const startMs = genStart + idx * nodeStagger + Math.random() * 40
-        nodeSchedule.set(node.id, { startMs, duration: ENTRANCE_NODE_DURATION })
+    let camera = null
+    const treeKey = String(graphPersons[0]?.id ?? '')
+    const firstOpen = treeKey !== '' && openedTreeRef.current !== treeKey
+    if (treeKey) openedTreeRef.current = treeKey
+    if (!firstOpen) {
+      for (const n of result.children) nodeSchedule.set(n.id, { startMs: -Infinity, duration: 1 })
+    } else if (prefersReducedMotion() || !focusNode) {
+      for (const n of result.children) nodeSchedule.set(n.id, { startMs: 0, duration: ENTRANCE_REDUCED_DURATION })
+      maxEndMs = ENTRANCE_REDUCED_DURATION
+    } else {
+      const fx = focusNode.x + focusNode.width / 2, fy = focusNode.y + focusNode.height / 2
+      const sx = fx * init.scale + init.x, sy = fy * init.scale + init.y
+      const at = (sc) => ({ scale: sc, x: sx - fx * sc, y: sy - fy * sc })
+      camera = { from: at(Math.min(MAX_SCALE, Math.max(ENTRANCE_CAMERA_FROM_SCALE, init.scale * 1.6))), to: init, durationMs: ENTRANCE_CAMERA_DURATION }
+      camera.last = camera.from
+      // Instant où le recul fait entrer la personne dans le champ (marge de 40 px), ou null si elle reste dehors
+      const entersAt = (n) => {
+        const nx = n.x + n.width / 2 - fx, ny = n.y + n.height / 2 - fy
+        for (let i = 0; i <= 60; i++) {
+          const sc = camera.from.scale + (init.scale - camera.from.scale) * easeOutQuint(i / 60)
+          const px = sx + nx * sc, py = sy + ny * sc
+          if (px > -40 && px < cssW + 40 && py > -40 && py < cssH + 40) return (i / 60) * camera.durationMs
+        }
+        return null
+      }
+      for (const n of result.children) {
+        const t = n === focusNode ? 0 : entersAt(n)
+        if (t == null) { nodeSchedule.set(n.id, { startMs: -Infinity, duration: 1 }); continue }
+        const startMs = t === 0 ? 0 : Math.max(0, t - 120) + Math.random() * 40
+        nodeSchedule.set(n.id, { startMs, duration: ENTRANCE_NODE_DURATION })
         maxEndMs = Math.max(maxEndMs, startMs + ENTRANCE_NODE_DURATION)
-      })
-    })
+      }
+      transformRef.current = camera.from
+      targetTransformRef.current = camera.from
+    }
 
     coupleBarMeta.forEach(({ elkId, p1Key, p2Key }) => {
       const s1 = nodeSchedule.get(p1Key)
@@ -741,6 +765,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     })
 
     entranceRef.current = {
+      camera,
       startTime: -1,
       nodeSchedule, coupleSchedule, edgeSchedule, orbitSchedule,
       totalDurationMs: maxEndMs,
@@ -808,6 +833,24 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       // Pendant l'entrée et le fondu des annotations qui la suit, on redessine chaque frame
       if (entrance && elapsed < entrance.totalDurationMs + 500) dirty = true
 
+      // Recul de la caméra à l'ouverture, abandonné dès qu'on déplace ou zoome soi-même l'arbre
+      const cam = entrance?.camera
+      if (cam) {
+        if (targetTransformRef.current !== cam.last) entrance.camera = null
+        else {
+          const k = easeOutQuint(Math.min(1, Math.max(0, elapsed / cam.durationMs)))
+          const t = {
+            scale: cam.from.scale + (cam.to.scale - cam.from.scale) * k,
+            x: cam.from.x + (cam.to.x - cam.from.x) * k,
+            y: cam.from.y + (cam.to.y - cam.from.y) * k,
+          }
+          transformRef.current = t
+          targetTransformRef.current = t
+          cam.last = t
+          dirty = true
+          if (k >= 1) entrance.camera = null
+        }
+      }
       // Lissage du transform
       const target = targetTransformRef.current
       const prev = transformRef.current

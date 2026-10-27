@@ -548,7 +548,8 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
   const hs = hoverScales.get(node.id) || 0
   // Personne soulevée pour changer sa place dans la fratrie : un peu plus grande, ombre plus portée
   const lift = liftScales?.get(node.id) || 0
-  const entranceScale = 0.3 + nodeProgress * 0.7
+  // Un portrait qui entre part de 92 % de sa taille, en fondu : rien n'apparaît de rien
+  const entranceScale = 0.92 + nodeProgress * 0.08
   const personScale = entranceScale * (1 + Math.max(hs, lift) * 0.1 + lift * 0.05) * k
 
   // --- Glow sélection ---
@@ -1113,7 +1114,7 @@ export function drawNodes(ctx, layoutData, posMap, entrance, entranceActive, ela
       ctx.fill()
       ctx.globalAlpha = 1
     } else if (node._type === 'unknown') {
-      const unknownScale = 0.3 + nodeProgress * 0.7
+      const unknownScale = 0.92 + nodeProgress * 0.08
       ctx.save()
       ctx.globalAlpha = nodeProgress
       ctx.translate(cx, cy)
