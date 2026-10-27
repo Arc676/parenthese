@@ -265,3 +265,15 @@ button:disabled:has(.pz-busy.is-busy) { opacity: 1; cursor: progress; }
 /* Dans la barre d'actions, séparé des boutons par un filet */
 /* Sous les écrans d'accès et de connexion */
 .pz-lang--screen { justify-self: center; }
+
+/* Zones de tap : sur écran tactile, chaque petit bouton se touche sur au moins 44 × 44 px (recommandation
+   d'Apple) sans grossir à l'œil : une zone invisible déborde autour de lui. :where() garde la position que le
+   bouton a déjà (une croix posée en absolu le reste) ; un bouton de 44 px ou plus ne déborde pas. */
+@media (pointer: coarse) {
+  :where(.pz-btn--icon, .pz-btn--sm, .pz-tab, .search-close-button, .pc-rel-remove, .pc-rel-add, .pc-fill-chip) { position: relative; }
+  :is(.pz-btn--icon, .pz-btn--sm, .pz-tab, .search-close-button, .pc-rel-remove, .pc-rel-add, .pc-fill-chip)::after {
+    content: '';
+    position: absolute;
+    inset: min(0px, calc((100% - 44px) / 2)) min(0px, calc((100% - 44px) / 2));
+  }
+}
