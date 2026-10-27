@@ -1,4 +1,4 @@
-import { computeLayout, componentOrderPerGen, chainGap } from './elkLayout'
+import { computeLayout, componentOrderPerGen, chainGap, coupleBarMeta, restoreCoupleBarMeta } from './elkLayout'
 import { persons as globalPersons, unions as globalUnions, filiations as globalFiliations } from '../../data/mockData'
 
 // ============================================================
@@ -72,23 +72,19 @@ export function filCroiseAutreFamille(nodes, childrenOfUnion, spouseKeysOf, u, c
     && n.x + n.width > lo && n.x < hi)
 }
 
-// Contours : par rangée, une liste d'intervalles [gauche, droite] triés et fusionnés
-function addInterval(list, l, r) {
-  const out = []
-  let nl = l, nr = r, inserted = false
-  for (const [a, b] of list) {
-    if (b < nl - 1) { out.push([a, b]); continue }
-    if (a > nr + 1) { if (!inserted) { out.push([nl, nr]); inserted = true } out.push([a, b]); continue }
-    nl = Math.min(nl, a); nr = Math.max(nr, b)
-  }
-  if (!inserted) out.push([nl, nr])
-  return out
-}
+// Contours : par rangée, une liste d'intervalles [gauche, droite] triés et fusionnés. Les intervalles qui se
+// touchent (écart ≤ 1) sont réunis. Un seul tri par rangée : insérer les intervalles un à un recopiait la
+// liste à chaque fois, quadratique sur un gros arbre.
 function mergeRows(target, source, dx) {
   for (const [g, list] of source) {
-    let cur = target.get(g) || []
-    for (const [l, r] of list) cur = addInterval(cur, l + dx, r + dx)
-    target.set(g, cur)
+    const all = (target.get(g) || []).concat(list.map(([l, r]) => [l + dx, r + dx])).sort((x, y) => x[0] - y[0])
+    const out = []
+    for (const [a, b] of all) {
+      const last = out[out.length - 1]
+      if (last && a <= last[1] + 1) last[1] = Math.max(last[1], b)
+      else out.push([a, b])
+    }
+    target.set(g, out)
   }
 }
 const extentOf = (rows) => {
@@ -915,6 +911,9 @@ export function familyTabsOf(graphData = null, referenceId = null) {
     if (fams[0]) { tab.label = fams[0].label; tab.count = fams[0].count }
     // La personne de départ réellement retenue (l'arbre sans personne de départ en choisit une)
     if (tab === root) root.resolvedRef = result.referenceId != null ? String(result.referenceId).replace(/^p-/, '') : null
+    // Le placement de la famille de départ est celui que l'arbre affiche ensuite : gardé pour takeRootLayout,
+    // il n'est pas recalculé (plusieurs secondes sur un arbre de quelques milliers de personnes)
+    if (tab === root && !graphData) Object.defineProperty(tabs, 'rootLayout', { value: { result, coupleBarMeta, referenceId }, writable: true })
     for (const f of fams.slice(1)) {
       if (f.drawn) continue
       const key = String(f.anchorId).replace(/^p-/, '')
@@ -939,4 +938,15 @@ export function familyTabsOf(graphData = null, referenceId = null) {
     }
   }
   return tabs
+}
+
+// Le placement de la famille de départ calculé par familyTabsOf (arbre du module, onglets allumés), rendu une
+// seule fois : l'arbre affiché le modifie ensuite (pastilles, ligne directe, réordonnancement)
+export function takeRootLayout(tabs, referenceId) {
+  const kept = tabs?.rootLayout
+  if (!kept) return null
+  tabs.rootLayout = null
+  if (String(kept.referenceId ?? '') !== String(referenceId ?? '')) return null
+  restoreCoupleBarMeta(kept.coupleBarMeta)
+  return kept.result
 }

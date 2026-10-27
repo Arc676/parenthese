@@ -33,5 +33,7 @@ La largeur totale ne départage qu'une égalité parfaite. Pas de score composit
 ## Performance, parcours compte, landing
 
 - `TREE_PASSWORD='...' node perf-probe.mjs <url d'un arbre>` : temps main thread par frame au repos, en drag et en zoom, appels canvas par frame, profil CPU. Brave ou Chrome headless piloté en CDP.
+- `node --import ./register.mjs layout-time.mjs [arbre ...]` : temps du placement sans écran (liste des onglets, arbre de départ, arbre entier, chaque onglet) et une empreinte des positions, arêtes, couples et onglets. Avant toute optimisation du placement, relever les empreintes, puis vérifier qu'elles sortent identiques (`SRC=` pour mesurer l'autre version).
+- `node load-probe.mjs <url> [nom] [répétitions]` : temps jusqu'à l'arbre utilisable et jusqu'à la barre des onglets, médiane des répétitions, fonctions les plus coûteuses au chargement. Sur un build (`vite build --minify false`, `vite preview`), pas en mode dev. `CPU=4` simule un téléphone moyen. Sur une machine occupée, les temps varient du simple au double : comparer deux versions en alternant les passes.
 - `node e2e-account.mjs <front> <api>` : scénario complet sur un backend local (lien partagé, compte créé, rattachement, contributions). `CLEANUP=1` supprime l'arbre de test.
 - `node landing-check.mjs <url>` : titres, liens, formulaires et erreurs JS d'une page, avec capture.
