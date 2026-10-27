@@ -2,6 +2,44 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
+## 1.5.5 (2026-10-27)
+
+### Undo instead of confirm
+
+- Deleting a person no longer asks for confirmation. A bar with "Undo" stays for 6 seconds, and Ctrl+Z works too (#169).
+- Same for a memory and for a moment in the Life tab. Two fixes to #169 on the way: an open profile no longer closes when the deletion starts, and the tree's internal lists are up to date after an undo (#172).
+
+### Motion
+
+- Profile card: it appears at once on a computer, with no fade or blur. On a phone it still rises as a sheet in 240 ms, resists when pulled up, and has continuous corners where the browser supports `corner-shape` (#170).
+- A memory grows from its thumbnail when it opens (280 ms, transform only). The viewer now respects reduced motion (#171).
+- On a phone, dragging a memory's photo down closes it, like the profile card (#176).
+- Opening a tree for the first time, the camera starts on the start person and pulls back to the family in 1.1 s while the tree draws. After an edit or a tab change, the tree shows without animation. With reduced motion, a plain fade (#181).
+
+### Faces on photos
+
+- Face markers are hidden by default. They show on hover with a mouse, when a name is hovered in the list, in tagging mode, or after a tap on the photo. The circles are thinner (#173).
+
+### Phone
+
+- Edit mode: the family tabs move to the top so the "You suggest" bar no longer covers them. The exit button reads "Done", at the height of the "+", and the bar's own close button is gone (#175).
+- The family bar only moves aside when the profile card reaches it (#180).
+- Tap targets of at least 44 px on touch screens, with no visible change (#182).
+
+### Loading
+
+- Big trees open faster with the same placement, and the list of family tabs is computed in a worker. A 3,010-person tree is usable in 1.6 s instead of 8.7 s. Tools in `tools/layout-bench` (`layout-time.mjs`, `load-probe.mjs`) (#179).
+- Blurred previews (BlurHash) of photos and portraits while they load. Migration `20261027_001_apercus_flous` adds two optional columns, and a background task fills them for existing photos when the API starts (#177).
+- Grey blocks while loading, instead of "Loading…" or a false empty state: the Life tab of a person with no known date, and the tree's panels (#178).
+
+### Reliability
+
+- Uploads from the family no longer create duplicates on a weak connection, through an `Idempotency-Key` header (#174).
+
+### Landing
+
+- Pages are prefetched when a link is hovered (`speculationrules`). The landing CSP in `deploy/nginx.conf` gets a second script hash for it (#183).
+
 ## 1.5.4 (2026-10-26)
 
 ### A link per family tab (#167)
