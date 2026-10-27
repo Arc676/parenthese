@@ -160,6 +160,22 @@ const PersonCard = ({
   // Feuille du bas (téléphone) : on la ferme en la glissant par la poignée ou l'en-tête, comme la croix
   const sheetMode = useSheetMode()
   const drag = useSheetDrag({ enabled: sheetMode, zone: '.pc-grab, .pc-head, .pc-close', onClose })
+  // La barre des familles (en haut à gauche) ne s'écarte que si la fiche, posée en bas, monte jusqu'à elle
+  const cardRef = useRef(null)
+  useEffect(() => {
+    const el = cardRef.current
+    if (!el) return undefined
+    const update = () => document.body.toggleAttribute('data-fiche-haute', el.getBoundingClientRect().top < 72)
+    update()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update)
+    observer?.observe(el)
+    window.addEventListener('resize', update)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', update)
+      document.body.removeAttribute('data-fiche-haute')
+    }
+  }, [])
 
   // Reset edits quand la personne change
   useEffect(() => {
@@ -666,6 +682,7 @@ const PersonCard = ({
 
   return (
     <div
+      ref={cardRef}
       className={`person-card ${editMode ? 'person-card--edit-mode' : ''}`}
       role="dialog"
       aria-label={t('Fiche de {name}', { name: fullNameLabel(person) })}
