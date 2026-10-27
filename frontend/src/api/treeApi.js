@@ -84,9 +84,10 @@ export async function updateLifeEvent(treeId, eventId, payload, token) {
   })
 }
 
-export async function deleteLifeEvent(treeId, eventId, token) {
+export async function deleteLifeEvent(treeId, eventId, token, { keepalive = false } = {}) {
   return apiRequest(`/trees/${encodeURIComponent(treeId)}/life/events/${encodeURIComponent(eventId)}`, {
     method: 'DELETE',
+    keepalive,
     headers: { Authorization: `Bearer ${token}` },
   })
 }
@@ -453,11 +454,12 @@ export async function reorderPersonMedia(treeId, personId, orderedMediaIds, toke
   return data
 }
 
-export async function deletePersonMedia(treeId, personId, mediaId, token) {
+export async function deletePersonMedia(treeId, personId, mediaId, token, { keepalive = false } = {}) {
   const data = await apiRequest(
     `/trees/${encodeURIComponent(treeId)}/persons/${encodeURIComponent(personId)}/media/${encodeURIComponent(mediaId)}`,
     {
       method: 'DELETE',
+      keepalive,
       headers: {
         Authorization: `Bearer ${token}`,
       },

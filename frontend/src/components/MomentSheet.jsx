@@ -36,7 +36,7 @@ function FileThumb({ type, url }) {
   return <span className="ms-file-icon"><Icon size={18} strokeWidth={1.8} /></span>
 }
 
-export default function MomentSheet({ person, entry = null, treeId, token, medias = [], isAdmin = false, onUploadFile, onClose, onSaved }) {
+export default function MomentSheet({ person, entry = null, treeId, token, medias = [], isAdmin = false, onUploadFile, onClose, onSaved, onDelete }) {
   const milestone = entry?.milestone || null
   const event = entry?.event || null
   const editing = Boolean(event)
@@ -178,6 +178,11 @@ export default function MomentSheet({ person, entry = null, treeId, token, media
   }
 
   const remove = async () => {
+    // Suppression annulable : la fiche s'en charge
+    if (onDelete) {
+      onDelete(event)
+      return
+    }
     setBusy(true)
     setError('')
     try {
@@ -329,7 +334,7 @@ export default function MomentSheet({ person, entry = null, treeId, token, media
                 <button type="button" className="pz-btn pz-btn--ghost" onClick={() => setConfirmDelete(false)} disabled={busy}>{t('Garder')}</button>
               </span>
             ) : (
-              <button type="button" className="pz-btn pz-btn--ghost ms-delete" onClick={() => setConfirmDelete(true)} disabled={busy}>{t('Supprimer ce moment')}</button>
+              <button type="button" className="pz-btn pz-btn--ghost ms-delete" onClick={onDelete ? remove : () => setConfirmDelete(true)} disabled={busy}>{t('Supprimer ce moment')}</button>
             ))}
             <span className="ms-actions-end">
               <button type="button" className="pz-btn pz-btn--ghost" onClick={onClose} disabled={busy}>{t('Annuler')}</button>

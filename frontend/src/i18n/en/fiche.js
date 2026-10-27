@@ -96,6 +96,8 @@ export default {
   "La personne est supprimée de l'arbre.": 'The person was deleted from the tree.',
   "{name} n'a pas pu être supprimé·e. Réessayez.": '{name} could not be deleted. Try again.',
   'Annuler (Ctrl+Z)': 'Undo (Ctrl+Z)',
+  'Le souvenir est supprimé.': 'The memory was deleted.',
+  'Le moment est supprimé.': 'The moment was deleted.',
   'Annuler': 'Cancel',
   'Supprimer': 'Delete',
   'Enregistré': 'Saved',
