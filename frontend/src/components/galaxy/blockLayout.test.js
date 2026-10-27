@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { computeBlockLayout, familyTabsOf, filCroiseAutreFamille, lineToFamily, takeRootLayout } from './blockLayout'
 import * as elk from './elkLayout'
-import { loadGraphData } from '../../data/mockData'
+import * as mockData from '../../data/mockData'
 import { generate } from '../../../../tools/layout-bench/gen-fr.mjs'
 import { COMPACT_W, PERSON_W } from './constants'
 
@@ -175,7 +175,7 @@ describe('lineToFamily, ligne directe vers un onglet de famille', () => {
 describe('familyTabsOf, placement de la famille de départ gardé', () => {
   it('rend le même placement et les mêmes couples qu’un calcul neuf, une seule fois', () => {
     const tree = generate('desc', 5)
-    loadGraphData(tree.graph, { apiBaseUrl: '' })
+    mockData.loadGraphData(tree.graph, { apiBaseUrl: '' })
     const fresh = computeBlockLayout(null, tree.rootPersonId)
     const freshMeta = JSON.stringify(elk.coupleBarMeta)
     const tabs = familyTabsOf(null, tree.rootPersonId)
@@ -184,5 +184,18 @@ describe('familyTabsOf, placement de la famille de départ gardé', () => {
     expect(JSON.stringify(elk.coupleBarMeta)).toBe(freshMeta)
     expect(kept.children.map((n) => [n.id, n.x, n.y])).toEqual(fresh.children.map((n) => [n.id, n.x, n.y]))
     expect(takeRootLayout(tabs, tree.rootPersonId)).toBeNull()
+  })
+})
+
+describe('familyTabsOf, graphe passé en entier (worker)', () => {
+  it('rend la même liste d’onglets sans les données du module', () => {
+    const tree = generate('desc', 5)
+    mockData.loadGraphData(tree.graph, { apiBaseUrl: '' })
+    const graph = structuredClone({ persons: mockData.persons, unions: mockData.unions, filiations: mockData.filiations })
+    const expected = familyTabsOf(null, tree.rootPersonId)
+    mockData.replaceGraph({ persons: [], unions: [], filiations: [] })
+    const fromWorker = familyTabsOf(graph, tree.rootPersonId)
+    expect(fromWorker.length).toBeGreaterThan(1)
+    expect(fromWorker).toEqual(expected)
   })
 })
