@@ -40,6 +40,7 @@ export function useSheetMode() {
  * - Au lâcher : `closes` décide (par défaut, un tiers de la hauteur ou un lâcher rapide). Fermer attend la fin de la sortie,
  *   puis appelle `onClose`. Si `onClose` renvoie `false` (enregistrement refusé), la feuille revient.
  * - Après un vrai glisser, le clic qui suit est avalé (pas de bouton déclenché au lâcher).
+ * - `canStart` (facultatif) peut refuser le geste au moment de l'appui (feuille qui a défilé, par exemple).
  *
  * Usage : `<div {...drag.bind} style={drag.style} data-dragging={drag.dragging || undefined}>`
  */
@@ -49,6 +50,7 @@ export function useSheetDrag({
   onClose,
   closes = shouldCloseSheet,
   closeDelayMs = 180,
+  canStart = null,
 }) {
   const [offset, setOffset] = useState(0)
   const [dragging, setDragging] = useState(false)
@@ -77,6 +79,7 @@ export function useSheetDrag({
     if (!enabled || closingRef.current || event.button > 0) return
     const selection = typeof window !== 'undefined' ? window.getSelection?.()?.toString() ?? '' : ''
     if (!canStartSheetDrag(event.target, zone, selection)) return
+    if (canStart && !canStart(event)) return
     gesture.current = {
       id: event.pointerId,
       x: event.clientX,

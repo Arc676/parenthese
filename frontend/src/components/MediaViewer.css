@@ -513,3 +513,21 @@
 @media (prefers-reduced-motion: reduce) {
   .media-viewer-card { animation: none; }
 }
+
+/* Téléphone : la photo se glisse vers le bas pour fermer (useSheetDrag, zone .mv-photo-box). L'entrée ne garde pas sa
+   valeur finale (fill-mode backwards) : sinon elle l'emporterait sur le transform du glisser, posé en ligne. */
+@media (max-width: 768px) {
+  .media-viewer-card {
+    animation-fill-mode: backwards;
+    transition: transform 240ms var(--pz-ease-drawer);
+  }
+  .media-viewer-card[data-dragging] { transition: none; }
+  .media-viewer-card .mv-photo-box { touch-action: none; }
+}
+/* Collée en bas (pz.css, sous 560 px) : un fond plein sous la carte, pour qu'elle tirée vers le haut ne découvre pas l'arbre */
+@media (max-width: 560px) {
+  .media-viewer-card { box-shadow: 0 40px 0 var(--pz-surface), var(--pz-shadow-lg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .media-viewer-card { transition-duration: 1ms; }
+}
