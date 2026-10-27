@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#FBFAF7" />
     <!-- Arrivée du logo : une fois par visite, décidée avant le premier affichage (animation dans src/index.css) -->
-    <script>try{if(!sessionStorage.getItem('pz-logo')&&!matchMedia('(prefers-reduced-motion: reduce)').matches){document.documentElement.classList.add('logo-intro');sessionStorage.setItem('pz-logo','1')}}catch(e){}</script>
+    <script>(function(){function intro(){try{if(!sessionStorage.getItem('pz-logo')&&!matchMedia('(prefers-reduced-motion: reduce)').matches){document.documentElement.classList.add('logo-intro');sessionStorage.setItem('pz-logo','1')}}catch(e){}}if(document.prerendering)document.addEventListener('prerenderingchange',intro,{once:true});else intro()})()</script>
 
     <title>Parenthèse : l'arbre généalogique vivant de votre famille</title>
     <meta name="description" content="Créez l'arbre généalogique de votre famille en ligne, avec photos, vidéos et voix. Partagez-le en un lien : la famille consulte sans compte et contribue avec un mot de passe." />
@@ -72,6 +72,10 @@
       ]
     }
     </script>
+  <!-- Pages du site préparées en avance quand on survole un lien (appui sur téléphone) : elles s'ouvrent presque
+       tout de suite. Seulement les pages, pas les fichiers ; l'application (app.parenthese.io) n'est pas concernée.
+       Un navigateur qui ne connaît pas ces règles les ignore. -->
+  <script type="speculationrules">{"prerender":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/*.*"}}]},"eagerness":"moderate"}]}</script>
   </head>
   <body>
     <!-- Sans JavaScript, le contenu prérendu reste visible (les révélations au défilement demandent JS) -->

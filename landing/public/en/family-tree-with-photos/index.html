@@ -48,6 +48,10 @@
     ]
   }
   </script>
+  <!-- Pages du site préparées en avance quand on survole un lien (appui sur téléphone) : elles s'ouvrent presque
+       tout de suite. Seulement les pages, pas les fichiers ; l'application (app.parenthese.io) n'est pas concernée.
+       Un navigateur qui ne connaît pas ces règles les ignore. -->
+  <script type="speculationrules">{"prerender":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/*.*"}}]},"eagerness":"moderate"}]}</script>
 </head>
 <body>
   <header class="top">
