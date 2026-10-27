@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { listTreeVisits } from '../api/treeApi'
 import { dateLocale, t } from '../i18n/index.js'
+import Skeleton from './Skeleton.jsx'
 
 // Onglet Visites des paramètres de l'arbre : qui est venu, combien de fois.
 // Le journal est tenu par le serveur à chaque ouverture de l'arbre (backend/src/lib/tree-visits.ts).
@@ -37,7 +38,7 @@ const TreeVisitsSection = ({ treeId, authToken }) => {
     return () => { active = false }
   }, [treeId, authToken])
 
-  if (state.loading) return <p className="pz-small ts-loading">{t('Chargement…')}</p>
+  if (state.loading) return <Skeleton variant="rows" count={4} />
   if (state.error) return <div className="pz-error" role="alert">{state.error}</div>
 
   const { summary, recent } = state.data

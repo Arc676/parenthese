@@ -432,6 +432,7 @@ export default {
   'Naissance de {name}': 'Birth of {name}',
   'Décès à {place}': 'Died in {place}',
   'Ajouter un moment': 'Add a moment',
+  'Chargement de la frise': 'Loading the timeline',
   'Modifier « {title} »': 'Edit “{title}”',
   'Déménagement': 'Move',
   'L’enregistrement n’a pas abouti. Réessayez dans un instant.': 'Saving did not go through. Try again in a moment.',

@@ -8,6 +8,7 @@ import PzBusy from './PzBusy.jsx'
 import { HELP_URL } from '../utils/siteLinks.js'
 import { t, dateLocale } from '../i18n/index.js'
 import { sexLabel } from '../utils/personSex.js'
+import Skeleton from './Skeleton.jsx'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -471,7 +472,7 @@ const ContributionPanel = ({
             {errorMessage && <div className="contrib-error">{errorMessage}</div>}
 
             {loading ? (
-              <div className="contrib-empty">{t('Chargement…')}</div>
+              <Skeleton variant="rows" count={3} />
             ) : sessions.length === 0 ? (
               <div className="contrib-empty">{t("Rien à relire pour l'instant. Les propositions de la famille apparaîtront ici.")}</div>
             ) : (

@@ -8,6 +8,7 @@ import { fetchSearchSources, searchSource } from '../api/searchSourcesApi.js'
 import { SEARCH_LINKS, SEARCH_LINK_REGIONS } from '../data/searchLinks.js'
 import { changesFromResult, personFromResult } from '../utils/searchResultChanges.js'
 import { fullNameLabel } from '../utils/personName.js'
+import Skeleton from './Skeleton.jsx'
 
 // Ce que chaque source interrogée couvre et ce qui part vers elle : affiché avant qu'on coche
 const SOURCE_INFO = {
@@ -283,7 +284,7 @@ function SearchSourcesPanel({ visible, treeId, token, persons = [], canApply = f
 
           <div className="apn-section sp-sources">
             <p className="pz-label">{t('Où chercher')}</p>
-            {sources === null && <p className="pz-hint">{t('Chargement…')}</p>}
+            {sources === null && <Skeleton variant="lines" count={3} />}
             {sources?.length === 0 && (
               <p className="pz-hint">{t("Ce serveur n'interroge aucune source : aucun nom ne quitte l'instance. Les liens plus bas ouvrent les sites dans votre navigateur.")}</p>
             )}

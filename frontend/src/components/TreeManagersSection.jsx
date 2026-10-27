@@ -3,6 +3,7 @@ import { inviteManager, invitationUrl, listManagers, removeManager, renewInvitat
 import PzBusy from './PzBusy.jsx'
 import { dateLocale, t } from '../i18n/index.js'
 import { initialOf } from '../utils/initial.js'
+import Skeleton from './Skeleton.jsx'
 
 // Onglet Gestion des paramètres de l'arbre (issue #145). Le propriétaire invite des co-gestionnaires par leur
 // adresse : Parenthèse n'envoie pas de mail, il donne un lien à transmettre. Les co-gestionnaires voient la liste.
@@ -102,7 +103,7 @@ const TreeManagersSection = ({ treeId, authToken, currentUserId = null, oidcName
     }
   }
 
-  if (state.loading) return <p className="pz-small ts-loading">{t('Chargement…')}</p>
+  if (state.loading) return <Skeleton variant="rows" count={2} />
   if (state.error) return <div className="pz-error" role="alert">{state.error}</div>
 
   const { canManage, managers, invitations } = state.data

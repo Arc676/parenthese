@@ -4,6 +4,7 @@ import { t } from '../i18n/index.js'
 import { buildLifeTimeline } from '../utils/lifeTimeline.js'
 import './LifeTimeline.css'
 import { blurPlaceholder } from '../utils/blurhash.js'
+import Skeleton from './Skeleton.jsx'
 
 // Onglet Vie de la fiche : naissance, unions et décès en grands repères, les autres événements
 // plus petits entre eux, la famille proche en retrait. Les sources restent repliées.
@@ -69,6 +70,9 @@ export default function LifeTimeline({
     </button>
   )
   const noticeLine = notice && <p className="pz-success lt-notice" role="status">{notice}</p>
+
+  // Premier chargement : la place de la frise, au lieu d'un « pas encore de date » qui serait faux une seconde après
+  if (loading && !life) return <Skeleton variant="timeline" count={4} label={t('Chargement de la frise')} />
 
   if (entries.length === 0) {
     return (
