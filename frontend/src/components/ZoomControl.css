@@ -11,6 +11,12 @@
   animation: zoomControlSlideIn 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* Fiche ouverte sur ordinateur : elle recouvre le bouton, dont le bord dépassait en bas à gauche (fiche à 25 px
+   du bord, bouton à 20 px). Il revient quand la fiche se ferme. */
+@media (min-width: 769px) {
+  body:has(.person-card) .zoom-control { visibility: hidden; }
+}
+
 @keyframes zoomControlSlideIn {
   from {
     opacity: 0;

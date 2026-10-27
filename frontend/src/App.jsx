@@ -1970,6 +1970,8 @@ function App() {
 
       const target = persons.find((candidate) => String(candidate.id) === String(personId))
       const name = target ? firstNameLabel(target) : ''
+      // Accordé quand le sexe est connu, « supprimé·e » seulement quand il ne l'est pas
+      const sex = target?.sex
       const snapshot = removePersonFromGraph(personId)
       tree.setSelectedPerson(null)
       tree.bumpGraphRevision()
@@ -1977,7 +1979,13 @@ function App() {
 
       const treeId = ownTree ? tree.treeContext.treeId : null
       undoable.start({
-        message: name ? t("{name} est supprimé·e de l'arbre.", { name }) : t("La personne est supprimée de l'arbre."),
+        message: !name
+          ? t("La personne est supprimée de l'arbre.")
+          : sex === 'female'
+            ? t("{name} est supprimée de l'arbre.", { name })
+            : sex === 'male'
+              ? t("{name} est supprimé de l'arbre.", { name })
+              : t("{name} est supprimé·e de l'arbre.", { name }),
         reapply: () => Boolean(removePersonFromGraph(personId)),
         commit: async ({ keepalive = false } = {}) => {
           if (!treeId) return
@@ -1987,7 +1995,11 @@ function App() {
           } catch {
             if (keepalive) return
             await refreshKeepingSelection({ relayout: true })
-            setDraftNotice(t("{name} n'a pas pu être supprimé·e. Réessayez.", { name }))
+            setDraftNotice(sex === 'female'
+              ? t("{name} n'a pas pu être supprimée. Réessayez.", { name })
+              : sex === 'male'
+                ? t("{name} n'a pas pu être supprimé. Réessayez.", { name })
+                : t("{name} n'a pas pu être supprimé·e. Réessayez.", { name }))
           }
         },
         undo: async () => {
