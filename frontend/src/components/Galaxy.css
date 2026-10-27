@@ -100,12 +100,13 @@
    se limite à la moitié gauche sur grand écran et descend sous le message sur téléphone */
 .family-tabs--lowered { max-width: calc(50vw - 200px); }
 
-/* Fiche ouverte sur grand écran (à gauche, 384 px depuis 24 px) : la barre passe à sa droite */
+/* Fiche ouverte sur grand écran (à gauche, 384 px depuis 24 px, posée en bas) : la barre passe à sa droite
+   seulement quand la fiche monte jusqu'à elle (data-fiche-haute, posé par PersonCard) */
 @media (min-width: 769px) {
-  body:has(.person-card) .family-tabs { left: 424px; max-width: calc(100vw - 424px - 96px); }
+  body[data-fiche-haute] .family-tabs { left: 424px; max-width: calc(100vw - 424px - 96px); }
   /* Recherche ouverte (environ 540 px à droite) : la barre s'arrête avant elle et se fond au bord */
   body:has(.expandable-search.expanded) .family-tabs { max-width: calc(100vw - 16px - 560px); }
-  body:has(.person-card):has(.expandable-search.expanded) .family-tabs { max-width: calc(100vw - 424px - 560px); }
+  body[data-fiche-haute]:has(.expandable-search.expanded) .family-tabs { max-width: calc(100vw - 424px - 560px); }
 }
 
 @media (max-width: 768px) {
