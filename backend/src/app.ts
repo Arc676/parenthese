@@ -9,6 +9,7 @@ import { Prisma } from './generated/prisma/client.js'
 import { env } from './config/env.js'
 import { prisma } from './lib/prisma.js'
 import { isUserTokenRevoked, loadRevokedTokens } from './lib/token-revocation.js'
+import { registerIdempotency } from './lib/idempotency.js'
 import { authRoutes } from './routes/auth.js'
 import { contributionRoutes } from './routes/contributions.js'
 import { graphRoutes } from './routes/graph.js'
@@ -155,6 +156,9 @@ export function createApp() {
   })
 
   app.get('/health', async () => ({ ok: true }))
+
+  // Après l'identification : une clé d'idempotence ne vaut que pour la personne qui l'a envoyée
+  registerIdempotency(app)
 
   app.register(authRoutes, { prefix: '/auth' })
   app.register(oidcRoutes, { prefix: '/auth/oidc' })

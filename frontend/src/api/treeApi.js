@@ -71,6 +71,7 @@ export async function fetchPersonLife(treeId, personId, token) {
 export async function createLifeEvent(treeId, personId, payload, token) {
   return apiRequest(`/trees/${encodeURIComponent(treeId)}/persons/${encodeURIComponent(personId)}/life/events`, {
     method: 'POST',
+    idempotent: true,
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify(payload),
   })
@@ -373,6 +374,7 @@ export async function listTreeVisits(treeId, token) {
 export async function submitContributionSession(treeId, payload, token) {
   const data = await apiRequest(`/trees/${encodeURIComponent(treeId)}/contributions/sessions`, {
     method: 'POST',
+    idempotent: true,
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -421,6 +423,7 @@ export async function fetchContributionStatus(treeId, sessionId, token) {
 export async function uploadAnnotationPhoto(treeId, payload, token) {
   const data = await apiRequest(`/trees/${encodeURIComponent(treeId)}/annotation-photos`, {
     method: 'POST',
+    idempotent: true,
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -433,6 +436,7 @@ export async function uploadAnnotationPhoto(treeId, payload, token) {
 export async function uploadPersonMedia(treeId, personId, payload, token) {
   const data = await apiRequest(`/trees/${encodeURIComponent(treeId)}/persons/${encodeURIComponent(personId)}/media`, {
     method: 'POST',
+    idempotent: true,
     headers: {
       Authorization: `Bearer ${token}`,
     },

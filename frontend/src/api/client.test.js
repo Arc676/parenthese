@@ -34,3 +34,52 @@ describe('apiRequest', () => {
     expect(error).not.toBeInstanceOf(ApiError)
   })
 })
+
+// Clé d'idempotence : gardée tant que l'envoi n'a pas abouti, libérée par une réussite
+describe('apiRequest, envois idempotents', () => {
+  const keysSent = []
+  const respond = (ok) => vi.fn(async (_url, init) => {
+    keysSent.push(init.headers['Idempotency-Key'])
+    if (ok === 'network') throw new TypeError('Failed to fetch')
+    return new Response('{}', { status: ok ? 201 : 503 })
+  })
+  const send = (body = '{"a":1}') => apiRequest('/trees/t/annotation-photos', { method: 'POST', idempotent: true, body })
+
+  afterEach(() => {
+    keysSent.length = 0
+  })
+
+  it('un envoi refait après une coupure ou une erreur garde la même clé', async () => {
+    vi.stubGlobal('fetch', respond('network'))
+    await expect(send()).rejects.toThrow()
+    vi.stubGlobal('fetch', respond(false))
+    await expect(send()).rejects.toThrow()
+    vi.stubGlobal('fetch', respond(true))
+    await send()
+    expect(keysSent).toHaveLength(3)
+    expect(new Set(keysSent).size).toBe(1)
+    expect(keysSent[0]).toMatch(/^[0-9a-f]{32}$/)
+  })
+
+  it('après une réussite, le même contenu repart avec une clé neuve', async () => {
+    vi.stubGlobal('fetch', respond(true))
+    await send('{"b":2}')
+    await send('{"b":2}')
+    expect(keysSent[0]).not.toBe(keysSent[1])
+  })
+
+  it('un autre contenu a sa propre clé, et un appel ordinaire n’en envoie pas', async () => {
+    vi.stubGlobal('fetch', respond('network'))
+    await expect(send('{"c":3}')).rejects.toThrow()
+    await expect(send('{"c":4}')).rejects.toThrow()
+    await expect(apiRequest('/trees/t', { method: 'POST', body: '{}' })).rejects.toThrow()
+    expect(keysSent[0]).not.toBe(keysSent[1])
+    expect(keysSent[2]).toBeUndefined()
+  })
+
+  it('l’option idempotent ne part pas dans fetch', async () => {
+    vi.stubGlobal('fetch', respond(true))
+    await send('{"d":5}')
+    expect(fetch.mock.calls[0][1]).not.toHaveProperty('idempotent')
+  })
+})
