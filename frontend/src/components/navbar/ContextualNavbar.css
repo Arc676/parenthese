@@ -180,9 +180,10 @@
 }
 
 /* --- Exit edit mode button --- */
+/* Même hauteur que le « + » à côté (46 px), zone de tap comprise (Patch, 27/10) */
 .nav-annot-exit {
-  height: 40px;
-  padding: 0 16px;
+  height: 46px;
+  padding: 0 18px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -190,7 +191,7 @@
   border-radius: 999px;
   background: rgba(42, 38, 34, 0.08);
   color: #2A2622;
-  font: 500 14.5px/1 var(--pz-sans);
+  font: 500 15px/1 var(--pz-sans);
   white-space: nowrap;
   cursor: pointer;
   transition: background-color 160ms ease, transform 140ms var(--pz-ease);
