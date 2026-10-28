@@ -83,7 +83,7 @@ Only the first name, last name and birth year leave the server, and the panel sa
 
 #### Sign in with your identity provider (OIDC)
 
-*Tested against a certified OpenID provider and used with Pocket ID on a real setup (#153).*
+*Used with Pocket ID on a real setup (#153).*
 
 Parenthèse can hand sign-in to an OpenID Connect provider you already run (Authentik, Authelia, Keycloak, Pocket ID, Zitadel…), so your family reuses one account and its two-factor settings. Create an OIDC application (confidential client, authorization code flow) whose redirect URI is the public address of Parenthèse followed by `/auth/oidc/callback`, then set in `.env`:
 
