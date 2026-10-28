@@ -83,7 +83,7 @@ Only the first name, last name and birth year leave the server, and the panel sa
 
 #### Sign in with your identity provider (OIDC)
 
-*Experimental in 1.2.0: tested against a certified OpenID provider, feedback from real setups is welcome in the issues.*
+*Tested against a certified OpenID provider and used with Pocket ID on a real setup (#153).*
 
 Parenthèse can hand sign-in to an OpenID Connect provider you already run (Authentik, Authelia, Keycloak, Pocket ID, Zitadel…), so your family reuses one account and its two-factor settings. Create an OIDC application (confidential client, authorization code flow) whose redirect URI is the public address of Parenthèse followed by `/auth/oidc/callback`, then set in `.env`:
 
@@ -94,6 +94,8 @@ OIDC_CLIENT_SECRET=...                                               # empty for
 OIDC_REDIRECT_URI=https://tree.your-domain.com/auth/oidc/callback
 OIDC_PROVIDER_NAME=Authentik                                         # shown on the button
 ```
+
+The `api` container talks to the provider itself, to read its configuration and exchange the sign-in code. If your Docker network is marked `internal`, give `api` a network that can reach the provider, not just `web`.
 
 The sign-in screen then shows "Sign in with Authentik". On a first sign-in, Parenthèse links the provider account to the Parenthèse account with the same email, or creates one when `ALLOW_REGISTRATION` allows it. With registration closed, the provider only signs in people who already have an account (the first account of an empty instance is still accepted). Emails are only trusted when the provider marks them verified (`email_verified`); `OIDC_REQUIRE_VERIFIED_EMAIL=false` lifts that check, for a provider that doesn't send the claim and where nobody picks their own address. Once linked, an account stays tied to the provider's user id, not to the email.
 
