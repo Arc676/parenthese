@@ -2,6 +2,19 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
+## 1.5.7 (2026-10-28)
+
+### Phone
+
+- Opening a tree no longer opens the start person's profile, which covered the bottom of the screen and the start person with it. The start person now sits at 40% of the height instead of 56% (#189, closes #188).
+- Tapping someone in the tree moves them into the top third, above their profile (#189).
+
+### Life tab
+
+- A couple reads "Together with X", and "Married X" only when it is said: a date, a place, marriage documents, or the box ticked. Before, every couple read "Marries X", because a couple is stored as a marriage as soon as a child has two parents (#190).
+- The date and place of a couple can be set from the Life tab: tap the couple's line, then "They were married", "When?" (year, "about", exact date) and "Where?". `PATCH /trees/:id/unions/:unionId` accepts `startPlace` and `startDatePrecision` (#190).
+- The names of a partner, a child, a brother or sister, or a parent open that person's profile and move the tree to them (#190).
+
 ## 1.5.6 (2026-10-28)
 
 ### Tree
