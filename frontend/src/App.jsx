@@ -1013,6 +1013,8 @@ function App() {
     setAddPersonPanelVisible(false)
 
     tree.setSelectedPerson(freshPerson)
+    // Sur téléphone, la fiche couvre le bas : la personne touchée remonte dans le tiers du haut (#188)
+    if (freshPerson && window.matchMedia?.('(max-width: 768px)').matches) galaxyZoomApiRef.current?.focusPerson?.(freshPerson.id)
     trackTreeInteraction('text')
     trackDemoInteraction('person')
   }, [chooseSelectedPerson, leaveSelectedPerson, tree.setSelectedPerson, trackTreeInteraction, trackDemoInteraction]) // eslint-disable-line react-hooks/exhaustive-deps

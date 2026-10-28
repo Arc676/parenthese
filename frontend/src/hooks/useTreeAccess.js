@@ -82,9 +82,11 @@ export function useTreeAccess() {
     const rootPerson = preferredRootPersonId
       ? graphPersons.find((person) => String(person.id) === String(preferredRootPersonId)) || null
       : null
-    // Par le lien de partage, la famille arrive sur l'arbre et sa carte d'accueil, pas sur une fiche ouverte
+    // Par le lien de partage, la famille arrive sur l'arbre et sa carte d'accueil, pas sur une fiche ouverte.
+    // Sur téléphone non plus : la fiche y couvre le bas de l'écran, et la personne de départ avec (#188).
     const openedByShareLink = (options.accessMode ?? '') === 'share'
-    setSelectedPerson(openedByShareLink ? null : rootPerson)
+    const phone = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 768px)').matches
+    setSelectedPerson(openedByShareLink || phone ? null : rootPerson)
     setSelectedMedia(null)
 
     setTreeContext((current) => ({

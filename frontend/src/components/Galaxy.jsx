@@ -679,8 +679,9 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     if (focusNode && fitScale < FOCUS_MIN_READABLE_SCALE) {
       scale = FOCUS_SCALE
       offsetX = (cssW < 768 ? (PHONE_SLIDER_BAND + cssW) / 2 : cssW / 2) - (focusNode.x + focusNode.width / 2) * scale
-      // Sur un écran étroit, la barre des familles couvre le haut : la personne de départ un peu plus bas
-      offsetY = cssH * (cssW < 768 ? 0.56 : 0.42) - (focusNode.y + focusNode.height / 2) * scale
+      // Sur un écran étroit, la barre des familles couvre le haut : la personne de départ un peu plus bas. Plus de
+      // fiche ouverte à l'arrivée sur téléphone (#188) : 0,4 et non plus 0,56, sinon le haut de l'écran reste vide
+      offsetY = cssH * (cssW < 768 ? 0.4 : 0.42) - (focusNode.y + focusNode.height / 2) * scale
     }
 
     const init = { x: offsetX, y: offsetY, scale }
