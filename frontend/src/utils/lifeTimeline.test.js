@@ -26,7 +26,7 @@ describe('frise de vie', () => {
 
   it('range tout par date, les entrées sans date en bas', () => {
     expect(titles).toEqual([
-      'Naissance à Limoges', 'Naissance de son frère André', 'Militaire', 'Épouse Simone Petit', 'Naissance de Jacques',
+      'Naissance à Limoges', 'Naissance de son frère André', 'Militaire', 'Mariage avec Simone Petit', 'Naissance de Jacques',
       'Instituteur', 'Fin de l’union avec Simone', 'Décès de son père Jean', 'Décès à Brive-la-Gaillarde', 'Résidence',
     ])
   })
@@ -36,7 +36,7 @@ describe('frise de vie', () => {
     expect(birth).toMatchObject({ kind: 'mile', year: 1920, sources: 'Registre A\nRegistre B' })
     expect(entries.find((e) => e.title === 'Instituteur').meta).toBe('jusqu’en 1981 · 26 ans')
     expect(entries.find((e) => e.title === 'Militaire')).toMatchObject({ kind: 'minor', meta: 'entre 1940 et 1942 · 20 ans', note: 'Verdun' })
-    expect(entries.find((e) => e.title === 'Épouse Simone Petit')).toMatchObject({ kind: 'mile', meta: 'Limoges · 23 ans' })
+    expect(entries.find((e) => e.title === 'Mariage avec Simone Petit')).toMatchObject({ kind: 'mile', meta: 'Limoges · 23 ans' })
   })
 
   it('famille limitée à sa vie : frère aîné, mère morte après lui, enfant mort après lui écartés', () => {
@@ -77,13 +77,34 @@ describe('frise de vie', () => {
       ],
     }, null)
     expect(entries.map((e) => e.title)).toEqual([
-      'Naissance', 'Épouse Marc Roy', 'Naissance de Hugo', 'Naissance de Léa', 'Décès de Marc', 'Épouse Paul Vidal', 'Décès de Paul', 'Épouse Yves Mallet',
+      'Naissance', 'En couple avec Marc Roy', 'Naissance de Hugo', 'Naissance de Léa', 'Décès de Marc', 'En couple avec Paul Vidal', 'Décès de Paul', 'En couple avec Yves Mallet',
     ])
     // Aucune année inventée : colonne vide, « date inconnue » dit pourquoi
     for (const key of ['union-u1', 'union-u2', 'union-u3']) {
       expect(entries.find((e) => e.key === key)).toMatchObject({ year: undefined, meta: 'date inconnue' })
     }
     expect(entries.find((e) => e.key === 'union-u1')).not.toHaveProperty('sortYear')
+  })
+
+  it('couple : « Mariage » seulement quand c’est dit, sinon « En couple avec »', () => {
+    const lucie = { id: 1, firstName: 'Lucie', birthYear: 1940 }
+    const marc = { id: 2, firstName: 'Marc', lastName: 'Roy' }
+    const title = (union, life = null) => buildLifeTimeline(lucie, { unions: [{ id: 'u1', partner: marc, ...union }] }, life).find((e) => e.key === 'union-u1').title
+    // Le type « mariage » posé par défaut, sans date ni lieu ni document : pas un mariage
+    expect(title({ unionType: 'mariage' })).toBe('En couple avec Marc Roy')
+    expect(title({ unionType: 'mariage', startYear: 1962 })).toBe('Mariage avec Marc Roy')
+    expect(title({ unionType: 'mariage' }, { unions: [{ id: 'u1', startPlace: 'Lille' }] })).toBe('Mariage avec Marc Roy')
+    expect(title({ unionType: 'mariage' }, { events: [{ id: 'm', type: 'marriage', unionId: 'u1' }] })).toBe('Mariage avec Marc Roy')
+    // « Pas un mariage » dit explicitement, même daté
+    expect(title({ unionType: 'union', startYear: 1962 })).toBe('En couple avec Marc Roy')
+  })
+
+  it('les proches sont des liens vers leur fiche', () => {
+    expect(entries.find((e) => e.key === 'union-u2').link).toEqual({ personId: 5, name: 'Simone Petit' })
+    expect(entries.find((e) => e.key === 'child-6').link).toEqual({ personId: 6, name: 'Jacques' })
+    expect(entries.find((e) => e.key === 'sibling-4').link).toEqual({ personId: 4, name: 'André' })
+    expect(entries.find((e) => e.key === 'parent-death-1').link).toEqual({ personId: 1, name: 'Jean' })
+    expect(entries.find((e) => e.key === 'birth').link).toBeUndefined()
   })
 
   it('un moment sans date dit « date inconnue »', () => {

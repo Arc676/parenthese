@@ -143,6 +143,9 @@ const patchUnionSchema = z
     partner2PersonId: z.string().min(1).optional().nullable(),
     unionType: z.string().max(50).optional().nullable(),
     startDate: z.string().regex(isoDateRegex).optional().nullable(),
+    // Lieu et précision de la date du couple, saisis dans l'onglet Vie (« vers 1980 »)
+    startPlace: z.string().trim().max(300).optional().nullable(),
+    startDatePrecision: z.enum(['about', 'estimated', 'calculated', 'before', 'after']).optional().nullable(),
     endDate: z.string().regex(isoDateRegex).optional().nullable(),
     displayOrder: z.number().int().positive().optional(),
   })
@@ -1780,6 +1783,8 @@ export const treeRoutes: FastifyPluginAsync = async (app) => {
       },
       data: {
         ...unionPrecisionResets(existingUnion, { startDate }),
+        ...(payload.data.startDatePrecision !== undefined ? { startDatePrecision: payload.data.startDatePrecision } : {}),
+        startPlace: payload.data.startPlace !== undefined ? payload.data.startPlace || null : undefined,
         partner1PersonId: payload.data.partner1PersonId,
         partner2PersonId: payload.data.partner2PersonId,
         unionType: payload.data.unionType,

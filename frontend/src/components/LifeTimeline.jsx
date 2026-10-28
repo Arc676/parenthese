@@ -26,6 +26,31 @@ function Sources({ text }) {
   )
 }
 
+// Titre d'une ligne : le prénom d'un proche ouvre sa fiche ; le reste du titre ouvre la modification du moment
+// (administrateur). Un bouton ne peut pas en contenir un autre : les deux sont côte à côte.
+function Title({ entry, editable, onEdit, onOpenPerson }) {
+  const editLabel = t('Modifier « {title} »', { title: entry.title })
+  const link = onOpenPerson ? entry.link : null
+  const at = link ? entry.title.indexOf(link.name) : -1
+  if (at < 0) {
+    return editable ? (
+      <button type="button" className="lt-title lt-title--edit" onClick={() => onEdit?.(entry)} aria-label={editLabel}>{entry.title}</button>
+    ) : <div className="lt-title">{entry.title}</div>
+  }
+  const before = entry.title.slice(0, at)
+  const after = entry.title.slice(at + link.name.length)
+  const edit = (text) => (editable && text.trim()
+    ? <button type="button" className="lt-title--edit" onClick={() => onEdit?.(entry)} aria-label={editLabel}>{text}</button>
+    : text)
+  return (
+    <div className="lt-title">
+      {edit(before.trimEnd())}{/\s$/.test(before) ? ' ' : ''}
+      <button type="button" className="lt-person" onClick={() => onOpenPerson(link.personId)}>{link.name}</button>
+      {before.trim() ? after : edit(after)}
+    </div>
+  )
+}
+
 const FILE_LABELS = { video: t('Vidéo'), audio: t('Enregistrement'), document: t('Document') }
 
 // Souvenirs rattachés au moment : les photos en vignettes, le reste (vidéo, acte, voix) en pastilles
@@ -59,7 +84,7 @@ function Attachments({ medias, onOpen }) {
 
 export default function LifeTimeline({
   person, family, life, loading = false, failed = false, medias = [],
-  canAdd = false, canEdit = false, notice = '', onAdd, onEdit, onOpenMedia,
+  canAdd = false, canEdit = false, notice = '', onAdd, onEdit, onOpenMedia, onOpenPerson,
 }) {
   const entries = buildLifeTimeline(person, family, life)
   const mediaById = new Map(medias.map((m) => [String(m.id), m]))
@@ -96,13 +121,7 @@ export default function LifeTimeline({
             <li key={entry.key} className={`lt-ev lt-ev--${entry.kind}`}>
               <span className="lt-year">{entry.year ?? ''}</span>
               <div className="lt-body">
-                {editable ? (
-                  <button type="button" className="lt-title lt-title--edit" onClick={() => onEdit?.(entry)} aria-label={t('Modifier « {title} »', { title: entry.title })}>
-                    {entry.title}
-                  </button>
-                ) : (
-                  <div className="lt-title">{entry.title}</div>
-                )}
+                <Title entry={entry} editable={editable} onEdit={onEdit} onOpenPerson={onOpenPerson} />
                 {entry.meta && <div className="lt-meta">{entry.meta}</div>}
                 {entry.note && <p className="lt-note">{entry.note}</p>}
                 {entry.sources && <Sources text={entry.sources} />}

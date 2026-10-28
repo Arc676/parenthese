@@ -93,6 +93,9 @@ export function describeDate(date, end, precision) {
 const ageAt = (birthYear, year) => (birthYear && year && year > birthYear ? t('{age} ans', { age: year - birthYear }) : '')
 const joinMeta = (...parts) => parts.filter(Boolean).join(' · ')
 
+// Le prénom d'un proche, cliquable dans la frise : il ouvre sa fiche
+const linkTo = (p, name = firstNameLabel(p)) => (p?.id != null && name ? { personId: p.id, name } : null)
+
 const parentWord = (p) => {
   if (p.sex === 'male' || p.sex === 'M') return t('Décès de son père {name}', { name: firstNameLabel(p) })
   if (p.sex === 'female' || p.sex === 'F') return t('Décès de sa mère {name}', { name: firstNameLabel(p) })
@@ -150,9 +153,17 @@ export function buildLifeTimeline(person, family = {}, life = null) {
     const childYears = (family.children || []).filter((c) => childIds.has(String(c.id))).map((c) => yearOf(c.birthDate) ?? c.birthYear).filter(within)
     const partnerDeath = union.partner ? yearOf(union.partner.deathDate) ?? union.partner.deathYear : null
     const anchor = year ? null : (childYears.length ? Math.min(...childYears) : null) ?? union.endYear ?? (within(partnerDeath) ? partnerDeath : null)
+    // Un couple naît « mariage » par défaut dès qu'un enfant a deux parents : « Mariage » seulement quand c'est
+    // dit (une date, un lieu, des documents de mariage), sinon « En couple avec », qui vaut pour toutes les familles
+    const married = union.unionType !== 'union' && Boolean(year || detail.startPlace || extra)
     out.push({
       key: `union-${union.id}`, year, sortYear: anchor, order: year ? 2 : 1, kind: 'mile',
-      title: union.unionType === 'union' ? t('Union avec {name}', { name: partnerName }) : t('Épouse {name}', { name: partnerName }),
+      title: married ? t('Mariage avec {name}', { name: partnerName }) : t('En couple avec {name}', { name: partnerName }),
+      link: union.partner ? linkTo(union.partner, partnerName) : null,
+      union: {
+        id: union.id, married, startDate: detail.startDate || (year ? String(year) : ''),
+        startDatePrecision: detail.startDatePrecision || null, startPlace: detail.startPlace || '',
+      },
       meta: year
         ? joinMeta(place, detail.startDatePrecision ? describeDate(detail.startDate, null, detail.startDatePrecision) : '', ageAt(birthYear, year))
         : joinMeta(place, t('date inconnue')),
@@ -165,7 +176,7 @@ export function buildLifeTimeline(person, family = {}, life = null) {
     }
     if (union.partner && within(yearOf(union.partner.deathDate) ?? union.partner.deathYear)) {
       const year2 = yearOf(union.partner.deathDate) ?? union.partner.deathYear
-      out.push({ key: `partner-death-${union.id}`, year: year2, order: 4, kind: 'fam', title: t('Décès de {name}', { name: union.partner.firstName }) })
+      out.push({ key: `partner-death-${union.id}`, year: year2, order: 4, kind: 'fam', title: t('Décès de {name}', { name: union.partner.firstName }), link: linkTo(union.partner, union.partner.firstName) })
     }
   }
 
@@ -189,17 +200,17 @@ export function buildLifeTimeline(person, family = {}, life = null) {
 
   for (const child of family.children || []) {
     const year = yearOf(child.birthDate) ?? child.birthYear
-    if (within(year)) out.push({ key: `child-${child.id}`, year, order: 5, kind: 'fam', title: t('Naissance de {name}', { name: child.firstName }) })
+    if (within(year)) out.push({ key: `child-${child.id}`, year, order: 5, kind: 'fam', title: t('Naissance de {name}', { name: child.firstName }), link: linkTo(child, child.firstName) })
     const death = yearOf(child.deathDate) ?? child.deathYear
-    if (within(death) && death !== deathYear) out.push({ key: `child-death-${child.id}`, year: death, order: 6, kind: 'fam', title: t('Décès de {name}', { name: child.firstName }) })
+    if (within(death) && death !== deathYear) out.push({ key: `child-death-${child.id}`, year: death, order: 6, kind: 'fam', title: t('Décès de {name}', { name: child.firstName }), link: linkTo(child, child.firstName) })
   }
   for (const sibling of family.siblings || []) {
     const year = yearOf(sibling.birthDate) ?? sibling.birthYear
-    if (within(year) && year !== birthYear) out.push({ key: `sibling-${sibling.id}`, year, order: 5, kind: 'fam', title: siblingWord(sibling) })
+    if (within(year) && year !== birthYear) out.push({ key: `sibling-${sibling.id}`, year, order: 5, kind: 'fam', title: siblingWord(sibling), link: linkTo(sibling) })
   }
   for (const parent of family.parents || []) {
     const year = yearOf(parent.deathDate) ?? parent.deathYear
-    if (within(year)) out.push({ key: `parent-death-${parent.id}`, year, order: 6, kind: 'fam', title: parentWord(parent) })
+    if (within(year)) out.push({ key: `parent-death-${parent.id}`, year, order: 6, kind: 'fam', title: parentWord(parent), link: linkTo(parent) })
   }
 
   if (deathYear || person.isAlive === false) {

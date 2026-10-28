@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { X, Paperclip, Images, FileText, Mic, Play, Check } from 'lucide-react'
 import { t } from '../i18n/index.js'
 import { firstNameLabel } from '../utils/personName.js'
-import { createLifeEvent, updateLifeEvent, deleteLifeEvent } from '../api/treeApi.js'
+import { createLifeEvent, updateLifeEvent, deleteLifeEvent, updateUnion } from '../api/treeApi.js'
 import { DESCRIBED_TYPES, eventTitle } from '../utils/lifeTimeline.js'
 import { inferMediaTypeFromMimeType } from '../utils/mediaUpload.js'
 import { readContributorName, saveContributorName } from '../utils/contributorName.js'
@@ -14,7 +14,8 @@ import { fetchImmichConfig } from '../api/immichApi.js'
 // Fiche « Ajouter un moment » de l'onglet Vie : quoi, quand, où, et des souvenirs (photo, vidéo, acte en
 // PDF, enregistrement). La date exacte, la fin, la source et la note restent dans « Plus de détails ».
 // Trois usages : ajouter (administrateur ou famille), modifier un moment (administrateur), et compléter une
-// naissance, un mariage ou un décès avec ses documents (administrateur, la date se change dans Infos).
+// naissance ou un décès avec ses documents (administrateur, la date se change dans Infos). Pour un couple, la
+// fiche dit aussi si c'est un mariage, et en garde la date et le lieu (onglet Vie, 28/10).
 
 // Suggestions touchables : le texte exact devient le type correspondant (exporté en GEDCOM sous sa balise)
 const SUGGESTIONS = [
@@ -36,15 +37,19 @@ function FileThumb({ type, url }) {
   return <span className="ms-file-icon"><Icon size={18} strokeWidth={1.8} /></span>
 }
 
-export default function MomentSheet({ person, entry = null, treeId, token, medias = [], isAdmin = false, onUploadFile, onClose, onSaved, onDelete }) {
+export default function MomentSheet({ person, entry = null, treeId, token, medias = [], isAdmin = false, onUploadFile, onClose, onSaved, onDelete, onUnionSaved }) {
   const milestone = entry?.milestone || null
   const event = entry?.event || null
+  // Couple : sa date et son lieu vivent sur le couple, pas sur le moment
+  const union = milestone && entry?.union ? entry.union : null
   const editing = Boolean(event)
+  const dated = union ? { date: union.startDate, datePrecision: union.startDatePrecision, place: union.startPlace } : event
   const [what, setWhat] = useState(() => (event && !milestone ? eventTitle(event) : ''))
-  const [year, setYear] = useState(() => yearOf(event?.date))
-  const [approx, setApprox] = useState(() => ['about', 'estimated', 'calculated', 'between'].includes(event?.datePrecision))
-  const [place, setPlace] = useState(event?.place || '')
-  const [day, setDay] = useState(() => exactDay(event?.date))
+  const [married, setMarried] = useState(() => Boolean(union?.married))
+  const [year, setYear] = useState(() => yearOf(dated?.date))
+  const [approx, setApprox] = useState(() => ['about', 'estimated', 'calculated', 'between'].includes(dated?.datePrecision))
+  const [place, setPlace] = useState(dated?.place || '')
+  const [day, setDay] = useState(() => exactDay(dated?.date))
   const [endYear, setEndYear] = useState(() => yearOf(event?.dateEnd))
   const [sources, setSources] = useState(event?.sources || '')
   const [notes, setNotes] = useState(event?.notes || '')
@@ -68,6 +73,8 @@ export default function MomentSheet({ person, entry = null, treeId, token, media
   const created = useRef(null)
   const fileRef = useRef(null)
   const hasDetails = Boolean(day || endYear || sources || notes)
+  // Les champs « Quand ? » et « Où ? » : un moment à soi, ou un couple
+  const withWhen = !milestone || Boolean(union)
 
   useEffect(() => { firstFieldRef.current?.focus() }, [])
   useEffect(() => {
@@ -151,9 +158,17 @@ export default function MomentSheet({ person, entry = null, treeId, token, media
       // Un fichier refusé au milieu de l'envoi : le moment est déjà créé, on ne le recrée pas en réessayant
       let eventId = event?.id || created.current?.id || null
       let status = created.current?.status || 'approved'
+      if (union) {
+        const start = day || (year ? `${year}-01-01` : null)
+        const unionType = married ? 'mariage' : 'union'
+        await updateUnion(treeId, union.id, { unionType, startDate: start, startDatePrecision: start && approx && !day ? 'about' : null, startPlace: place.trim() || null }, token)
+        onUnionSaved?.(union.id, { unionType, startYear: start ? Number(start.slice(0, 4)) : null })
+      }
+      // Un couple qui n'est pas un mariage, sans source, note ni souvenir : rien à garder à côté de lui
+      const needsRow = !union || married || Boolean(sources.trim() || notes.trim() || linkedIds.length || files.length)
       if (editing) {
         await updateLifeEvent(treeId, eventId, buildPayload(), token)
-      } else if (!created.current) {
+      } else if (!created.current && needsRow) {
         const response = await createLifeEvent(treeId, person.id, buildPayload(), token)
         eventId = response?.event?.id
         status = response?.event?.status || 'approved'
@@ -204,14 +219,20 @@ export default function MomentSheet({ person, entry = null, treeId, token, media
         </button>
         <div className="pz-modal-head">
           <h2 id="ms-title" className="pz-title ms-title">{title}</h2>
-          {milestone && <p className="pz-small">{t('Ajoutez ses documents, un acte en PDF ou une photo, et la source. La date et le lieu se changent dans l’onglet Infos.')}</p>}
+          {milestone && !union && <p className="pz-small">{t('Ajoutez ses documents, un acte en PDF ou une photo, et la source. La date et le lieu se changent dans l’onglet Infos.')}</p>}
           {!isAdmin && <p className="pz-small">{t('Ce que vous ajoutez apparaîtra dans sa vie quand la personne qui gère l’arbre l’aura accepté.')}</p>}
         </div>
 
         <form className="ms-form" onSubmit={(e) => { e.preventDefault(); save() }}>
-          {!milestone && (
+          {union && (
+            <label className="ms-check ms-married">
+              <input type="checkbox" checked={married} onChange={(e) => setMarried(e.target.checked)} />
+              {t('C’était un mariage')}
+            </label>
+          )}
+          {withWhen && (
             <>
-              <div className="pz-field">
+              {!milestone && <div className="pz-field">
                 <label htmlFor="ms-what">{t('Quoi ?')}</label>
                 <input id="ms-what" ref={firstFieldRef} value={what} maxLength={120} onChange={(e) => setWhat(e.target.value)} placeholder={t('Service militaire, premier emploi, départ pour Paris…')} />
                 {!editing && (
@@ -221,12 +242,12 @@ export default function MomentSheet({ person, entry = null, treeId, token, media
                     ))}
                   </div>
                 )}
-              </div>
+              </div>}
 
               <div className="ms-row">
                 <div className="pz-field ms-year">
                   <label htmlFor="ms-year">{t('Quand ?')}</label>
-                  <input id="ms-year" inputMode="numeric" maxLength={4} value={year} onChange={(e) => setYear(e.target.value.replace(/\D/g, ''))} placeholder={t('Année')} aria-invalid={!yearValid || undefined} disabled={Boolean(day)} />
+                  <input id="ms-year" ref={union ? firstFieldRef : undefined} inputMode="numeric" maxLength={4} value={year} onChange={(e) => setYear(e.target.value.replace(/\D/g, ''))} placeholder={t('Année')} aria-invalid={!yearValid || undefined} disabled={Boolean(day)} />
                 </div>
                 <label className="ms-check">
                   <input type="checkbox" checked={approx} onChange={(e) => setApprox(e.target.checked)} disabled={Boolean(day) && !endYear} />
@@ -264,7 +285,7 @@ export default function MomentSheet({ person, entry = null, treeId, token, media
             )}
             <div className="ms-file-actions">
               {isAdmin && immichConfigured && <button type="button" className="ms-file-add" disabled={busy} onClick={() => setPickingImmich((value) => !value)}>{t('Depuis Immich')}</button>}
-              <button type="button" ref={milestone ? firstFieldRef : undefined} className="ms-file-add" onClick={() => fileRef.current?.click()} disabled={busy || !onUploadFile}>
+              <button type="button" ref={milestone && !union ? firstFieldRef : undefined} className="ms-file-add" onClick={() => fileRef.current?.click()} disabled={busy || !onUploadFile}>
                 <Paperclip size={15} strokeWidth={1.8} />
                 {t('Ajouter un fichier')}
               </button>
@@ -299,19 +320,19 @@ export default function MomentSheet({ person, entry = null, treeId, token, media
             </div>
           )}
 
-          <details className="ms-more" open={hasDetails || milestone ? true : undefined}>
-            <summary>{milestone ? t('Source et note') : t('Plus de détails')}</summary>
+          <details className="ms-more" open={hasDetails || (milestone && !union) ? true : undefined}>
+            <summary>{milestone && !union ? t('Source et note') : t('Plus de détails')}</summary>
             <div className="ms-more-body">
-              {!milestone && (
+              {withWhen && (
                 <div className="ms-row">
                   <div className="pz-field">
                     <label htmlFor="ms-day">{t('Date exacte')}</label>
                     <input id="ms-day" type="date" value={day} onChange={(e) => { setDay(e.target.value); if (e.target.value) setYear(e.target.value.slice(0, 4)) }} />
                   </div>
-                  <div className="pz-field ms-year">
+                  {!union && <div className="pz-field ms-year">
                     <label htmlFor="ms-end">{t('Jusqu’en')}</label>
                     <input id="ms-end" inputMode="numeric" maxLength={4} value={endYear} onChange={(e) => setEndYear(e.target.value.replace(/\D/g, ''))} placeholder={t('Année')} aria-invalid={!endValid || undefined} />
-                  </div>
+                  </div>}
                 </div>
               )}
               <div className="pz-field">

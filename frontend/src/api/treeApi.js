@@ -216,6 +216,19 @@ export async function createParentChildLink(treeId, payload, token) {
   return data.link
 }
 
+// Type, date et lieu d'un couple, depuis l'onglet Vie
+export async function updateUnion(treeId, unionId, payload, token) {
+  const data = await apiRequest(`/trees/${encodeURIComponent(treeId)}/unions/${encodeURIComponent(unionId)}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  return data.union
+}
+
 export async function deleteUnion(treeId, unionId, token) {
   const data = await apiRequest(`/trees/${encodeURIComponent(treeId)}/unions/${encodeURIComponent(unionId)}`, {
     method: 'DELETE',
