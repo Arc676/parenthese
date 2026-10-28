@@ -2,6 +2,22 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
+## 1.5.6 (2026-10-28)
+
+### Tree
+
+- Optional last name under the first name: the maiden name when it is known, otherwise the current last name. In the tree settings, under Display. Saved in this browser (#186, closes #168).
+- Opening a tree: the camera now stops close enough to read the names, and on a phone the tree is centred in the space beside the zoom slider (#187).
+
+### Undo bar
+
+- The message agrees with the person's sex in French ("supprimée", "supprimé"), and "supprimé·e" only when it is unknown (#185).
+- On phones and tablets the bar no longer covers the zoom slider. On a computer the zoom button is hidden while a profile is open (#185).
+
+### Shortcuts
+
+- Ctrl+K (⌘K on Mac) opens the person search from anywhere. The search tooltip and the Edit menu show their shortcuts (#184).
+
 ## 1.5.5 (2026-10-27)
 
 ### Undo instead of confirm
