@@ -23,7 +23,7 @@ export default {
   'Lien': 'Link',
 
   // Contrôles
-  'Contrôle du zoom': 'Zoom control',
+  'Zoomer': 'Zoom in',
   'En cours': 'Loading',
 
   // Annotations

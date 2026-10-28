@@ -139,7 +139,7 @@ export default function ZoomControl({ zoomApiRef }) {
       <button
         className="zoom-button"
         onClick={stepZoom}
-        aria-label={t('Contrôle du zoom')}
+        aria-label={t('Zoomer')}
       >
         <ZoomIn size={20} strokeWidth={1.5} className="zoom-btn-icon" />
       </button>

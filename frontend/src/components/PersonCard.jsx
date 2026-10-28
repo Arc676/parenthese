@@ -631,7 +631,9 @@ const PersonCard = ({
     // <bdi> : un lieu en arabe ou en hébreu ne retourne pas l'ordre de la ligne (« 1980, الدار البيضاء · 46 ans »)
     if (born) parts.push(person.birthPlace ? <>{born}, <bdi>{formatPlace(person.birthPlace)}</bdi></> : born)
     if (!person.isAlive) parts.push(died || '?')
-    return parts.length ? parts.reduce((line, part) => <>{line} – {part}</>) : null
+    // « – 1995 » passe entier à la ligne : Chrome coupe après un tiret même suivi d'une espace insécable,
+    // le gluon U+2060 l'en empêche
+    return parts.length ? parts.reduce((line, part) => <>{line} –{'\u2060\u00a0'}{part}</>) : null
   })()
   const ageLabel = age === null ? null : person.isAlive ? t('{age} ans', { age }) : t('{age} ans au décès', { age })
   // Une seule ligne sous le nom : surnom, repères de vie, âge, séparés par un point médian
