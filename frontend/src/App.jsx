@@ -3544,6 +3544,11 @@ function App() {
           onMoveSibling={(delta) => galaxyZoomApiRef.current?.moveSibling?.(tree.selectedPerson.id, delta)}
           onUploadMomentFile={tree.canEditCurrentTree || tree.canSubmitContribution ? media.uploadMomentFile : undefined}
           onMomentSaved={media.refreshMomentMedia}
+          onOpenPerson={async (personId) => {
+            const target = persons.find((p) => String(p.id) === String(personId))
+            if (!target || !(await chooseSelectedPerson(target))) return
+            galaxyZoomApiRef.current?.focusPerson?.(target.id)
+          }}
           onQuickEdit={tree.canEditCurrentTree && userRole.isAdmin && !isDemoMode ? handleEditToggle : undefined}
         />
       )}

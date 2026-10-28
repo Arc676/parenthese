@@ -82,6 +82,8 @@ const PersonCard = ({
   onMoveSibling,
   onUploadMomentFile,
   onMomentSaved,
+  // Prénom d'un proche touché dans l'onglet Vie : sa fiche s'ouvre
+  onOpenPerson,
   // Suppression annulable (App, hooks/useUndoable.js)
   onUndoable,
   saveOnLeaveRef = null,
@@ -951,6 +953,7 @@ const PersonCard = ({
             onAdd={() => { setLifeNotice(''); setMomentSheet({ entry: null }) }}
             onEdit={(entry) => { setLifeNotice(''); setMomentSheet({ entry }) }}
             onOpenMedia={(media) => onMediaSelect?.(media, person)}
+            onOpenPerson={onOpenPerson}
           />
         )}
 
@@ -1291,6 +1294,11 @@ const PersonCard = ({
               undo: () => setLifeRevision((r) => r + 1),
             })
           } : undefined}
+          onUnionSaved={(unionId, { unionType, startYear }) => {
+            // Le couple du graphe suit tout de suite (onglet Infos, frise), sans recharger l'arbre
+            const union = personUnions.find((u) => String(u.id) === String(unionId))
+            if (union) Object.assign(union, { unionType, startYear })
+          }}
           onSaved={({ pending, uploaded }) => {
             setMomentSheet(null)
             if (pending) setLifeNotice(t('Merci, c’est envoyé. Le moment apparaîtra dans sa vie quand la personne qui gère l’arbre l’aura accepté.'))
