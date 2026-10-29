@@ -2,6 +2,20 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
+## 1.5.9 (2026-10-29)
+
+### Tree
+
+- A child added to someone who has a single partner becomes the couple's child, next to their brothers and sisters, instead of hanging under one parent and an "Unknown" one. With no partner, several partners, or an adoption, the child stays with the parent chosen (#200).
+
+### Phone
+
+- No more zoom slider: it opened by itself and covered a corner of the tree. Pinch to zoom, the magnifier zooms in one step. On a computer the slider still shows on hover (#199).
+
+### Profile
+
+- "– 1995" no longer breaks after the dash at the end of a line. The magnifier button is labelled "Zoom in" for screen readers.
+
 ## 1.5.8 (2026-10-29)
 
 ### Family tabs
