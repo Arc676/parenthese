@@ -293,11 +293,6 @@
 .undo-toast-btn:hover { background: color-mix(in srgb, var(--pz-bg) 26%, transparent); }
 .undo-toast-btn:focus-visible { outline: 2px solid var(--pz-bg); outline-offset: 2px; }
 @media (max-width: 768px) { .contrib-success-toast { bottom: 78px; padding: 11px 16px; border-radius: 16px; font-size: 13px; } }
-/* Sous 768 px, la réglette de zoom reste ouverte en bas à gauche (ZoomControl.css, de 8 à 60 px du bord) :
-   tant qu'elle se voit (ni panneau ni fiche par-dessus), la notification commence après elle au lieu de passer dessus */
-@media (max-width: 768px) {
-  body:not(:has(.pz-overlay, .person-card)) .contrib-success-toast { left: 72px; right: 12px; width: auto; max-width: none; transform: none; }
-}
 
 @media (max-width: 560px) {
   .contrib-invite-link { flex-wrap: wrap; border-radius: var(--pz-r-m); padding: 10px; }

@@ -104,7 +104,8 @@ export default function ZoomControl({ zoomApiRef }) {
     document.addEventListener('pointerup', onUp)
   }, [zoomApiRef])
 
-  const panelVisible = isHovered || isMobile
+  // Sur téléphone, on zoome à deux doigts : la réglette n'apparaît jamais, la loupe seule reste
+  const panelVisible = isHovered && !isMobile
 
   return (
     <div
@@ -112,7 +113,7 @@ export default function ZoomControl({ zoomApiRef }) {
       onMouseEnter={showSlider}
       onMouseLeave={hideSlider}
     >
-      {/* Panel slider — hover sur desktop, toujours visible sur mobile */}
+      {/* Panel slider — au survol sur ordinateur, jamais sur téléphone */}
       <div
         className={`zoom-slider-panel ${panelVisible ? 'visible' : ''}`}
         onMouseEnter={showSlider}
