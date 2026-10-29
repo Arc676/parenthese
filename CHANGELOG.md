@@ -2,6 +2,23 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
+## 1.5.8 (2026-10-29)
+
+### Family tabs
+
+- A tab is named after the surname most of its members carry (birth name, otherwise current name), not after the person it starts from. When two tabs would share a name, the smaller one takes its next most common surname (#192).
+- Switching tabs keeps the person who joins the two families at the same place and zoom, only the families around change. Hovering a tab lights that person up in the tree (#192).
+- The tab bar follows the shape of the tree, grouped by branch, with a line between a tab and the one it comes from. The way-back badge sits where the way-in badge was (#192).
+
+### Profile
+
+- The age counts the birthday: with a full birth date, a person born in December is not a year older from January. Same for the age at death and the ages in the Life tab. With only a year, the age stays the difference between the years (#198).
+
+### Dependencies
+
+- `@node-rs/bcrypt` 2.0: the cost is passed as an option. Stored passwords still verify, new hashes are `$2b$` with the same cost (#197).
+- Minor updates for the frontend, the landing, the backend and the CI (#193, #194, #195, #196).
+
 ## 1.5.7 (2026-10-28)
 
 ### Phone
