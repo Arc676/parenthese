@@ -21,7 +21,7 @@
     "@fastify/cors": "^11.3.0",
     "@fastify/jwt": "^10.2.5",
     "@fastify/rate-limit": "^11.2.0",
-    "@node-rs/bcrypt": "^1.10.7",
+    "@node-rs/bcrypt": "^2.0.0",
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "blurhash": "^2.0.5",

@@ -8,7 +8,7 @@ import { env } from '../config/env.js'
 const HASH_ROUNDS = 12
 
 export async function hashPassword(value: string): Promise<string> {
-  return hash(value, HASH_ROUNDS)
+  return hash(value, { cost: HASH_ROUNDS })
 }
 
 export async function verifyPassword(value: string, storedHash: string): Promise<boolean> {
