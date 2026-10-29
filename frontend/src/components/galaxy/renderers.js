@@ -697,7 +697,10 @@ function drawPersonNode(ctx, node, pos, nodeProgress, {
   // la charnière peut avoir des enfants dessous, jamais rien au-dessus que le fil de ses parents.
   if (withDetail && node._familyTab) {
     const tab = node._familyTab
-    const text = `${tab.label ? t('Famille {name}', { name: tab.label }) : t('Famille')} · ${tab.count} ›`
+    // Retour vers la famille d'où l'on vient : même place que la pastille de l'aller (la charnière ne bouge pas),
+    // flèche retournée (Patch, 28/10, planche D)
+    const name = tab.label ? t('Famille {name}', { name: tab.label }) : t('Famille')
+    const text = tab.back ? `‹ ${name} · ${tab.count}` : `${name} · ${tab.count} ›`
     const py = cy - PERSON_R * personScale - RENVOI_CHILD_GAP
     familyPills.push({ text, cx, cy: py, anchorId: tab.anchorId, tabKey: tab.tabKey, alpha: nodeProgress * labelAlpha })
   }

@@ -50,6 +50,33 @@ const centerX = (node) => node.x + node.width / 2
 const easeOutQuint = (t) => 1 - (1 - t) ** 5
 const prefersReducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
+// Barre des familles rangée comme l'arbre (Patch, 28/10, planche A variante 2 « le trait d'union ») : chaque
+// famille juste après celle par laquelle on y entre, la famille de départ en tête. Les onglets d'une même branche
+// (sous-arbre d'un enfant direct de la famille de départ) se serrent à 10 px, 16 px entre les branches ; un trait
+// relie deux voisins quand le second part du premier (jamais vers la famille de départ, sa place en tête suffit).
+// Le trait qui mène à l'onglet ouvert est terracotta, les autres couleur fil.
+function barTabs(tabs, activeKey) {
+  if (!tabs.length) return []
+  const root = tabs[0]
+  const kids = new Map()
+  for (const tb of tabs.slice(1)) { const pk = tabs.some((x) => x.key === tb.parentKey) ? tb.parentKey : root.key; if (!kids.has(pk)) kids.set(pk, []); kids.get(pk).push(tb) }
+  const order = []
+  const visit = (tb) => { order.push(tb); for (const c of kids.get(tb.key) || []) visit(c) }
+  visit(root)
+  for (const tb of tabs) if (!order.includes(tb)) order.push(tb)
+  const byKey = new Map(tabs.map((tb) => [tb.key, tb]))
+  const pathTo = (tb) => { const out = []; for (let t = tb; t; t = byKey.get(t.parentKey)) out.unshift(t.key); return out }
+  const branchOf = (tb) => { const p = pathTo(tb); return p[1] || p[0] }
+  const active = byKey.get(activeKey) || root
+  const lit = new Set(pathTo(active))
+  return order.map((tb, i) => {
+    const prev = order[i - 1]
+    const gap = i === 0 ? 0 : (prev !== root && branchOf(tb) === branchOf(prev) ? 10 : 16)
+    const trait = i > 0 && prev !== root && tb.parentKey === prev.key ? (lit.has(tb.key) ? 'on' : 'off') : null
+    return { tb, gap, trait }
+  })
+}
+
 const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlightIds = [], graphRevision = 0, annotationHandlers = null, transformReadRef = null, zoomApiRef = null, focusPersonId = null, assetRevision = 0, reorderEnabled = false, onReorderSiblings = null, familyTabs = true, fullNames = false, annotationViewRef = null, onAnnotationsAnchored = null, selfPersonId = null, ghosts = null, initialFamilyKey = null, onFamilyChange = null }) => {
   const canvasRef = useRef(null)
   const layoutDataRef = useRef(null)
@@ -94,7 +121,32 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     setActiveKey(focusPersonId != null ? String(focusPersonId) : null)
   }, [focusPersonId])
   // Onglet choisi par la personne (barre, badge, recherche) : le lien d'arrivée ne s'impose plus
-  const chooseTab = useCallback((key) => { linkFamilyRef.current = null; pendingFamilyRef.current = null; frameOnRef.current = null; setActiveKey(key) }, [])
+  // Repère du changement d'onglet (Patch, 28/10 : « on perd un peu rapidement le fil ») : la personne qui relie
+  // les deux familles garde sa place et son zoom à l'écran, seules les familles autour changent
+  const anchorRef = useRef(null)
+  const linkPeople = (key) => {
+    const list = tabsCacheRef.current.tabs
+    const target = list.find((tb) => tb.key === String(key)), cur = activeTabRef.current || list[0]
+    return [target?.referenceId, ...(target?.hinges || []), cur?.referenceId, ...(cur?.hinges || [])].filter((x) => x != null).map(String)
+  }
+  const rememberAnchor = (key) => {
+    const layout = layoutDataRef.current, t = transformRef.current
+    if (!layout || !t) return
+    const ids = linkPeople(key)
+    const node = layout.children.find((n) => n._type === 'person' && ids.includes(String(n._data?.id)))
+    anchorRef.current = node ? { id: String(node._data.id), sx: (node.x + node.width / 2) * t.scale + t.x, sy: (node.y + node.height / 2) * t.scale + t.y, scale: t.scale } : null
+  }
+  const chooseTab = useCallback((key) => { rememberAnchor(key); linkFamilyRef.current = null; pendingFamilyRef.current = null; frameOnRef.current = null; setActiveKey(key) }, [])
+  // Survol d'un onglet : la personne par qui l'on y passe s'allume dans l'arbre affiché, sans texte (Patch : « que ça les suggère »)
+  const hoverTab = (key) => {
+    const layout = layoutDataRef.current
+    if (!layout) return
+    const present = new Set(layout.children.filter((n) => n._type === 'person').map((n) => String(n._data?.id)))
+    const ids = linkPeople(key).filter((id) => present.has(id))
+    searchHighlightSetRef.current = new Set([...searchHighlightIdsRef.current.map((id) => `p-${id}`), ...ids.map((id) => `p-${id}`)])
+    needsRedrawRef.current = true
+  }
+  const leaveTab = () => { searchHighlightSetRef.current = new Set(searchHighlightIdsRef.current.map((id) => `p-${id}`)); needsRedrawRef.current = true }
   // Lu au calcul du cadrage et par le réordonnancement : la référence de l'arbre affiché
   const focusPersonIdRef = useRef(focusPersonId)
   // La barre défile quand les onglets débordent : l'onglet ouvert se met en vue (sans animation) et les bords
@@ -630,7 +682,7 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       const parent = tabsCacheRef.current.tabs.find((tb) => tb.key === tab.parentKey)
       for (const h of (tab.hinges || [tab.referenceId])) {
         const node = result.children.find((n) => n.id === `p-${h}`)
-        if (parent && node) node._familyTab = { anchorId: node.id, label: parent.label, count: parent.count, tabKey: parent.key, place: 'above' }
+        if (parent && node) node._familyTab = { anchorId: node.id, label: parent.label, count: parent.count, tabKey: parent.key, place: 'above', back: true }
       }
     }
 
@@ -682,6 +734,15 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
       // Sur un écran étroit, la barre des familles couvre le haut : la personne de départ un peu plus bas. Plus de
       // fiche ouverte à l'arrivée sur téléphone (#188) : 0,4 et non plus 0,56, sinon le haut de l'écran reste vide
       offsetY = cssH * (cssW < 768 ? 0.4 : 0.42) - (focusNode.y + focusNode.height / 2) * scale
+    }
+
+    const anc = anchorRef.current
+    anchorRef.current = null
+    const ancNode = anc && personNodes.find((n) => String(n._data?.id) === anc.id)
+    if (ancNode) {
+      scale = anc.scale
+      offsetX = anc.sx - (ancNode.x + ancNode.width / 2) * scale
+      offsetY = anc.sy - (ancNode.y + ancNode.height / 2) * scale
     }
 
     const init = { x: offsetX, y: offsetY, scale }
@@ -803,7 +864,9 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
   }, [selectedPersonId])
 
   // Sync searchHighlightIds
+  const searchHighlightIdsRef = useRef(searchHighlightIds)
   useEffect(() => {
+    searchHighlightIdsRef.current = searchHighlightIds
     searchHighlightSetRef.current = new Set(searchHighlightIds.map(id => `p-${id}`))
   }, [searchHighlightIds])
 
@@ -1259,18 +1322,23 @@ const Galaxy = ({ onPersonSelect, onMediaSelect, selectedPersonId, searchHighlig
     )}
     {familyTabs && tabs.length > 1 && (
       <nav ref={tabsBarRef} onScroll={updateTabsEdges} className={`family-tabs${annotationHandlers ? ' family-tabs--lowered' : ''}${tabsEdges}`} aria-label={tr('Familles')}>
-        {tabs.map((tb) => {
+        {barTabs(tabs, activeKey).map(({ tb, gap, trait }) => {
           const active = tb.key === (tabs.some((x) => x.key === activeKey) ? activeKey : tabs[0].key)
           return (
             <button
               key={tb.key}
               type="button"
-              className={`family-tab${active ? ' is-active' : ''}`}
+              style={gap ? { marginLeft: gap } : undefined}
+              className={`family-tab${active ? ' is-active' : ''}${trait ? ` family-tab--suite family-tab--trait-${trait}` : ''}`}
               aria-current={active ? 'page' : undefined}
               onClick={() => chooseTab(tb.key)}
+              onMouseEnter={() => { if (!active) hoverTab(tb.key) }}
+              onMouseLeave={leaveTab}
+              onFocus={() => { if (!active) hoverTab(tb.key) }}
+              onBlur={leaveTab}
             >
               <span className="family-tab-name">{tb.label ? tr('Famille {name}', { name: tb.label }) : tr('Famille')}</span>
-              <span className="family-tab-count">{tb.count}</span>
+              <span className="family-tab-count" title={tr('{n} personnes', { n: tb.count })}>{tb.count}</span>
             </button>
           )
         })}

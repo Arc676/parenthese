@@ -1,6 +1,7 @@
 // Traductions anglaises, clé = texte français exact passé à t().
 export default {
   'Famille {name}': 'The {name} family',
+  '{n} personnes': '{n} people',
   'Famille': 'Family',
   'Familles': 'Families',
   'Affichage': 'Display',

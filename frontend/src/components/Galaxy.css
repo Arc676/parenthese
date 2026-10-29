@@ -119,3 +119,10 @@
   body:has(.expandable-search.expanded) .family-tabs { top: 80px; max-width: calc(100vw - 20px); }
   .family-tab { font-size: 14px; padding: 6px 12px 7px; }
 }
+
+/* Trait d'union entre deux onglets voisins quand le second part du premier (planche A, variante 2) */
+.family-tabs { gap: 0; }
+.family-tab + .family-tab:not([style]) { margin-left: 6px; }
+.family-tab--suite { position: relative; }
+.family-tab--suite::before { content: ""; position: absolute; right: 100%; top: 50%; width: 10px; height: 1.3px; transform: translateY(-50%); background: #E3A590; pointer-events: none; }
+.family-tab--trait-on::before { background: #D2694A; }

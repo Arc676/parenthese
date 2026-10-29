@@ -127,6 +127,20 @@ function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
   const result = computeLayout(graphData, referenceId)
   const nodes = result.children
   const byId = new Map(nodes.map(n => [n.id, n]))
+  // Nom d'une famille : celui que portent le plus ses membres (nom de naissance, sinon nom), pas celui de la seule
+  // personne de référence. Ex. : 175 personnes dont 5 portent le nom de la référence. Égalité : le nom
+  // de secours (celui de la référence) s'il est parmi les premiers, sinon le premier rencontré.
+  const nomMajoritaire = (ids, secours = '') => {
+    const n = new Map()
+    for (const id of ids) {
+      const d = byId.get(id)?._type === 'person' ? byId.get(id)._data : null
+      const nom = (d?.birthName || d?.lastName || '').trim()
+      if (nom) n.set(nom, (n.get(nom) || 0) + 1)
+    }
+    let best = '', max = 0
+    for (const [nom, c] of n) if (c > max) { best = nom; max = c }
+    return secours && n.get(secours) === max ? secours : (best || secours)
+  }
 
   // Chaînes de couples (composantes d'une rangée) telles que computeLayout les a ordonnées
   const chainOf = new Map()
@@ -416,8 +430,8 @@ function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
       unplace(block.members)
       forgetExternal(snap.externalBefore, snap.externalAfter)
       const A = byId.get(id)
-      const label = A._data?.birthName || byId.get(pcPersons[0])?._data?.lastName || A._data?.lastName || ''
       const members = new Set([...extra, ...nested].filter(m => !keep.has(m)))
+      const label = nomMajoritaire(members, A._data?.birthName || byId.get(pcPersons[0])?._data?.lastName || A._data?.lastName || '')
       registerTab({ anchorId: pcPersons[0], pu: parentUnionOf.get(pcPersons[0]) || pu, label, count: members.size, members, hinges: pcPersons.slice(1), hingeEdges: [] })
       for (const x of pcPersons) byId.get(x)._familyTab = { anchorId: pcPersons[0], label, count: members.size, tabKey: pcPersons[0].replace(/^p-/, ''), place: 'above' }
       const saved = anchor
@@ -461,7 +475,7 @@ function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
       anchor = saved
       if (block.width > FAMILY_TAB_PX && !familyTabs) {
         const A = byId.get(id)
-        bigFamilies.push({ anchorId: id, label: A._data?.birthName || A._data?.lastName || '', count: [...block.members].filter(m => byId.get(m)?._type === 'person').length })
+        bigFamilies.push({ anchorId: id, label: nomMajoritaire(block.members, A._data?.birthName || A._data?.lastName || ''), count: [...block.members].filter(m => byId.get(m)?._type === 'person').length })
       }
       if (block.width > FAMILY_TAB_PX && familyTabs) {
         // Trop large pour cet arbre : la famille devient un onglet et n'est pas dessinée ici. Sa construction ne
@@ -474,8 +488,8 @@ function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
         forgetExternal(externalBefore, new Set(externalEdges))
         const A = byId.get(id)
         const partners = [byId.get(pu)?._data?.p1Key, byId.get(pu)?._data?.p2Key].map(k => byId.get(k)?._data).filter(Boolean)
-        const label = A._data?.birthName || partners.find(d => d.lastName)?.lastName || A._data?.lastName || ''
         const members = new Set([...[...block.members].filter(m => byId.get(m)?._type === 'person'), ...nested])
+        const label = nomMajoritaire(members, A._data?.birthName || partners.find(d => d.lastName)?.lastName || A._data?.lastName || '')
         registerTab({ anchorId: id, pu, label, count: members.size, members, hinges: [], hingeEdges: [[pu, id]] })
         A._familyTab = { anchorId: id, label, count: members.size, tabKey: id.replace(/^p-/, ''), place: 'above' }
         continue
@@ -818,7 +832,7 @@ function layoutOnce(graphData, referenceId, forcedSide, familyTabs = true) {
   // la barre d'onglets ; un onglet est le même arbre recalculé avec le conjoint comme référence.
   const drawn = nodes.filter(n => n._type === 'person')
   result.families = [
-    { id: 'main', label: referenceNode?._data?.lastName || drawn[0]?._data?.lastName || '', count: drawn.length, referenceId: result.referenceId ?? null },
+    { id: 'main', label: nomMajoritaire(drawn.map(n => n.id), referenceNode?._data?.lastName || drawn[0]?._data?.lastName || ''), count: drawn.length, referenceId: result.referenceId ?? null },
     ...tabs.map(tb => ({ id: tb.anchorId, anchorId: tb.anchorId, label: tb.label, count: tb.count, members: [...tb.members].map(m => m.replace(/^p-/, '')), hinges: [tb.anchorId, ...tb.hinges].map(m => m.replace(/^p-/, '')) })),
     ...bigFamilies.map(f => ({ id: f.anchorId, anchorId: f.anchorId, label: f.label, count: f.count, members: [], drawn: true })),
   ]
@@ -925,14 +939,26 @@ export function familyTabsOf(graphData = null, referenceId = null) {
   // Deux onglets au même nom (homonymes, ou une branche sortie de sa propre lignée) : sauf le plus grand, chacun
   // prend les prénoms de sa charnière, ceux que porte la pastille qui y mène (Patch, 20/10 : « plusieurs fois
   // les mêmes familles »)
-  const firstName = new Map((graphData?.persons || globalPersons).map(p => [String(p.id), p.firstName]))
+  // 28/10 (Patch : « ptet le Joseph et Marie ») : l'onglet le plus petit prend d'abord le nom suivant le plus
+  // porté chez lui et pas encore pris par un autre onglet ; les prénoms de la charnière ne servent qu'en dernier recours.
+  const persons = graphData?.persons || globalPersons
+  const firstName = new Map(persons.map(p => [String(p.id), p.firstName]))
+  const familyName = new Map(persons.map(p => [String(p.id), (p.birthName || p.lastName || '').trim()]))
+  const namesByCount = (tb) => {
+    const n = new Map()
+    for (const id of tb.personIds || []) { const nom = familyName.get(String(id).replace(/^p-/, '')); if (nom) n.set(nom, (n.get(nom) || 0) + 1) }
+    return [...n].sort((x, y) => y[1] - x[1]).map(([nom]) => nom)
+  }
   const byLabel = new Map()
   for (const tb of tabs) { if (!byLabel.has(tb.label)) byLabel.set(tb.label, []); byLabel.get(tb.label).push(tb) }
+  const taken = new Set(tabs.map(tb => tb.label))
   for (const group of byLabel.values()) {
     if (group.length < 2) continue
     const biggest = group.reduce((a, b) => (b.count > a.count ? b : a))
-    for (const tb of group) {
+    for (const tb of [...group].sort((a, b) => b.count - a.count)) {
       if (tb === biggest) continue
+      const next = namesByCount(tb).find(nom => !taken.has(nom))
+      if (next) { tb.label = next; taken.add(next); continue }
       const names = [...new Set((tb.hinges || [tb.referenceId]).map(id => firstName.get(String(id))).filter(Boolean))].slice(0, 2)
       if (names.length) tb.label = `${tb.label} · ${names.join(' et ')}`
     }
