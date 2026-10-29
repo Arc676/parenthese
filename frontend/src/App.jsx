@@ -73,7 +73,7 @@ import { readGedcomBundle, zipErrorMessage } from './utils/gedcomBundle.js'
 import { materializeFile } from './utils/zipReader.js'
 import { loadMediaRefs, loadPhotoRefs, pickFirstFaces, prepareImageForUpload, saveMediaRefs, savePhotoRefs, sizeBucket } from './utils/photoImport'
 import { fileToBase64, getAccountErrorMessage } from './utils/errorMessages'
-import { getSiblingParentLinks } from './utils/familyLinks'
+import { getCoupleParentLinks, getSiblingParentLinks } from './utils/familyLinks'
 import { getUploadMimeType, inferMediaTypeFromMimeType, validateMediaFile } from './utils/mediaUpload'
 import {
   getSource,
@@ -1225,6 +1225,19 @@ function App() {
           siblingParentLinks.push(...links)
         }
       }
+      // Un enfant ajouté à une personne qui n'a qu'un conjoint est l'enfant du couple : il passe par les liens
+      // du couple, comme un frère ou une sœur. Une adoption reste au seul parent choisi.
+      const relationCount = (formData.relations || []).length
+      formData = {
+        ...formData,
+        relations: (formData.relations || []).filter((rel) => {
+          if (rel.type !== 'child' || rel.adopted) return true
+          const coupleLinks = getCoupleParentLinks(rel.personId, unions)
+          if (!coupleLinks.length) return true
+          siblingParentLinks.push(...coupleLinks)
+          return false
+        }),
+      }
 
       if (!tree.canEditCurrentTree) {
         if (isDemoMode) {
@@ -1331,7 +1344,7 @@ function App() {
           },
         ]
         editMode.updateDraft({ addedPersons })
-        trackAppEvent('person_added', { via: addPersonViaRef.current, role: 'family', relations: (formData.relations || []).length, tree_id: opaqueTreeId })
+        trackAppEvent('person_added', { via: addPersonViaRef.current, role: 'family', relations: relationCount, tree_id: opaqueTreeId })
         // La personne apparaît en fantôme « Brouillon » : la famille peut en ajouter d'autres, puis envoyer une
         // fois avec le bouton « Envoyer » de la barre (Patch, 25/10). Avant, la fenêtre d'envoi s'ouvrait d'office,
         // seule façon de montrer qu'un ajout invisible comptait.
@@ -1409,7 +1422,7 @@ function App() {
       })
 
       await tree.refreshCurrentTreeGraph()
-      trackAppEvent('person_added', { via: addPersonViaRef.current, role: 'manager', relations: (formData.relations || []).length, tree_id: opaqueTreeId })
+      trackAppEvent('person_added', { via: addPersonViaRef.current, role: 'manager', relations: relationCount, tree_id: opaqueTreeId })
       return newPerson
     } catch (err) {
       setAddPersonError(err.message || t("Erreur lors de l'ajout de la personne"))

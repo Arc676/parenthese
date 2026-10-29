@@ -36,3 +36,20 @@ export function getSiblingParentLinks(personId, filiations, unions) {
 
   return links
 }
+
+/**
+ * Parents à rattacher à un nouvel enfant de `parentId` : quand cette personne n'a qu'une union,
+ * l'enfant est celui du couple (les deux partenaires, avec l'identifiant de l'union).
+ * Aucune union, ou plusieurs (on ne devine pas l'autre parent) : liste vide, l'enfant reste au seul parent.
+ *
+ * @param {string} parentId - Personne à qui l'on ajoute un enfant
+ * @param {Array} unions - Unions du graphe courant ({ id, partner1Id, partner2Id })
+ * @returns {Array<{ parentId: string, unionId: string }>}
+ */
+export function getCoupleParentLinks(parentId, unions) {
+  const key = String(parentId)
+  const own = (unions || []).filter((union) => String(union.partner1Id) === key || String(union.partner2Id) === key)
+  if (own.length !== 1 || !own[0].partner1Id || !own[0].partner2Id) return []
+  const unionId = String(own[0].id)
+  return [{ parentId: String(own[0].partner1Id), unionId }, { parentId: String(own[0].partner2Id), unionId }]
+}

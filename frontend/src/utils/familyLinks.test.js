@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getSiblingParentLinks } from './familyLinks'
+import { getCoupleParentLinks, getSiblingParentLinks } from './familyLinks'
 
 describe('getSiblingParentLinks', () => {
   const unions = [{ id: 'u1', partner1Id: 'p1', partner2Id: 'p2' }]
@@ -29,5 +29,25 @@ describe('getSiblingParentLinks', () => {
     const filiations = [{ id: 'f1', childId: 'other', parentId: 'p1', unionId: null }]
     expect(getSiblingParentLinks('c1', filiations, unions)).toEqual([])
     expect(getSiblingParentLinks('c1', undefined, undefined)).toEqual([])
+  })
+})
+
+describe('getCoupleParentLinks', () => {
+  it('gives both partners when the parent has a single union', () => {
+    const unions = [{ id: 'u1', partner1Id: 'p1', partner2Id: 'p2' }]
+    expect(getCoupleParentLinks('p2', unions)).toEqual([
+      { parentId: 'p1', unionId: 'u1' },
+      { parentId: 'p2', unionId: 'u1' },
+    ])
+  })
+
+  it('keeps the child with the parent alone when there is no union or several', () => {
+    expect(getCoupleParentLinks('p1', [])).toEqual([])
+    expect(getCoupleParentLinks('p1', undefined)).toEqual([])
+    const unions = [
+      { id: 'u1', partner1Id: 'p1', partner2Id: 'p2' },
+      { id: 'u2', partner1Id: 'p3', partner2Id: 'p1' },
+    ]
+    expect(getCoupleParentLinks('p1', unions)).toEqual([])
   })
 })
