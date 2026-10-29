@@ -18,6 +18,7 @@ import { t, dateLocale } from '../i18n/index.js'
 import { formatPlace } from '../utils/place.js'
 import { firstNameLabel, fullNameLabel, isFirstNameUnknown } from '../utils/personName.js'
 import { isYearOnly } from '../utils/dateInput.js'
+import { ageInYears } from '../utils/age.js'
 import DateField from './DateField.jsx'
 import { runOnce } from '../utils/saveOnLeave.js'
 import { normalizeSex, SEX_CHOICES } from '../utils/personSex.js'
@@ -448,9 +449,9 @@ const PersonCard = ({
   const hasDeathYear = Number.isFinite(deathYearNumber)
   const age = hasBirthYear
     ? person.isAlive
-      ? new Date().getFullYear() - birthYearNumber
+      ? ageInYears(person.birthDate ?? birthYearNumber)
       : hasDeathYear
-        ? deathYearNumber - birthYearNumber
+        ? ageInYears(person.birthDate ?? birthYearNumber, person.deathDate ?? deathYearNumber)
         : null
     : null
 

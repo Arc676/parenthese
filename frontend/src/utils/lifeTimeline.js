@@ -8,6 +8,7 @@
 import { t, dateLocale } from '../i18n/index.js'
 import { firstNameLabel } from './personName.js'
 import { formatPlace } from './place.js'
+import { ageInYears } from './age.js'
 
 const EVENT_LABELS = {
   baptism: t('Baptême'),
@@ -90,7 +91,11 @@ export function describeDate(date, end, precision) {
   }
 }
 
-const ageAt = (birthYear, year) => (birthYear && year && year > birthYear ? t('{age} ans', { age: year - birthYear }) : '')
+// Âge à une date, au jour près quand les deux dates sont complètes (#198), sinon à l'année
+const ageAt = (birth, end) => {
+  const age = ageInYears(birth, end || null)
+  return age > 0 ? t('{age} ans', { age }) : ''
+}
 const joinMeta = (...parts) => parts.filter(Boolean).join(' · ')
 
 // Le prénom d'un proche, cliquable dans la frise : il ouvre sa fiche
@@ -123,6 +128,7 @@ export function buildLifeTimeline(person, family = {}, life = null) {
   const lifeUnions = new Map((life?.unions || []).map((u) => [String(u.id), u]))
   const events = life?.events || []
   const birthYear = yearOf(person.birthDate) ?? person.birthYear ?? null
+  const birthDate = person.birthDate || birthYear
   const deathYear = yearOf(person.deathDate) ?? person.deathYear ?? null
   const lastYear = deathYear ?? new Date().getFullYear()
   const within = (year) => year && (!birthYear || year >= birthYear) && year <= lastYear
@@ -165,14 +171,14 @@ export function buildLifeTimeline(person, family = {}, life = null) {
         startDatePrecision: detail.startDatePrecision || null, startPlace: detail.startPlace || '',
       },
       meta: year
-        ? joinMeta(place, detail.startDatePrecision ? describeDate(detail.startDate, null, detail.startDatePrecision) : '', ageAt(birthYear, year))
+        ? joinMeta(place, detail.startDatePrecision ? describeDate(detail.startDate, null, detail.startDatePrecision) : '', ageAt(birthDate, detail.startDate || year))
         : joinMeta(place, t('date inconnue')),
       note: extra?.notes || '', sources: extra?.sources || '',
       ...milestoneFields(extra, { type: 'marriage', unionId: union.id }),
     })
     const hasEndEvent = events.some((e) => String(e.unionId) === String(union.id) && ['divorce', 'annulment'].includes(e.type))
     if (union.endYear && !hasEndEvent) {
-      out.push({ key: `union-end-${union.id}`, year: union.endYear, order: 3, kind: 'minor', title: t('Fin de l’union avec {name}', { name: union.partner?.firstName || partnerName }), meta: ageAt(birthYear, union.endYear) })
+      out.push({ key: `union-end-${union.id}`, year: union.endYear, order: 3, kind: 'minor', title: t('Fin de l’union avec {name}', { name: union.partner?.firstName || partnerName }), meta: ageAt(birthDate, union.endYear) })
     }
     if (union.partner && within(yearOf(union.partner.deathDate) ?? union.partner.deathYear)) {
       const year2 = yearOf(union.partner.deathDate) ?? union.partner.deathYear
@@ -190,7 +196,7 @@ export function buildLifeTimeline(person, family = {}, life = null) {
     }
     out.push({
       key: `event-${event.id}`, year, order: 1, kind: 'minor', title,
-      meta: joinMeta(formatPlace(event.place || ''), year ? describeDate(event.date, event.dateEnd, event.datePrecision) : t('date inconnue'), ageAt(birthYear, year)),
+      meta: joinMeta(formatPlace(event.place || ''), year ? describeDate(event.date, event.dateEnd, event.datePrecision) : t('date inconnue'), ageAt(birthDate, event.date || year)),
       note: event.notes || '', sources: event.sources || '',
       mediaIds: event.mediaIds || [],
       // Seuls les moments propres à la personne se modifient depuis l'onglet (pas ceux d'une union)
@@ -219,7 +225,7 @@ export function buildLifeTimeline(person, family = {}, life = null) {
     out.push({
       key: 'death', year: deathYear, order: 9, kind: 'mile',
       title: place ? t('Décès à {place}', { place: place.split(',')[0] }) : t('Décès'),
-      meta: deathYear ? joinMeta(describeDate(person.deathDate, details.deathDateEnd, details.deathDatePrecision), ageAt(birthYear, deathYear)) : t('date inconnue'),
+      meta: deathYear ? joinMeta(describeDate(person.deathDate, details.deathDateEnd, details.deathDatePrecision), ageAt(birthDate, person.deathDate || deathYear)) : t('date inconnue'),
       note: extra?.notes || '', sources: extra?.sources || '',
       ...milestoneFields(extra, { type: 'death' }),
     })
