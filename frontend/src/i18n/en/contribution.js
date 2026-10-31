@@ -41,6 +41,8 @@ export default {
 
   // ─── Message d'invitation ───
   'Bonjour à tous,': 'Hi everyone,',
+  "Pour Noël, j'ai mis l'arbre de notre famille en ligne. Regardez-le avant le réveillon, et apportez vos vieilles photos, on le complétera ensemble à table.":
+    "For Christmas, I put our family tree online. Have a look before Christmas Eve, and bring your old photos, we'll fill it in together at the table.",
   "Je rassemble l'histoire de notre famille dans un arbre en ligne, et j'aimerais que vous m'aidiez à le compléter.":
     "I'm putting our family's history together in an online tree, and I'd love your help filling it in.",
   "L'arbre est ici {url}": 'The tree is here {url}',
@@ -171,6 +173,8 @@ export default {
   'Modifications en cours': 'Unsaved changes',
   'Quitter {em} ?': 'Leave {em}?',
   "l'édition": 'edit mode',
+  'Vos dernières modifications restent dans la démo tant que cette page est ouverte, puis elles disparaissent.':
+    'Your latest changes stay in the demo while this page is open, then they are gone.',
   'Vos dernières modifications ne sont pas encore enregistrées. Elles restent sur cet appareil tant que vous ne les abandonnez pas.':
     "Your latest changes aren't saved yet. They stay on this device until you discard them.",
   'Abandonner': 'Discard',

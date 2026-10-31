@@ -114,7 +114,7 @@ function fragmentOf(location: string | undefined) {
 describe('départ et retour', () => {
   it("annonce le fournisseur à l'écran de connexion", async () => {
     const res = await app.inject({ method: 'GET', url: '/auth/options' })
-    expect(res.json()).toEqual({ registration: true, passwordLogin: true, oidc: { name: 'Authentik' } })
+    expect(res.json()).toEqual({ registration: true, passwordLogin: true, oidc: { name: 'Authentik' }, signupPrompts: false })
   })
 
   it('part chez le fournisseur avec un cookie signé, httpOnly, lax, sécurisé en https', async () => {

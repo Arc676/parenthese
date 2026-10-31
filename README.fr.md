@@ -59,6 +59,8 @@ Pour ouvrir l'instance à la famille depuis Internet, placez un reverse proxy HT
 
 Pour qu'une personne qui tombe sur l'adresse ne puisse pas s'inscrire et y créer ses arbres, mettez `ALLOW_REGISTRATION=false` dans `.env`, puis lancez `docker compose up -d`. Les comptes existants se connectent et créent leurs arbres comme avant, la famille ouvre toujours les arbres partagés avec le lien et le mot de passe, et l'application ne propose plus de créer de compte. Une instance sans aucun compte accepte quand même le premier, la variable peut donc être posée avant le tout premier démarrage : créez votre compte tout de suite, avant de donner l'adresse.
 
+Votre instance ne pousse personne à y créer un compte. Sur app.parenthese.io, l'instance hébergée, l'application invite à créer son propre arbre : la famille qui ouvre un arbre partagé trouve « Faire le mien » dans le menu Ajouter, les messages de la démo proposent l'inscription, et du 1er décembre au 6 janvier le message d'invitation parle de Noël. Ces invitations sont éteintes par défaut. Pour les allumer, mettez `SIGNUP_PROMPTS=true` dans `.env` (elles restent coupées si l'inscription est fermée).
+
 #### Chercher quelqu'un dans des sources publiques
 
 Le menu « + » propose « Quelqu'un ailleurs » : un panneau à droite de l'arbre où l'on tape un nom pour voir ce que les sources publiques disent de cette personne. Les liens vers des sites sans recherche interrogeable d'ici (presse ancienne sur Gallica, registres matricules sur FranceArchives, Geneanet, FamilySearch et quelques autres, la France d'abord) marchent toujours : votre navigateur ouvre le site avec le nom déjà tapé, et rien ne passe par le serveur.

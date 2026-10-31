@@ -7,6 +7,7 @@ import './SettingsPanels.css'
 import PzBusy from './PzBusy.jsx'
 import { HELP_URL } from '../utils/siteLinks.js'
 import { t, dateLocale } from '../i18n/index.js'
+import { buildInviteText } from '../utils/inviteText.js'
 import { sexLabel } from '../utils/personSex.js'
 import Skeleton from './Skeleton.jsx'
 
@@ -217,21 +218,6 @@ function formatSessionDate(value) {
   })
 }
 
-// Message d'invitation prêt à envoyer par mail, SMS ou WhatsApp
-function buildInviteText(url, password) {
-  return [
-    t('Bonjour à tous,'),
-    '',
-    t("Je rassemble l'histoire de notre famille dans un arbre en ligne, et j'aimerais que vous m'aidiez à le compléter."),
-    '',
-    t("L'arbre est ici {url}", { url }),
-    t("Le mot de passe pour l'ouvrir est {password}", { password }),
-    '',
-    t("En bas de l'écran, vous pouvez ajouter une photo, un souvenir ou une personne qui manque."),
-    t("Le mode d'emploi, si besoin {url}", { url: HELP_URL }),
-  ].join('\n')
-}
-
 // ─── component ──────────────────────────────────────────────────────────────
 
 const ContributionPanel = ({
@@ -254,6 +240,7 @@ const ContributionPanel = ({
   onRotatePasswords,
   onRememberPassword,
   onReviewSession,
+  seasonalInvite = false,
 }) => {
   const [decisionMap, setDecisionMap] = useState({})
   const [collapsedSessions, setCollapsedSessions] = useState(new Set())
@@ -355,7 +342,7 @@ const ContributionPanel = ({
   }, [inviteKnownPasswords?.share, visible])
 
   const knownShare = inviteKnownPasswords?.share || ''
-  const defaultInviteText = knownShare && inviteShareUrl ? buildInviteText(inviteShareUrl, knownShare) : ''
+  const defaultInviteText = knownShare && inviteShareUrl ? buildInviteText(inviteShareUrl, knownShare, { seasonal: seasonalInvite }) : ''
   const [inviteText, setInviteText] = useState('')
   useEffect(() => { setInviteText(defaultInviteText) }, [defaultInviteText])
 

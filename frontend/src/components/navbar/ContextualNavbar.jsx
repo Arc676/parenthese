@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import {
-  Brush, ImagePlus, Plus, UserPlus, User, MousePointer2, Pencil, Type, Star, Trash2, Image, ArrowLeft, Search,
+  Brush, ImagePlus, Plus, UserPlus, User, MousePointer2, Pencil, Type, Star, Trash2, Image, ArrowLeft, Search, TreeDeciduous,
 } from 'lucide-react'
 import { NavMenu, NavMenuGroup, NavMenuItem } from './NavMenu'
 import AvatarMenu from './AvatarMenu'
@@ -54,6 +54,7 @@ function ContextualNavbar({
   onCreateTree,
   onProfileClick,
   canRegister = true,
+  signupPrompts = false,
   onAccountClick,
   onSettingsClick,
   onLogout,
@@ -148,9 +149,10 @@ function ContextualNavbar({
   }
 
   // Création de compte dans l'app
-  const handleCreateAccountClick = () => {
-    trackAppEvent('create_account_clicked', accountClickProps)
-    onProfileClick?.('register')
+  // via : « ajouter » (menu Ajouter de la famille) ou « compte » (menu du compte)
+  const handleCreateAccountClick = (via = 'compte') => {
+    trackAppEvent('create_account_clicked', { ...accountClickProps, via })
+    onProfileClick?.('register', via)
   }
 
   const handleAnnotToolClick = (toolId) => {
@@ -222,6 +224,12 @@ function ContextualNavbar({
     if (onSearchClick) {
       addGroups.push({ label: t('Chercher'), items: [{ key: 'search', icon: <Search {...ICON} />, label: t("Quelqu'un ailleurs"), sub: t('décès depuis 1970, archives, presse'), onSelect: onSearchClick }] })
     }
+  }
+  // La famille sans compte trouve « Faire le mien » en bas du menu qu'elle ouvre, le menu Ajouter, et la ligne quitte
+  // le menu du compte. Seulement si l'instance invite à créer son arbre (SIGNUP_PROMPTS).
+  const ownTreeInAddMenu = signupPrompts && canRegister && isFamily && !authenticated && !showMobileAnnot
+  if (ownTreeInAddMenu) {
+    addGroups.push({ label: t('Votre famille'), items: [{ key: 'own-tree', icon: <TreeDeciduous {...ICON} />, label: t('Faire le mien'), sub: t('un arbre pour votre famille, gratuit'), onSelect: () => handleCreateAccountClick('ajouter') }] })
   }
   const hasAddMenu = addGroups.length > 0
 
@@ -420,8 +428,8 @@ function ContextualNavbar({
                   onSelectTree={onTreeSelect}
                   onCreateTree={onCreateTree}
                   onSettings={onSettingsClick}
-                  onLogin={() => onProfileClick?.('login')}
-                  onRegister={canRegister ? handleCreateAccountClick : undefined}
+                  onLogin={() => onProfileClick?.('login', 'compte')}
+                  onRegister={canRegister && !ownTreeInAddMenu ? () => handleCreateAccountClick('compte') : undefined}
                   onLogout={onLogout}
                 />
               )}

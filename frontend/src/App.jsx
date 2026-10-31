@@ -77,6 +77,7 @@ import { getCoupleParentLinks, getSiblingParentLinks } from './utils/familyLinks
 import { getUploadMimeType, inferMediaTypeFromMimeType, validateMediaFile } from './utils/mediaUpload'
 import {
   getSource,
+  rememberSource,
   identifyUser,
   resetUser,
   toInteractionMediaType,
@@ -607,8 +608,22 @@ function App() {
   const [accountEntryMode, setAccountEntryMode] = useState('login')
   // Options de l'instance. Inscription fermée (ALLOW_REGISTRATION=false, #113) ou mot de passe désactivé
   // (PASSWORD_LOGIN=false, #115) : plus de « Créer un compte » nulle part. oidc : le bouton du fournisseur.
-  const [authOptions, setAuthOptions] = useState({ registration: true, passwordLogin: true, oidc: null })
+  const [authOptions, setAuthOptions] = useState({ registration: true, passwordLogin: true, oidc: null, signupPrompts: false })
   const registrationOpen = authOptions.registration !== false && authOptions.passwordLogin !== false
+  // Invitations à créer son arbre (SIGNUP_PROMPTS, allumé sur l'instance hébergée) : « Faire le mien » pour la
+  // famille, l'inscription au bout des messages de la démo, le message d'invitation de Noël
+  const signupPrompts = authOptions.signupPrompts === true && registrationOpen
+  // Message de la démo suivi de l'invitation ; le lien ouvre l'inscription sans recharger la page
+  const demoSignupMessage = (lead) => (
+    <span>
+      {lead} {t('Pour votre famille,')}{' '}
+      <a
+        href="/?account=register&source=demo"
+        className="pz-inline-link"
+        onClick={(event) => { event.preventDefault(); handleUseAccount('register', 'demo') }}
+      >{t('créez votre arbre')}</a>.
+    </span>
+  )
   const [treeWizardVisible, setTreeWizardVisible] = useState(false)
   const [treeWizardLoading, setTreeWizardLoading] = useState(false)
   const [treeWelcomeVisible, setTreeWelcomeVisible] = useState(false)
@@ -1107,7 +1122,8 @@ function App() {
     if (!left) return
     editMode.saveDraft()
     editMode.deactivate()
-  }, [leaveSelectedPerson, editMode.saveDraft, editMode.deactivate]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (isDemoMode && signupPrompts) setDraftNotice(demoSignupMessage(t('Votre essai reste dans la démo.')))
+  }, [leaveSelectedPerson, editMode.saveDraft, editMode.deactivate, isDemoMode, signupPrompts]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleConfirmDiscard = useCallback(() => {
     editMode.clearDraft()
@@ -1129,9 +1145,10 @@ function App() {
   useEffect(() => {
     if (!relationFeedback.success) return undefined
 
+    // Le message de la démo qui porte l'invitation (lien vers l'inscription) reste le temps de le lire et de cliquer
     const timeout = setTimeout(() => {
       setRelationFeedback((current) => ({ ...current, success: '' }))
-    }, 2500)
+    }, typeof relationFeedback.success === 'string' ? 2500 : 6000)
 
     return () => clearTimeout(timeout)
   }, [relationFeedback.success])
@@ -1485,6 +1502,7 @@ function App() {
       editMode.deactivate()
       setContribSubmitError('')
       setShowContribModal(false)
+      if (signupPrompts) setDraftNotice(demoSignupMessage(t('Votre essai reste dans la démo.')))
       return
     }
 
@@ -2122,7 +2140,7 @@ function App() {
       const addedRelations = [...(draft.addedRelations || []), { sourcePersonId, targetPersonId, relationType }]
       editMode.updateDraft({ addedRelations })
       tree.bumpGraphRevision()
-      setRelationFeedback({ loading: false, success: t('Lien familial ajouté (démo locale)'), error: '' })
+      setRelationFeedback({ loading: false, success: signupPrompts ? demoSignupMessage(t('Lien ajouté à la démo.')) : t('Lien familial ajouté (démo locale)'), error: '' })
       return
     }
 
@@ -2187,7 +2205,7 @@ function App() {
     if (isDemoMode) {
       for (const link of childLinks) link.parentageType = parentageType
       tree.bumpGraphRevision()
-      setRelationFeedback({ loading: false, success: t('Lien modifié (démo locale)'), error: '' })
+      setRelationFeedback({ loading: false, success: signupPrompts ? demoSignupMessage(t('Lien modifié dans la démo.')) : t('Lien modifié (démo locale)'), error: '' })
       return
     }
 
@@ -2264,7 +2282,7 @@ function App() {
       const removedRelations = [...(draft.removedRelations || []), { sourcePersonId, targetPersonId, relationType }]
       editMode.updateDraft({ removedRelations })
       tree.bumpGraphRevision()
-      setRelationFeedback({ loading: false, success: t('Lien familial supprimé (démo locale)'), error: '' })
+      setRelationFeedback({ loading: false, success: signupPrompts ? demoSignupMessage(t('Lien retiré de la démo.')) : t('Lien familial supprimé (démo locale)'), error: '' })
       return
     }
 
@@ -2416,6 +2434,8 @@ function App() {
       // Explicit demo modes (landing iframe / forced demo)
       if (query.has('embed') || query.has('demo')) {
         tree.handleUseDemo()
+        // Sans attendre : la démo s'ouvre tout de suite, les options (inscription, invitations) arrivent ensuite
+        fetchAuthOptions().then((options) => { if (active && options) setAuthOptions(options) }).catch(() => {})
         return
       }
 
@@ -2605,7 +2625,7 @@ function App() {
       // ?account=register (CTA de la landing) : écran compte directement en création
       if (query.get('account') === 'register' && registrationAllowed) {
         setAccountEntryMode('register')
-        trackAppEvent('account_screen_viewed', { mode: 'register', from_shared_tree: false, source: getSource() })
+        trackAppEvent('account_screen_viewed', { mode: 'register', from_shared_tree: false, via: 'lien', source: getSource() })
       }
       tree.setBootState('account')
     }
@@ -2648,8 +2668,14 @@ function App() {
     }
   }, [tree.bootState, auth.authenticated, auth.accountLoading, auth.accountTrees.length, accountFromTree]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleUseAccount = (mode = 'login') => {
+  const ownTreeAfterSignupRef = useRef(false)
+  // via : la porte qui a mené à l'écran de compte (ajouter, compte, demo), pour les mesures
+  const handleUseAccount = (mode = 'login', via = 'autre') => {
     const ctx = tree.treeContext
+    // « Faire le mien » : après l'inscription, l'assistant de création s'ouvre au-dessus de l'arbre de la famille
+    ownTreeAfterSignupRef.current = mode === 'register' && via === 'ajouter'
+    // Inscription depuis un arbre reçu ou depuis la démo, sans source dans l'adresse : on le note
+    if (mode === 'register' && ctx.treeId && ctx.accessMode !== 'member') rememberSource(ctx.accessMode === 'demo' ? 'demo' : 'arbre-partage')
     pendingSharedTreeRef.current = ctx.treeId && ctx.accessMode !== 'demo' && ctx.accessMode !== 'member'
       ? {
         treeId: ctx.treeId,
@@ -2666,7 +2692,7 @@ function App() {
     setAccountPanelVisible(false)
     const entryMode = mode === 'register' && registrationOpen ? 'register' : 'login'
     setAccountEntryMode(entryMode)
-    trackAppEvent('account_screen_viewed', { mode: entryMode, from_shared_tree: Boolean(pendingSharedTreeRef.current?.treeId) })
+    trackAppEvent('account_screen_viewed', { mode: entryMode, from_shared_tree: Boolean(pendingSharedTreeRef.current?.treeId), via, source: getSource() })
     media.resetMediaManager()
     setAdminPanelVisible(false)
     contrib.resetContribState()
@@ -2714,7 +2740,7 @@ function App() {
           const entry = trees.find((candidate) => String(candidate.id) === String(pending.treeId))
           if (entry) {
             await openAccountTree(entry, token, { promptWizard: false })
-            return true
+            return 'opened'
           }
         } catch {
           // Jeton expiré ou refusé : on repasse par le mot de passe
@@ -2724,7 +2750,7 @@ function App() {
       tree.setTreeContext(buildEmptyTreeContext(pending))
       tree.setGateError('')
       tree.setBootState('need-access')
-      return true
+      return 'gate'
     } finally {
       pendingSharedTreeRef.current = null
       setPendingSharedTreeName('')
@@ -2776,7 +2802,11 @@ function App() {
     trackAppEvent('account_registered', { from_shared_tree: Boolean(pendingSharedTreeRef.current?.treeId), source: getSource() })
 
     const token = auth.restoreUserToken()
-    if (token && await resumePendingSharedTree(token)) {
+    const resumed = token ? await resumePendingSharedTree(token) : false
+    if (resumed) {
+      // L'arbre de la famille est rattaché au compte et rouvert ; « Faire le mien » ouvre aussi l'assistant
+      if (resumed === 'opened' && ownTreeAfterSignupRef.current) setTreeWizardVisible(true)
+      ownTreeAfterSignupRef.current = false
       return
     }
 
@@ -3387,6 +3417,7 @@ function App() {
         onContinue={handleConfirmContinue}
         onSaveAndQuit={handleConfirmSaveAndQuit}
         onDiscard={handleConfirmDiscard}
+        demo={isDemoMode}
       />
       {/* Slide-in Ajouter Personne */}
       <AddPersonPanel
@@ -3467,6 +3498,7 @@ function App() {
         onCreateTree={handleOpenTreeWizard}
         onProfileClick={handleUseAccount}
         canRegister={registrationOpen}
+        signupPrompts={signupPrompts}
         onAccountClick={() => setAccountPanelVisible(true)}
         onSettingsClick={() => setAdminPanelVisible(true)}
         onLogout={handleLogout}
@@ -3635,6 +3667,7 @@ function App() {
         onRotatePasswords={handleContributionPasswordRotate}
         onRememberPassword={handleContributionPasswordRemember}
         onReviewSession={contrib.handleReviewContributionSession}
+        seasonalInvite={signupPrompts}
       />
       <SearchSourcesPanel
         visible={searchPanelVisible}

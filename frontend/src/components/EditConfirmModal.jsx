@@ -12,7 +12,8 @@ import { t } from '../i18n/index.js'
  * - Enregistrer brouillon et quitter
  * - Abandonner les modifications
  */
-function EditConfirmModal({ visible, onContinue, onSaveAndQuit, onDiscard }) {
+// demo : la démo ne garde rien sur l'appareil, ses modifications vivent le temps de la page
+function EditConfirmModal({ visible, onContinue, onSaveAndQuit, onDiscard, demo = false }) {
   const continueRef = useRef(null)
 
   // Focus sur "Continuer" à l'ouverture + trap ESC
@@ -47,7 +48,9 @@ function EditConfirmModal({ visible, onContinue, onSaveAndQuit, onDiscard }) {
         <div className="pz-modal-head">
           <p className="pz-eyebrow">{t('Modifications en cours')}</p>
           <h2 id="edit-confirm-title" className="pz-title">{titleBefore}<em>{t("l'édition")}</em>{titleAfter}</h2>
-          <p className="pz-sub">{t('Vos dernières modifications ne sont pas encore enregistrées. Elles restent sur cet appareil tant que vous ne les abandonnez pas.')}</p>
+          <p className="pz-sub">{demo
+            ? t('Vos dernières modifications restent dans la démo tant que cette page est ouverte, puis elles disparaissent.')
+            : t('Vos dernières modifications ne sont pas encore enregistrées. Elles restent sur cet appareil tant que vous ne les abandonnez pas.')}</p>
         </div>
 
         <div className="pz-modal-actions pz-modal-actions--split">

@@ -109,11 +109,16 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     '/options',
     { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
-    async (_request, reply) => reply.send({
-      registration: await isRegistrationOpen(app.prisma),
-      passwordLogin: env.PASSWORD_LOGIN,
-      oidc: isOidcEnabled() ? { name: env.OIDC_PROVIDER_NAME } : null,
-    }),
+    async (_request, reply) => {
+      const registration = await isRegistrationOpen(app.prisma)
+      return reply.send({
+        registration,
+        passwordLogin: env.PASSWORD_LOGIN,
+        oidc: isOidcEnabled() ? { name: env.OIDC_PROVIDER_NAME } : null,
+        // Rien à proposer quand l'instance ne crée plus de compte
+        signupPrompts: env.SIGNUP_PROMPTS && registration && env.PASSWORD_LOGIN,
+      })
+    },
   )
 
   app.post(

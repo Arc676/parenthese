@@ -57,9 +57,10 @@ export function scrubAnalyticsEvent(event) {
 // La première source connue gagne, « direct » ne remplace jamais une vraie source.
 const SOURCE_KEY = 'parenthese_source'
 
-export function rememberSource() {
+// fallback : source donnée par l'app quand l'adresse n'en porte pas (arbre-partage, demo), au même rang
+export function rememberSource(fallback = '') {
   try {
-    const fromUrl = new URLSearchParams(window.location.search).get('source')
+    const fromUrl = new URLSearchParams(window.location.search).get('source') || fallback
     const clean = String(fromUrl || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 40)
     if (clean && clean !== 'direct' && !localStorage.getItem(SOURCE_KEY)) {
       localStorage.setItem(SOURCE_KEY, clean)

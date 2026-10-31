@@ -65,6 +65,8 @@ To open the instance to your family over the Internet, put an HTTPS reverse prox
 
 So that people who come across the address can't sign up and start their own trees, set `ALLOW_REGISTRATION=false` in `.env`, then run `docker compose up -d`. Existing accounts keep signing in and creating trees, relatives still open shared trees with the link and password, and the app no longer offers to create an account. An instance with no account at all still accepts the first one, so the variable can be set before the very first start: create your own account right away, before you give out the address.
 
+Your instance doesn't push anyone to create an account. On app.parenthese.io, the hosted instance, the app suggests starting your own tree: relatives who open a shared tree find « Faire le mien » ("Make my own") in the Add menu, the demo's messages offer to sign up, and from December 1 to January 6 the invitation message mentions Christmas. These prompts are off by default. To turn them on, set `SIGNUP_PROMPTS=true` in `.env` (they stay off while registration is closed).
+
 #### Search for someone in public records
 
 The "+" menu offers "Someone elsewhere": a panel on the right of the tree where you type a name and see what public records hold about that person. Links to sites without a search we can query from here (old newspapers on Gallica, military registers on FranceArchives, Geneanet, FamilySearch and a few others, France first) always work: your browser opens the site with the name already typed in, and nothing goes through the server.

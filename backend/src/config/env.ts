@@ -68,6 +68,11 @@ const envSchema = z.object({
   // Internet ne laisse pas un inconnu qui trouve l'adresse créer ses arbres. Une instance sans aucun compte
   // accepte quand même le premier, celui du propriétaire (voir lib/registration.ts).
   ALLOW_REGISTRATION: z.string().default('true').transform(parseBooleanFlag('ALLOW_REGISTRATION')),
+  // Invitations à créer son propre arbre, ajoutées pour l'instance hébergée app.parenthese.io : « Faire le mien »
+  // dans le menu Ajouter de la famille, l'inscription proposée dans les messages de la démo, message d'invitation
+  // de Noël. Éteintes par défaut : une instance auto-hébergée n'a pas à pousser vers la création de compte.
+  // L'instance hébergée les allume dans ecosystem.config.cjs.
+  SIGNUP_PROMPTS: z.string().default('false').transform(parseBooleanFlag('SIGNUP_PROMPTS')),
   // Connexion par un fournisseur d'identité OIDC (#115 ; Authentik, Authelia, Keycloak, Pocket ID…). Éteinte sans
   // OIDC_ISSUER. Le fournisseur renvoie vers OIDC_REDIRECT_URI, l'adresse publique de /auth/oidc/callback.
   OIDC_ISSUER: z.string().trim().default(''),

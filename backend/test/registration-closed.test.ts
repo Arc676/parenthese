@@ -27,7 +27,7 @@ vi.mock('../src/lib/prisma.js', () => ({
 }))
 
 let app: FastifyInstance
-let env: { ALLOW_REGISTRATION: boolean }
+let env: { ALLOW_REGISTRATION: boolean, SIGNUP_PROMPTS: boolean }
 
 const newAccount = { firstName: 'Camille', email: 'camille@example.com', password: 'securepass123' }
 
@@ -50,6 +50,7 @@ afterAll(async () => {
 beforeEach(() => {
   vi.clearAllMocks()
   env.ALLOW_REGISTRATION = false
+  env.SIGNUP_PROMPTS = false
   prismaMock.user.findUnique.mockResolvedValue(null)
   prismaMock.user.count.mockResolvedValue(3)
   prismaMock.user.create.mockResolvedValue({ id: 'user-1', email: newAccount.email, firstName: 'Camille' })
@@ -102,7 +103,7 @@ describe('inscription fermée', () => {
     const res = await app.inject({ method: 'GET', url: '/auth/options' })
 
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ registration: false, passwordLogin: true, oidc: null })
+    expect(res.json()).toEqual({ registration: false, passwordLogin: true, oidc: null, signupPrompts: false })
   })
 
   it('instance neuve : le premier compte se crée, sous verrou', async () => {
@@ -143,5 +144,24 @@ describe('inscription ouverte (par défaut)', () => {
     expect(res.statusCode).toBe(201)
     expect(prismaMock.$transaction).not.toHaveBeenCalled()
     expect(prismaMock.user.count).not.toHaveBeenCalled()
+  })
+})
+
+// Invitations à créer son arbre (SIGNUP_PROMPTS) : éteintes par défaut, jamais annoncées quand l'instance ne crée plus de compte
+describe('invitations à créer son arbre', () => {
+  it('éteintes par défaut', async () => {
+    env.ALLOW_REGISTRATION = true
+    expect((await app.inject({ method: 'GET', url: '/auth/options' })).json().signupPrompts).toBe(false)
+  })
+
+  it('allumées avec SIGNUP_PROMPTS et une inscription ouverte', async () => {
+    env.ALLOW_REGISTRATION = true
+    env.SIGNUP_PROMPTS = true
+    expect((await app.inject({ method: 'GET', url: '/auth/options' })).json().signupPrompts).toBe(true)
+  })
+
+  it("coupées quand l'inscription est fermée, même allumées", async () => {
+    env.SIGNUP_PROMPTS = true
+    expect((await app.inject({ method: 'GET', url: '/auth/options' })).json().signupPrompts).toBe(false)
   })
 })

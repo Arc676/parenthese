@@ -292,6 +292,8 @@
 .undo-toast-btn::before { content: ''; position: absolute; inset: -8px; }
 .undo-toast-btn:hover { background: color-mix(in srgb, var(--pz-bg) 26%, transparent); }
 .undo-toast-btn:focus-visible { outline: 2px solid var(--pz-bg); outline-offset: 2px; }
+/* Le lien d'une invitation (démo) reste cliquable, le reste de la bulle laisse passer les clics */
+.contrib-success-toast a { pointer-events: auto; }
 @media (max-width: 768px) { .contrib-success-toast { bottom: 78px; padding: 11px 16px; border-radius: 16px; font-size: 13px; } }
 
 @media (max-width: 560px) {

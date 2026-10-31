@@ -563,7 +563,10 @@ paths:
                     properties:
                       name:
                         type: string
-                required: [registration, passwordLogin, oidc]
+                  signupPrompts:
+                    type: boolean
+                    description: true when SIGNUP_PROMPTS=true and accounts can be created. The app then suggests starting one's own tree to relatives and demo visitors
+                required: [registration, passwordLogin, oidc, signupPrompts]
 
   /auth/oidc/start:
     get:

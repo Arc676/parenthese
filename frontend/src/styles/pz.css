@@ -83,6 +83,7 @@ p, li, blockquote, figcaption, dd, .pz-sub, .pz-small, .pz-hint, .pz-error, .pz-
   .pz-btn--danger-ghost:hover:not(:disabled) { background: var(--pz-danger-bg); }
 }
 .pz-link { background: none; border: 0; padding: 0; cursor: pointer; font: 500 14px var(--pz-sans); color: var(--pz-a700); text-decoration: underline; text-underline-offset: 3px; }
+.pz-inline-link { color: inherit; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
 
 /* ── Champs ───────────────────────────────────────────────────── */
 .pz-field { display: grid; gap: 7px; }
