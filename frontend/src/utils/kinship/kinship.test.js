@@ -70,10 +70,14 @@ describe('nommage anglais', () => {
     expect(bothEn(['spouse'])).toEqual(['Partner', 'Partner', 'Partner'])
     expect(bothEn(['up', 'sibling', 'down'])).toEqual(['First cousin', 'First cousin', 'First cousin'])
     expect(bothEn(['up', 'up', 'sibling', 'down', 'down'])).toEqual(['Second cousin', 'Second cousin', 'Second cousin'])
-    expect(bothEn(['up', 'up', 'sibling', 'down'])).toEqual(['First cousin, once removed', 'First cousin, once removed', 'First cousin, once removed'])
-    expect(bothEn(['up', 'up', 'up', 'up', 'up', 'up', 'sibling', 'down', 'down', 'down'])).toEqual(['Third cousin, thrice removed', 'Third cousin, thrice removed', 'Third cousin, thrice removed'])
-    expect(bothEn(['up', 'up', 'up', 'sibling', 'down'])).toEqual(['First cousin, twice removed', 'First cousin, twice removed', 'First cousin, twice removed'])
-    expect(bothEn(['up', 'up', 'up', 'up', 'up', 'sibling', 'down'])).toEqual(['First cousin, 4 times removed', 'First cousin, 4 times removed', 'First cousin, 4 times removed'])
+    expect(bothEn(['up', 'up', 'sibling', 'down'])).toEqual(['First cousin once removed', 'First cousin once removed', 'First cousin once removed'])
+    expect(bothEn(['up', 'up', 'up', 'up', 'up', 'up', 'sibling', 'down', 'down', 'down'])).toEqual(['Third cousin thrice removed', 'Third cousin thrice removed', 'Third cousin thrice removed'])
+    expect(bothEn(['up', 'up', 'up', 'sibling', 'down'])).toEqual(['First cousin twice removed', 'First cousin twice removed', 'First cousin twice removed'])
+    expect(bothEn(['up', 'up', 'up', 'up', 'up', 'sibling', 'down'])).toEqual(['First cousin 4 times removed', 'First cousin 4 times removed', 'First cousin 4 times removed'])
+    expect(bothEn(['up', 'up', 'up', 'up', 'sibling', 'down', 'down', 'down', 'down'])).toEqual(['4th cousin', '4th cousin', '4th cousin'])
+    expect(bothEn(['up', 'up', 'sibling'])).toEqual(['Great-uncle', 'Great-aunt', 'Great-uncle/aunt'])
+    expect(bothEn(['up', 'up', 'up', 'sibling'])).toEqual(['Great-great-uncle', 'Great-great-aunt', 'Great-great-uncle/aunt'])
+    expect(bothEn(['sibling', 'down', 'down'])).toEqual(['Grandnephew', 'Grandniece', 'Grandnibling'])
   })
 
   it('une langue inconnue retombe sur l’anglais', () => {
