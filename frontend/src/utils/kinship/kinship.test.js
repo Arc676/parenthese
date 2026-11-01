@@ -56,6 +56,8 @@ describe('nommage français', () => {
 describe('nommage anglais', () => {
   it('genre le mot quand le sexe est connu', () => {
     expect(bothEn(['up'])).toEqual(['Father', 'Mother', 'Parent'])
+    expect(bothEn(['up', 'up'])).toEqual(['Grandfather', 'Grandmother', 'Grandparent'])
+    expect(bothEn(['up', 'up', 'up', 'up'])).toEqual(['Great-great-grandfather', 'Great-great-grandmother', 'Great-great-grandparent'])
     expect(bothEn(['down', 'down'])).toEqual(['Grandson', 'Granddaughter', 'Grandchild'])
     expect(bothEn(['sibling'])).toEqual(['Brother', 'Sister', 'Sibling'])
     expect(bothEn(['up', 'sibling'])).toEqual(['Uncle', 'Aunt', 'Uncle/Aunt'])

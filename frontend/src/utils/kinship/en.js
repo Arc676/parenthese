@@ -29,6 +29,15 @@ function times(n) {
   }
 }
 
+function grule(n) {
+  switch (n - 1) {
+    case 1:
+    return "Grand"
+    default:
+    return `Great-${"great-".repeat(n - 3)}grand`
+  }
+}
+
 export default function nameEn(path) {
   const { ups, downs, hasSpouse, sex } = kinshipFacts(path)
 
@@ -45,21 +54,45 @@ export default function nameEn(path) {
 
   let label
   if (downs === 0 && ups > 0) {
-    if (ups === 1) label = g(sex, 'Father', 'Mother', 'Parent')
-    else if (ups === 2) label = g(sex, 'Grandfather', 'Grandmother', 'Grandparent')
-    else if (ups === 3) label = g(sex, 'Great-grandfather', 'Great-grandmother', 'Great-grandparent')
-    else label = `Ancestor, ${ups} generations up`
+    switch (ups) {
+      case 1:
+        label = g(sex, 'Father', 'Mother', 'Parent')
+        break;
+      default:
+        label = `${grule(ups)}${g(sex, 'father', 'mother', 'parent')}`
+        break;
+    }
   } else if (ups === 0 && downs > 0) {
-    if (downs === 1) label = g(sex, 'Son', 'Daughter', 'Child')
-    else if (downs === 2) label = g(sex, 'Grandson', 'Granddaughter', 'Grandchild')
-    else if (downs === 3) label = g(sex, 'Great-grandson', 'Great-granddaughter', 'Great-grandchild')
-    else label = `Descendant, ${downs} generations down`
-  } else if (ups === 1 && downs === 1) label = g(sex, 'Brother', 'Sister', 'Sibling')
-  else if (ups === 2 && downs === 1) label = g(sex, 'Uncle', 'Aunt', 'Uncle/Aunt')
-  else if (ups === 3 && downs === 1) label = g(sex, 'Great-uncle', 'Great-aunt', 'Great-uncle/aunt')
-  else if (ups === 1 && downs === 2) label = g(sex, 'Nephew', 'Niece', 'Nibling')
-  else if (ups === 1 && downs === 3) label = g(sex, 'Grandnephew', 'Grandniece', 'Grandnibling')
-  else if (ups >= 2 && downs >= 2) {
+    switch (downs) {
+      case 1:
+        label = g(sex, 'Son', 'Daughter', 'Child')
+        break;
+      default:
+        label = `${grule(downs)}${g(sex, 'son', 'daughter', 'child')}`
+        break;
+    }
+  } else if (downs == 1) {
+    switch (ups) {
+      case 1:
+        label = g(sex, 'Brother', 'Sister', 'Sibling')
+        break;
+      case 2:
+        label = g(sex, 'Uncle', 'Aunt', 'Uncle/Aunt')
+        break;
+      default:
+        label = `${grule(ups - 1)}${g(sex, 'uncle', 'aunt', 'uncle/aunt')}`
+        break;
+    }
+  } else if (ups === 1) {
+    switch (downs) {
+      case 2:
+        label = g(sex, 'Nephew', 'Niece', 'Nibling')
+        break;
+      default:
+        label = `${grule(downs - 1)}${g(sex, 'nephew', 'niece', 'nibling')}`
+        break;
+    }
+  } else if (ups >= 2 && downs >= 2) {
     const degree = Math.min(ups, downs) - 1
     const removed = Math.abs(ups - downs)
     if (removed === 0) label = `${ordinal(degree)} cousin`
