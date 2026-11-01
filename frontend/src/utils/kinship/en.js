@@ -57,8 +57,8 @@ export default function nameEn(path) {
   } else if (ups === 1 && downs === 1) label = g(sex, 'Brother', 'Sister', 'Sibling')
   else if (ups === 2 && downs === 1) label = g(sex, 'Uncle', 'Aunt', 'Uncle/Aunt')
   else if (ups === 3 && downs === 1) label = g(sex, 'Great-uncle', 'Great-aunt', 'Great-uncle/aunt')
-  else if (ups === 1 && downs === 2) label = g(sex, 'Nephew', 'Niece', 'Nephew/Niece')
-  else if (ups === 1 && downs === 3) label = g(sex, 'Grandnephew', 'Grandniece', 'Grandnephew/niece')
+  else if (ups === 1 && downs === 2) label = g(sex, 'Nephew', 'Niece', 'Nibling')
+  else if (ups === 1 && downs === 3) label = g(sex, 'Grandnephew', 'Grandniece', 'Grandnibling')
   else if (ups >= 2 && downs >= 2) {
     const degree = Math.min(ups, downs) - 1
     const removed = Math.abs(ups - downs)
