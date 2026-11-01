@@ -6,8 +6,8 @@ const g = (sex, male, female, neutral) => (sex === 'male' ? male : sex === 'fema
 export default function nameEn(path) {
   const { ups, downs, hasSpouse, sex } = kinshipFacts(path)
 
-  // « Spouse » reste neutre : husband et wife supposeraient un mariage
-  if (hasSpouse && ups === 0 && downs === 0) return 'Spouse'
+  // « Partner » reste neutre au lieu de supposer un mariage
+  if (hasSpouse && ups === 0 && downs === 0) return 'Partner'
 
   if (hasSpouse) {
     // L'anglais distingue l'ordre : le parent du conjoint (in-law) n'est pas le conjoint du parent (step)

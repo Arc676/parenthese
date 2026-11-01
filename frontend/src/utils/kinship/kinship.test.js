@@ -65,7 +65,7 @@ describe('nommage anglais', () => {
     expect(bothEn(['spouse', 'down'])).toEqual(['Stepson', 'Stepdaughter', 'Stepchild'])
     expect(bothEn(['down', 'spouse'])).toEqual(['Son-in-law', 'Daughter-in-law', 'Child-in-law'])
     expect(bothEn(['spouse', 'sibling'])).toEqual(['Brother-in-law', 'Sister-in-law', 'Brother/sister-in-law'])
-    expect(bothEn(['spouse'])).toEqual(['Spouse', 'Spouse', 'Spouse'])
+    expect(bothEn(['spouse'])).toEqual(['Partner', 'Partner', 'Partner'])
     expect(bothEn(['up', 'sibling', 'down'])).toEqual(['First cousin', 'First cousin', 'First cousin'])
   })
 
