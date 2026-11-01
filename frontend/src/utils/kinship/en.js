@@ -3,6 +3,32 @@ import { kinshipFacts } from './facts.js'
 // Mot genré quand le sexe de la personne nommée est connu, forme neutre ou double sinon
 const g = (sex, male, female, neutral) => (sex === 'male' ? male : sex === 'female' ? female : neutral)
 
+function ordinal(n) {
+  switch (n) {
+    case 1:
+      return "First"
+    case 2:
+      return "Second"
+    case 3:
+      return "Third"
+    default:
+      return `{n}th`
+  }
+}
+
+function times(n) {
+  switch (n) {
+    case 1:
+      return "once"
+    case 2:
+      return "twice"
+    case 3:
+      return "thrice"
+    default:
+      return `${n} times`
+  }
+}
+
 export default function nameEn(path) {
   const { ups, downs, hasSpouse, sex } = kinshipFacts(path)
 
@@ -36,10 +62,8 @@ export default function nameEn(path) {
   else if (ups >= 2 && downs >= 2) {
     const degree = Math.min(ups, downs) - 1
     const removed = Math.abs(ups - downs)
-    if (degree === 1 && removed === 0) label = 'First cousin'
-    else if (degree === 1) label = 'First cousin once removed'
-    else if (removed === 0) label = `Cousin, degree ${degree}`
-    else label = 'Distant cousin'
+    if (removed === 0) label = `${ordinal(degree)} cousin`
+    else label = `${ordinal(degree)} cousin, ${times(removed)} removed`
   } else label = `${ups + downs} steps apart`
 
   return hasSpouse ? `${label} by marriage` : label
