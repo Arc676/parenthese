@@ -20,7 +20,7 @@ Website: [parenthese.io/en](https://parenthese.io/en/) · Demo, no account neede
 - No account needed to visit: someone who receives the link and the password opens the tree directly.
 - Reviewed contributions: the owner chooses whether the family's changes apply right away or go through a review queue, where each change is approved or declined.
 - GEDCOM import and export, to come from another program or leave for one (the export holds the people and their links, not the media files).
-- English and French interface. It follows the browser's language, with a switch in the app, and `?lang=en` or `?lang=fr` in the address forces one.
+- English, French and German interface. It follows the browser's language, with a switch in the app, and `?lang=en`, `?lang=fr` or `?lang=de` in the address forces one.
 
 ## The promise
 

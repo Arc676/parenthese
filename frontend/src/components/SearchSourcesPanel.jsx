@@ -100,6 +100,14 @@ const RELATION_LABELS = {
   spouse: t('Conjoint·e de'),
   sibling: t('Frère·Sœur de'),
 }
+// Les mêmes au milieu d'une phrase : une clé à part, car toutes les langues ne passent pas le mot
+// en minuscules (l'allemand garde « Kind von »)
+const RELATION_IN_SENTENCE = {
+  parent: t('parent de'),
+  child: t('enfant de'),
+  spouse: t('conjoint·e de'),
+  sibling: t('frère·sœur de'),
+}
 
 const plain = (value) => String(value || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim()
 
@@ -401,7 +409,7 @@ function SearchSourcesPanel({ visible, treeId, token, persons = [], canApply = f
                             </button>
                           </div>
                           <p className="pz-hint">{picker.relative
-                            ? t('{name}, {link} {relative}. Ses dates, ses lieux et la source sont repris, et la fiche passe « à vérifier ».', { name: `${result.firstName} ${result.lastName}`.trim(), link: RELATION_LABELS[picker.relationType].toLowerCase(), relative: fullNameLabel(picker.relative) })
+                            ? t('{name}, {link} {relative}. Ses dates, ses lieux et la source sont repris, et la fiche passe « à vérifier ».', { name: `${result.firstName} ${result.lastName}`.trim(), link: RELATION_IN_SENTENCE[picker.relationType], relative: fullNameLabel(picker.relative) })
                             : t('Choisissez à qui la rattacher dans l’arbre.')}</p>
                         </>
                       ) : (

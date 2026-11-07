@@ -5,7 +5,7 @@
 // move vaut 'up' (vers un parent), 'down' (vers un enfant), 'sibling' (vers un frère ou une sœur)
 // ou 'spouse' (vers un conjoint). sex vaut 'male', 'female', 'other' (autre) ou null (non précisé).
 //
-// Chaque langue lit ce dont elle a besoin. Le français et l'anglais comptent les générations et
+// Chaque langue lit ce dont elle a besoin. Le français, l'anglais et l'allemand comptent les générations et
 // regardent le sexe de la personne nommée (kinshipFacts). Une langue qui distingue le côté paternel
 // ou maternel lit le sexe du premier parent du chemin (steps[0].person quand steps[0].move === 'up'),
 // et les aînés et cadets se lisent sur les années de naissance de deux personnes du chemin.
@@ -13,10 +13,11 @@
 import { locale } from '../../i18n/index.js'
 import nameFr from './fr.js'
 import nameEn from './en.js'
+import nameDe from './de.js'
 
 export { kinshipFacts, normalizeSex } from './facts.js'
 
-const NAMERS = { fr: nameFr, en: nameEn }
+const NAMERS = { fr: nameFr, en: nameEn, de: nameDe }
 
 export function nameKinship(path, lang = locale) {
   if (!path?.steps?.length) return ''

@@ -9,7 +9,7 @@ export function normalizeSex(value) {
   return null
 }
 
-// Ce que le français et l'anglais lisent d'un chemin : générations montées et descendues
+// Ce que le français, l'anglais et l'allemand lisent d'un chemin : générations montées et descendues
 // (un frère ou une sœur compte une montée et une descente), passage par un conjoint, et sexe
 // de la personne nommée, au bout du chemin.
 export function kinshipFacts(path) {

@@ -1,7 +1,8 @@
 // Saisie d'une date dans la fiche : une année seule (« 1950 ») ou une date complète (« 12/03/1950 »).
 // L'année seule se range au 1er janvier, la convention de toute l'appli (issue #77).
 // L'ordre et le séparateur suivent la région du navigateur : « 03/12/1950 » en en-US, « 1950-03-12 » en fr-CA
-// (issue #152). Le mois s'écrit aussi en lettres, en français ou en anglais : « 12 mars 1950 », « March 12, 1950 ».
+// (issue #152). Le mois s'écrit aussi en lettres, en français, en anglais ou en allemand : « 12 mars 1950 »,
+// « March 12, 1950 », « 12. März 1950 ».
 import { dateFormat } from '../i18n/index.js'
 
 const pad = (n) => String(n).padStart(2, '0')
@@ -29,10 +30,11 @@ export function formatDigitsAsDate(text, { order, sep } = dateFormat) {
   return `${raw.slice(0, 2)}${sep}${raw.slice(2, 4)}${sep}${raw.slice(4)}`
 }
 
-// Noms des mois sans accents, en minuscules, dans les deux langues de l'appli
+// Noms des mois sans accents, en minuscules, dans les langues de l'appli (« janner » : Jänner, en Autriche)
 const MONTHS = [
-  ['janvier', 'january'], ['fevrier', 'february'], ['mars', 'march'], ['avril', 'april'], ['mai', 'may'], ['juin', 'june'],
-  ['juillet', 'july'], ['aout', 'august'], ['septembre', 'september'], ['octobre', 'october'], ['novembre', 'november'], ['decembre', 'december'],
+  ['janvier', 'january', 'januar', 'janner'], ['fevrier', 'february', 'februar'], ['mars', 'march', 'marz'], ['avril', 'april'],
+  ['mai', 'may'], ['juin', 'june', 'juni'], ['juillet', 'july', 'juli'], ['aout', 'august'], ['septembre', 'september'],
+  ['octobre', 'october', 'oktober'], ['novembre', 'november'], ['decembre', 'december', 'dezember'],
 ]
 const normalize = (s) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
 
@@ -44,9 +46,10 @@ function monthFromWord(word) {
   return found.size === 1 ? [...found][0] : undefined
 }
 
-// « 12 juin 1950 », « 1er juin 1950 », « June 12, 1950 », « 12 June 1950 »
+// « 12 juin 1950 », « 1er juin 1950 », « June 12, 1950 », « 12 June 1950 », « 12. Juni 1950 »
 function parseWritten(raw) {
-  const words = raw.replace(/,/g, ' ').replace(/\b(\d{1,2})(er|st|nd|rd|th)\b/gi, '$1').split(/\s+/).filter(Boolean)
+  const words = raw.replace(/,/g, ' ').replace(/\b(\d{1,2})(er|st|nd|rd|th)\b/gi, '$1').replace(/^(\d{1,2})\.(?=\s)/, '$1')
+    .split(/\s+/).filter(Boolean)
   if (words.length !== 3 || !/^\d{4}$/.test(words[2])) return undefined
   const [a, b, year] = words
   if (/^\d{1,2}$/.test(a) && monthFromWord(b)) return { day: a, month: monthFromWord(b), year }

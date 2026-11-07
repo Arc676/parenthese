@@ -1,0 +1,47 @@
+// Traductions anglaises, clé = texte français exact passé à t().
+export default {
+  "Famille {name}": "Familie {name}",
+  "{n} personnes": "{n} Personen",
+  "Famille": "Familie",
+  "Familles": "Familien",
+  "Affichage": "Anzeige",
+  "Les grandes familles par alliance dans des onglets": "Große angeheiratete Familien in Tabs",
+  "Une belle-famille plus large qu'un écran s'ouvre dans son propre onglet au lieu d'être dessinée dans l'arbre. Réglage de ce navigateur.": "Eine angeheiratete Familie, die breiter als der Bildschirm ist, öffnet sich in einem eigenen Tab, statt im Stammbaum gezeichnet zu werden. Gilt für diesen Browser.",
+  "Le nom de famille sous le prénom": "Nachname unter dem Vornamen",
+  "Le nom de naissance quand il est connu, sinon le nom d'usage. Réglage de ce navigateur.": "Der Geburtsname, wenn er bekannt ist, sonst der aktuelle Nachname. Gilt für diesen Browser.",
+  "Les noms de famille en capitales": "Nachnamen in Großbuchstaben",
+  "Jeanne MARTIN plutôt que Jeanne Martin, pour toute la famille. Les noms restent enregistrés comme ils ont été tapés.": "Johanna SCHMIDT statt Johanna Schmidt, für die ganze Familie. Die Namen bleiben so gespeichert, wie sie eingetippt wurden.",
+  // Arbre sur canvas (components/galaxy/renderers.js)
+  "Voir les parents": "Eltern anzeigen",
+  "Voir {firstName}": "{firstName} anzeigen",
+  "Voir l’enfant": "Kind anzeigen",
+  "Inconnu": "Unbekannt",
+  // Le lien de parenté affiché au survol se nomme langue par langue dans utils/kinship/
+  // Ajouter un proche
+  "Conjoint": "Partner/in",
+  "Frère·Sœur": "Geschwister",
+  "Lien": "Verbindung",
+  // Contrôles
+  "Zoomer": "Vergrößern",
+  "En cours": "Wird geladen",
+  // Annotations
+  "Sélection": "Auswahl",
+  "Texte": "Text",
+  "Sticker": "Sticker",
+  "Photo": "Foto",
+  "Taille": "Größe",
+  "Supprimer": "Löschen",
+  "Fin": "Dünn",
+  "Moyen": "Mittel",
+  "Épais": "Dick",
+  "Couleur": "Farbe",
+  "Épaisseur": "Strichstärke",
+  "Stickers": "Sticker",
+  "Cliquez sur le canvas": "Klicke auf die Zeichenfläche",
+  "Saisir du texte...": "Text eingeben …",
+  "Petit": "Klein",
+  "Normal": "Normal",
+  "Grand": "Groß",
+  "Très grand": "Sehr groß",
+  "Stabilo": "Textmarker",
+}
