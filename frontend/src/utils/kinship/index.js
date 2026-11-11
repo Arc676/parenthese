@@ -14,10 +14,16 @@ import { locale } from '../../i18n/index.js'
 import nameFr from './fr.js'
 import nameEn from './en.js'
 import nameDe from './de.js'
+import nameZh from './zh.js'
 
 export { kinshipFacts, normalizeSex } from './facts.js'
 
-const NAMERS = { fr: nameFr, en: nameEn, de: nameDe }
+const NAMERS = {
+  fr: nameFr,
+  en: nameEn,
+  de: nameDe,
+  zh: nameZh,
+}
 
 export function nameKinship(path, lang = locale) {
   if (!path?.steps?.length) return ''
