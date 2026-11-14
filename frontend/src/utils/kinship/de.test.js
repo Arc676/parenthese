@@ -39,8 +39,8 @@ describe('nommage allemand', () => {
     expect(de(['up', 'up', 'up', 'sibling'])).toEqual(['Urgroßonkel', 'Urgroßtante', 'Urgroßonkel/-tante'])
     expect(de(['sibling', 'down'])).toEqual(['Neffe', 'Nichte', 'Neffe/Nichte'])
     expect(de(['sibling', 'down', 'down'])).toEqual(['Großneffe', 'Großnichte', 'Großneffe/-nichte'])
-    expect(de(['up', 'sibling', 'down'])).toEqual(['Cousin', 'Cousine', 'Cousin/-e'])
-    expect(de(['up', 'up', 'sibling', 'down', 'down'])).toEqual(['Cousin 2. Grades', 'Cousine 2. Grades', 'Cousin/-e 2. Grades'])
+    expect(de(['up', 'sibling', 'down'])).toEqual(['Cousin', 'Cousine', 'Cousin/e'])
+    expect(de(['up', 'up', 'sibling', 'down', 'down'])).toEqual(['Cousin 2. Grades', 'Cousine 2. Grades', 'Cousin/e 2. Grades'])
     // Le cousin d'un parent, l'enfant d'un cousin, le cousin d'un grand-parent
     expect(de(['up', 'up', 'sibling', 'down'])).toEqual(['Onkel 2. Grades', 'Tante 2. Grades', 'Onkel/Tante 2. Grades'])
     expect(de(['up', 'sibling', 'down', 'down'])).toEqual(['Neffe 2. Grades', 'Nichte 2. Grades', 'Neffe/Nichte 2. Grades'])

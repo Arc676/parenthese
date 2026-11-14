@@ -51,8 +51,8 @@ export default function nameDe(path) {
     const suffix = grade > 1 && removed > 0 ? ` ${grade}. Grades` : ''
     if (removed === 0) {
       if (grade === 1) label = g(sex, 'Bruder', 'Schwester', 'Geschwister')
-      else if (grade === 2) label = g(sex, 'Cousin', 'Cousine', 'Cousin/-e')
-      else label = `${g(sex, 'Cousin', 'Cousine', 'Cousin/-e')} ${grade - 1}. Grades`
+      else if (grade === 2) label = g(sex, 'Cousin', 'Cousine', 'Cousin/e')
+      else label = `${g(sex, 'Cousin', 'Cousine', 'Cousin/e')} ${grade - 1}. Grades`
     } else if (ups > downs) {
       label = `${join(gross(removed), g(sex, 'Onkel', 'Tante', 'Onkel/Tante'))}${suffix}`
     } else {
