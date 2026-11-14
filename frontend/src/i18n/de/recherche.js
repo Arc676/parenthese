@@ -81,6 +81,6 @@ export default {
   // Lien de parenté au milieu d'une phrase (« Marie Dupont, enfant de Jean Dupont »)
   "parent de": "Elternteil von",
   "enfant de": "Kind von",
-  "conjoint·e de": "Partner/in von",
+  "conjoint·e de": "Partner/-in von",
   "frère·sœur de": "Geschwister von",
 }

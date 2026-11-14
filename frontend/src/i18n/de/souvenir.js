@@ -20,7 +20,7 @@ export default {
   "Qui est sur la vidéo ?": "Wer ist im Video?",
   "Chercher une personne de l’arbre": "Jemanden im Stammbaum suchen",
   "Personnes trouvées": "Gefundene Personen",
-  "Merci. La personne qui gère l’arbre va relire votre proposition.": "Danke. Die Person, die den Stammbaum verwaltet, sieht sich deinen Vorschlag an.",
+  "Merci. La personne qui gère l’arbre va relire votre proposition.": "Danke. Die Person, die den Stammbaum verwaltet, prüft deinen Vorschlag.",
   "Touchez son visage sur la photo.": "Tippe auf dem Foto auf das Gesicht.",
   "Ajoutez les personnes, puis touchez leur visage sur la photo.": "Füge die Personen hinzu und tippe dann auf dem Foto auf ihre Gesichter.",
   "Ajoutez les personnes de la vidéo.": "Füge die Personen aus dem Video hinzu.",

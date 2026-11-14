@@ -18,7 +18,7 @@ export default {
   "Inconnu": "Unbekannt",
   // Le lien de parenté affiché au survol se nomme langue par langue dans utils/kinship/
   // Ajouter un proche
-  "Conjoint": "Partner/in",
+  "Conjoint": "Partner/-in",
   "Frère·Sœur": "Geschwister",
   "Lien": "Verbindung",
   // Contrôles

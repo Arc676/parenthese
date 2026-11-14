@@ -199,7 +199,7 @@ export default {
   "Supprimer": "Löschen",
   "Menu compte": "Kontomenü",
   "Mes arbres": "Meine Stammbäume",
-  "Propriétaire": "Eigentümer/in",
+  "Propriétaire": "Eigentümer/-in",
   "Admin": "Admin",
   "Contributeur": "Mitwirkende/r",
   "Visiteur": "Gast",

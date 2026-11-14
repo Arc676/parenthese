@@ -67,7 +67,7 @@ export default {
   "Commencer l'arbre": "Stammbaum beginnen",
   // ErrorBoundary, BootLoader
   "Une erreur inattendue est survenue": "Etwas Unerwartetes ist schiefgegangen",
-  "L'application a rencontré un problème. Vous pouvez essayer de recharger ou revenir à l'écran précédent.": "Die App hatte ein Problem. Du kannst die Seite neu laden oder zum vorherigen Bildschirm zurückgehen.",
+  "L'application a rencontré un problème. Vous pouvez essayer de recharger ou revenir à l'écran précédent.": "Die App hatte ein Problem. Du kannst versuchen, die Seite neu zu laden oder zum vorherigen Bildschirm zurückzugehen.",
   "Réessayer": "Noch einmal versuchen",
   "Recharger la page": "Seite neu laden",
   "Ouverture de l'arbre": "Stammbaum wird geöffnet",

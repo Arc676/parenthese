@@ -3,8 +3,9 @@ import { isHalfSibling, isStepSibling, kinshipFacts } from './facts.js'
 // Mot genré quand le sexe de la personne nommée est connu, forme neutre ou double sinon
 const g = (sex, male, female, neutral) => (sex === 'male' ? male : sex === 'female' ? female : neutral)
 
-// « Groß » + « Onkel » → « Großonkel » : le mot perd sa majuscule derrière un préfixe
-const join = (prefix, word) => (prefix ? `${prefix}${word.toLowerCase()}` : word)
+// « Groß » + « Onkel » → « Großonkel » : le mot perd sa majuscule derrière un préfixe.
+// Forme double : la partie commune ne se répète pas, « Großonkel/-tante »
+const join = (prefix, word) => (prefix ? `${prefix}${word.toLowerCase().replace('/', '/-')}` : word)
 // n fois « Ur » : Ur, Urur, Ururur
 const ur = (n) => (n > 0 ? `Ur${'ur'.repeat(n - 1)}` : '')
 // Préfixe d'écart de générations : Vater, Großvater, Urgroßvater, Ururgroßvater.
@@ -18,7 +19,7 @@ export default function nameDe(path) {
   const { ups, downs, hasSpouse, sex } = kinshipFacts(path)
 
   // « Partner » plutôt qu'« Ehemann » : le lien ne dit pas s'il y a mariage
-  if (hasSpouse && ups === 0 && downs === 0) return g(sex, 'Partner', 'Partnerin', 'Partner/in')
+  if (hasSpouse && ups === 0 && downs === 0) return g(sex, 'Partner', 'Partnerin', 'Partner/-in')
   // Un seul parent en commun : Halb- ; l'enfant du conjoint d'un parent : Stief- (#218)
   if (isHalfSibling(path)) return g(sex, 'Halbbruder', 'Halbschwester', 'Halbgeschwister')
   if (isStepSibling(path)) return g(sex, 'Stiefbruder', 'Stiefschwester', 'Stiefgeschwister')
@@ -35,7 +36,7 @@ export default function nameDe(path) {
   let label
   if (downs === 0 && ups > 0) {
     label = ups > MAX_UR
-      ? `${g(sex, 'Vorfahre', 'Vorfahrin', 'Vorfahre/Vorfahrin')} ${ups}. Generation`
+      ? `${g(sex, 'Vorfahre', 'Vorfahrin', 'Vorfahre/-in')} ${ups}. Generation`
       : join(gross(ups), g(sex, 'Vater', 'Mutter', 'Elternteil'))
   } else if (ups === 0 && downs > 0) {
     if (downs > MAX_UR) label = `Nachkomme ${downs}. Generation`
@@ -50,8 +51,8 @@ export default function nameDe(path) {
     const suffix = grade > 1 && removed > 0 ? ` ${grade}. Grades` : ''
     if (removed === 0) {
       if (grade === 1) label = g(sex, 'Bruder', 'Schwester', 'Geschwister')
-      else if (grade === 2) label = g(sex, 'Cousin', 'Cousine', 'Cousin/Cousine')
-      else label = `${g(sex, 'Cousin', 'Cousine', 'Cousin/Cousine')} ${grade - 1}. Grades`
+      else if (grade === 2) label = g(sex, 'Cousin', 'Cousine', 'Cousin/-e')
+      else label = `${g(sex, 'Cousin', 'Cousine', 'Cousin/-e')} ${grade - 1}. Grades`
     } else if (ups > downs) {
       label = `${join(gross(removed), g(sex, 'Onkel', 'Tante', 'Onkel/Tante'))}${suffix}`
     } else {
