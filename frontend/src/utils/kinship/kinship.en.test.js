@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { nameKinship } from './index.js'
-import { path } from './kinship.fr.test.js'
+import { path, namesBySex } from './test-helpers.js'
 
-const both = (moves) => ['male', 'female', null].map((sex) => nameKinship(path(moves, sex), 'en'))
+const both = namesBySex('en')
 
 describe('nommage anglais', () => {
   it('genre le mot quand le sexe est connu', () => {

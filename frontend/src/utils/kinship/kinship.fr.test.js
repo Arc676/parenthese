@@ -1,14 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { kinshipFacts, nameKinship, normalizeSex } from './index.js'
 import { computeRelationshipLabel, kinshipPath } from '../../components/galaxy/pathfinding.js'
+import { path, namesBySex } from './test-helpers.js'
 
-// Chemin écrit à la main : moves = suite de pas, sex = sexe de la personne au bout
-export const path = (moves, sex = null, extra = {}) => ({
-  from: { id: 'moi', sex: null, birthYear: null },
-  steps: moves.map((move, i) => ({ move, person: { id: `p${i}`, sex: i === moves.length - 1 ? sex : null, birthYear: null, ...(extra[i] || {}) } })),
-})
-
-const both = (moves) => ['male', 'female', null].map((sex) => nameKinship(path(moves, sex), 'fr'))
+const both = namesBySex('fr')
 
 describe('nommage français', () => {
   it('genre le mot quand le sexe est connu, garde la forme double sinon', () => {
