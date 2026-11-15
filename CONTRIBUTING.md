@@ -32,6 +32,7 @@ If you touch Docker or nginx, run `docker compose up -d --build` then `bash tool
 ## Conventions
 
 - The interface is in French, English and German. Every visible text goes through `t()` from `frontend/src/i18n/index.js`, with the French text as the key and its English entry in `frontend/src/i18n/en/`. A test fails if an English entry is missing. Other languages fall back to English, so a new text only needs French and English.
+- Each language addresses the user the way apps usually do in that language: "vous" in French, "du" in German. A new translation follows the habit of its language, not the French one.
 - No new heavy dependency (framework, UI library, external service) without discussing it in an issue.
 - The README promise holds: no ads, and no analytics turned on by default on a self-hosted instance.
 
