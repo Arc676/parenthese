@@ -28,6 +28,7 @@ import ContextualNavbar from './components/navbar/ContextualNavbar'
 import ZoomControl from './components/ZoomControl'
 import ExpandableSearch from './components/search/ExpandableSearch'
 import { t, dateLocale } from './i18n/index.js'
+import { withShortcut } from './utils/shortcuts.js'
 import {
   createParentChildLink,
   updateParentChildLink,
@@ -3510,7 +3511,7 @@ function App() {
       {undoable.message && (
         <div className="contrib-success-toast undo-toast" role="status">
           <span>{undoable.message}</span>
-          <button type="button" className="undo-toast-btn" onClick={undoable.undo} title={t('Annuler (Ctrl+Z)')}>{t('Annuler')}</button>
+          <button type="button" className="undo-toast-btn" onClick={undoable.undo} title={withShortcut(t('Annuler la modification'), 'cmd', 'z')}>{t('Annuler')}</button>
         </div>
       )}
       {draftNotice && !undoable.message && !contribSuccess && !showContribModal && (

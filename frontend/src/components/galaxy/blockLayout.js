@@ -1,4 +1,5 @@
 import { computeLayout, componentOrderPerGen, chainGap, coupleBarMeta, restoreCoupleBarMeta } from './elkLayout'
+import { t } from '../../i18n/index.js'
 import { persons as globalPersons, unions as globalUnions, filiations as globalFiliations } from '../../data/mockData'
 
 // ============================================================
@@ -1006,7 +1007,7 @@ export function familyTabsOf(graphData = null, referenceId = null) {
       const next = namesByCount(tb).find(nom => !taken.has(nom))
       if (next) { tb.label = next; taken.add(next); continue }
       const names = [...new Set((tb.hinges || [tb.referenceId]).map(id => firstName.get(String(id))).filter(Boolean))].slice(0, 2)
-      if (names.length) tb.label = `${tb.label} · ${names.join(' et ')}`
+      if (names.length) tb.label = `${tb.label} · ${names.join(t(' et '))}`
     }
   }
   return tabs

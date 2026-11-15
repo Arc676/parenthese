@@ -1,12 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { nameKinship } from './index.js'
+import { path, namesBySex } from './test-helpers.js'
 
-// Chemin écrit à la main : moves = suite de pas, sex = sexe de la personne au bout
-const path = (moves, sex = null) => ({
-  from: { id: 'moi', sex: null, birthYear: null },
-  steps: moves.map((move, i) => ({ move, person: { id: `p${i}`, sex: i === moves.length - 1 ? sex : null, birthYear: null } })),
-})
-const de = (moves) => ['male', 'female', null].map((sex) => nameKinship(path(moves, sex), 'de'))
+const de = namesBySex('de')
 const up = (n) => Array(n).fill('up')
 const down = (n) => Array(n).fill('down')
 

@@ -652,7 +652,7 @@ const AdminPanel = ({
                   <div className="ts-row ts-row--muted">
                     <div className="ts-row-text">
                       <strong>{t('Sauvegarde complète')}</strong>
-                      <p className="pz-small">{t('Toutes les données et les médias. Bientôt disponible.')}</p>
+                      <p className="pz-small">{t('Toutes les données et les médias.')} {t('Bientôt disponible.')}</p>
                     </div>
                     <div className="ts-row-actions">
                       <button type="button" className="pz-btn pz-btn--secondary pz-btn--sm" disabled>
