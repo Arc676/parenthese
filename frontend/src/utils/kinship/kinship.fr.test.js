@@ -1,15 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { kinshipFacts, nameKinship, normalizeSex } from './index.js'
 import { computeRelationshipLabel, kinshipPath } from '../../components/galaxy/pathfinding.js'
+import { path, namesBySex } from './test-helpers.js'
 
-// Chemin écrit à la main : moves = suite de pas, sex = sexe de la personne au bout
-const path = (moves, sex = null, extra = {}) => ({
-  from: { id: 'moi', sex: null, birthYear: null },
-  steps: moves.map((move, i) => ({ move, person: { id: `p${i}`, sex: i === moves.length - 1 ? sex : null, birthYear: null, ...(extra[i] || {}) } })),
-})
-
-const both = (moves) => ['male', 'female', null].map((sex) => nameKinship(path(moves, sex), 'fr'))
-const bothEn = (moves) => ['male', 'female', null].map((sex) => nameKinship(path(moves, sex), 'en'))
+const both = namesBySex('fr')
 
 describe('nommage français', () => {
   it('genre le mot quand le sexe est connu, garde la forme double sinon', () => {
@@ -56,41 +50,6 @@ describe('nommage français', () => {
   it('le sexe des personnes du milieu ne change pas le mot (seule la personne nommée compte)', () => {
     const p = path(['up', 'sibling'], 'female', { 0: { sex: 'male' } })
     expect(nameKinship(p, 'fr')).toBe('Tante')
-  })
-})
-
-describe('nommage anglais', () => {
-  it('genre le mot quand le sexe est connu', () => {
-    expect(bothEn(['up'])).toEqual(['Father', 'Mother', 'Parent'])
-    expect(bothEn(['up', 'up'])).toEqual(['Grandfather', 'Grandmother', 'Grandparent'])
-    expect(bothEn(['up', 'up', 'up', 'up'])).toEqual(['Great-great-grandfather', 'Great-great-grandmother', 'Great-great-grandparent'])
-    expect(bothEn(['down', 'down'])).toEqual(['Grandson', 'Granddaughter', 'Grandchild'])
-    expect(bothEn(['sibling'])).toEqual(['Brother', 'Sister', 'Sibling'])
-    expect(bothEn(['up', 'sibling'])).toEqual(['Uncle', 'Aunt', 'Uncle/Aunt'])
-    expect(bothEn(['sibling', 'down'])).toEqual(['Nephew', 'Niece', 'Nibling'])
-    expect(bothEn(['spouse', 'up'])).toEqual(['Father-in-law', 'Mother-in-law', 'Parent-in-law'])
-    expect(bothEn(['up', 'spouse'])).toEqual(['Stepfather', 'Stepmother', 'Stepparent'])
-    expect(bothEn(['spouse', 'down'])).toEqual(['Stepson', 'Stepdaughter', 'Stepchild'])
-    expect(bothEn(['down', 'spouse'])).toEqual(['Son-in-law', 'Daughter-in-law', 'Child-in-law'])
-    expect(bothEn(['spouse', 'sibling'])).toEqual(['Brother-in-law', 'Sister-in-law', 'Brother/sister-in-law'])
-    expect(bothEn(['sibling', 'spouse'])).toEqual(['Brother-in-law', 'Sister-in-law', 'Brother/sister-in-law'])
-    expect(bothEn(['up', 'spouse', 'down'])).toEqual(['Stepbrother', 'Stepsister', 'Stepsibling'])
-    expect(bothEn(['up', 'down'])).toEqual(['Half-brother', 'Half-sister', 'Half-sibling'])
-    expect(bothEn(['spouse'])).toEqual(['Partner', 'Partner', 'Partner'])
-    expect(bothEn(['up', 'sibling', 'down'])).toEqual(['First cousin', 'First cousin', 'First cousin'])
-    expect(bothEn(['up', 'up', 'sibling', 'down', 'down'])).toEqual(['Second cousin', 'Second cousin', 'Second cousin'])
-    expect(bothEn(['up', 'up', 'sibling', 'down'])).toEqual(['First cousin once removed', 'First cousin once removed', 'First cousin once removed'])
-    expect(bothEn(['up', 'up', 'up', 'up', 'up', 'up', 'sibling', 'down', 'down', 'down'])).toEqual(['Third cousin thrice removed', 'Third cousin thrice removed', 'Third cousin thrice removed'])
-    expect(bothEn(['up', 'up', 'up', 'sibling', 'down'])).toEqual(['First cousin twice removed', 'First cousin twice removed', 'First cousin twice removed'])
-    expect(bothEn(['up', 'up', 'up', 'up', 'up', 'sibling', 'down'])).toEqual(['First cousin 4 times removed', 'First cousin 4 times removed', 'First cousin 4 times removed'])
-    expect(bothEn(['up', 'up', 'up', 'up', 'sibling', 'down', 'down', 'down', 'down'])).toEqual(['4th cousin', '4th cousin', '4th cousin'])
-    expect(bothEn(['up', 'up', 'sibling'])).toEqual(['Great-uncle', 'Great-aunt', 'Great-uncle/aunt'])
-    expect(bothEn(['up', 'up', 'up', 'sibling'])).toEqual(['Great-great-uncle', 'Great-great-aunt', 'Great-great-uncle/aunt'])
-    expect(bothEn(['sibling', 'down', 'down'])).toEqual(['Grandnephew', 'Grandniece', 'Grandnibling'])
-  })
-
-  it('une langue inconnue retombe sur l’anglais', () => {
-    expect(nameKinship(path(['up'], 'female'), 'xx')).toBe('Mother')
   })
 })
 
