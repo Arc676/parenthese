@@ -11,6 +11,7 @@
 // (dessin de l'arbre sur canvas, données de la démo, messages d'erreur).
 
 import en from './en/index.js'
+import de from './de/index.js'
 
 // Langues de l'interface, dans l'ordre du bouton de choix.
 //   name : le nom de la langue écrit dans la langue même, il ne se traduit pas
@@ -21,6 +22,7 @@ import en from './en/index.js'
 export const LANGUAGES = {
   fr: { name: 'Français', region: 'fr-FR' },
   en: { name: 'English', region: 'en-GB', dictionary: en },
+  de: { name: 'Deutsch', region: 'de-DE', dictionary: de },
 }
 export const LOCALES = Object.keys(LANGUAGES)
 // Langue de repli : celle d'un navigateur dont aucune langue n'est connue, et celle d'un texte

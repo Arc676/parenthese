@@ -70,7 +70,7 @@ describe('région du navigateur (issue #152)', () => {
   })
 })
 
-describe('mois en lettres, français ou anglais', () => {
+describe('mois en lettres, français, anglais ou allemand', () => {
   it('jour, mois, année', () => {
     expect(parseDateInput('12 juin 1924', FR)).toBe('1924-06-12')
     expect(parseDateInput('1er août 1950', FR)).toBe('1950-08-01')
@@ -88,5 +88,16 @@ describe('mois en lettres, français ou anglais', () => {
     expect(parseDateInput('12 jui 1924', FR)).toBeUndefined()
     expect(parseDateInput('31 juin 1924', FR)).toBeUndefined()
     expect(parseDateInput('juin 1924', FR)).toBeUndefined()
+  })
+  it('allemand : point après le jour, Umlaut facultatif, Jänner', () => {
+    const DE = { order: 'dmy', sep: '.' }
+    expect(parseDateInput('12. März 1950', DE)).toBe('1950-03-12')
+    expect(parseDateInput('12 Marz 1950', DE)).toBe('1950-03-12')
+    expect(parseDateInput('1. Okt. 1901', DE)).toBe('1901-10-01')
+    expect(parseDateInput('24. Dezember 1944', DE)).toBe('1944-12-24')
+    expect(parseDateInput('3. Jänner 1920', DE)).toBe('1920-01-03')
+    expect(parseDateInput('12.03.1950', DE)).toBe('1950-03-12')
+    expect(dateToInputText('1950-03-12', DE)).toBe('12.03.1950')
+    expect(parseDateInput('31. Juni 1950', DE)).toBeUndefined()
   })
 })

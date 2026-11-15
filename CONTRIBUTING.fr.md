@@ -31,7 +31,7 @@ Si vous touchez à Docker ou à nginx, lancez `docker compose up -d --build` pui
 
 ## Conventions
 
-- L'interface est en français et en anglais. Tout texte visible passe par `t()` de `frontend/src/i18n/index.js` : le texte français sert de clé, sa traduction anglaise va dans `frontend/src/i18n/en/`. Un test échoue si une traduction anglaise manque. Les autres langues retombent sur l'anglais : un nouveau texte n'a besoin que du français et de l'anglais.
+- L'interface est en français, en anglais et en allemand. Tout texte visible passe par `t()` de `frontend/src/i18n/index.js` : le texte français sert de clé, sa traduction anglaise va dans `frontend/src/i18n/en/`. Un test échoue si une traduction anglaise manque. Les autres langues retombent sur l'anglais : un nouveau texte n'a besoin que du français et de l'anglais.
 - Pas de nouvelle dépendance lourde (framework, bibliothèque d'interface, service externe) sans en avoir discuté dans une issue.
 - La promesse du README tient : pas de publicité, et aucune mesure d'audience activée par défaut sur une instance auto-hébergée.
 

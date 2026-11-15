@@ -78,4 +78,9 @@ export default {
   'Arbre mondial tenu par ses membres': 'Worldwide tree kept by its members',
   'Angleterre et pays de Galles': 'England and Wales',
   'Registres du monde entier, compte gratuit': 'Records from around the world, free account',
+  // Lien de parenté au milieu d'une phrase (« Marie Dupont, enfant de Jean Dupont »)
+  'parent de': 'parent of',
+  'enfant de': 'child of',
+  'conjoint·e de': 'partner of',
+  'frère·sœur de': 'sibling of',
 }
