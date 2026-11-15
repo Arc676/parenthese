@@ -12,6 +12,7 @@
 
 import en from './en/index.js'
 import de from './de/index.js'
+import zh from './zh/index.js'
 
 // Langues de l'interface, dans l'ordre du bouton de choix.
 //   name : le nom de la langue écrit dans la langue même, il ne se traduit pas
@@ -23,6 +24,7 @@ export const LANGUAGES = {
   fr: { name: 'Français', region: 'fr-FR' },
   en: { name: 'English', region: 'en-GB', dictionary: en },
   de: { name: 'Deutsch', region: 'de-DE', dictionary: de },
+  zh: { name: '中文', region: 'zh-CN', dictionary: zh },
 }
 export const LOCALES = Object.keys(LANGUAGES)
 // Langue de repli : celle d'un navigateur dont aucune langue n'est connue, et celle d'un texte
