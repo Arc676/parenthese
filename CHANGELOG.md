@@ -2,6 +2,33 @@
 
 Notable changes to Parenthèse. Dates are in YYYY-MM-DD format.
 
+## 1.7.0 (2026-11-15)
+
+### Languages
+
+- The interface is in German. Every text, the relationship names (Großvater, Großonkel, Cousin 2. Grades, Halbbruder, Stiefbruder, Schwager…) and dates typed with German month names, "Jänner" included. Thanks to fridgee1 for the translation and to Arc676 for the review (#221, #236).
+- Languages are now a list instead of the French and English pair, so adding one is a dictionary folder and a line in `LANGUAGES`. A browser set to "en-US, de" gets German, as "en-US, fr" gets French (#222). The language picker is no longer translated by the browser's own translation.
+- A family tab named after two first names joins them in the interface language, and the undo tooltip shows ⌘Z on a Mac (#237).
+
+### Tree
+
+- A person with several partners sits in the middle of them, so the lines to each partner and their children no longer cross behind the others (#234).
+- Several partners with no family of their own no longer overlap (#223).
+- A child of only one of your parents is a half-brother or half-sister (Demi-frère in French), and a child of a parent's partner is a stepbrother or stepsister in English instead of a brother-in-law (#218).
+- New tree setting, Tree settings > Display: last names in capitals. It's off by default, changes only the display, and the family sees it too. The name stays saved as typed (#233).
+
+### Memories
+
+- A YouTube video pastes under all its address forms: embed links, Shorts, live videos and the full `<iframe>` code from the Embed button. Embed links saved before now play too (#229).
+
+### Clean-up
+
+- Dead code, API routes the app no longer calls and leftovers of older versions are gone, duplicates are grouped (#230, #231).
+
+### Update
+
+There's a database change (the capitals setting). With Docker, `docker compose pull` and `docker compose up -d` apply it on start.
+
 ## 1.6.0 (2026-11-04)
 
 ### Adding people
